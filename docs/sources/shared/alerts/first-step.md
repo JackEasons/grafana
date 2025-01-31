@@ -1,7 +1,9 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/alerts/first-step/
-title: TBD...
+labels:
+  products:
+    - enterprise
+    - oss
+title: TBD
 ---
 
 ## TBD

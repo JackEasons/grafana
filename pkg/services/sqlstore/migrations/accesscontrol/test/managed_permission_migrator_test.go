@@ -2,17 +2,17 @@ package test
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	"xorm.io/xorm"
 
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	acmig "github.com/grafana/grafana/pkg/services/sqlstore/migrations/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/sqlstore/migrator"
 	"github.com/grafana/grafana/pkg/setting"
-	"github.com/stretchr/testify/require"
-	"xorm.io/xorm"
 )
 
 type inheritanceTestCase struct {
@@ -255,7 +255,10 @@ func TestManagedPermissionsMigrationRunTwice(t *testing.T) {
 func putTestPermissions(t *testing.T, x *xorm.Engine, rolePerms map[int64]map[string][]rawPermission) {
 	for orgID, roles := range rolePerms {
 		for roleName, perms := range roles {
-			uid := strconv.FormatInt(orgID, 10) + strings.ReplaceAll(roleName, ":", "_")
+			uid := strings.ReplaceAll(roleName, ":", "_")
+			if !strings.HasPrefix(roleName, "basic") {
+				uid = fmt.Sprintf("%d_%s", orgID, uid)
+			}
 			role := accesscontrol.Role{
 				OrgID:   orgID,
 				Version: 1,

@@ -1,8 +1,7 @@
 ---
 aliases:
-  - /docs/grafana/latest/enterprise/activate-aws-marketplace-license/activate-license-on-eks/
-  - /docs/grafana/latest/enterprise/license/activate-aws-marketplace-license/activate-license-on-eks/
-  - /docs/grafana/latest/administration/enterprise-licensing/activate-aws-marketplace-license/activate-license-on-eks/
+  - ../../../enterprise/activate-aws-marketplace-license/activate-license-on-eks/
+  - ../../../enterprise/license/activate-aws-marketplace-license/activate-license-on-eks/
 description: Activate a Grafana Enterprise license from AWS Marketplace on EKS
 keywords:
   - grafana
@@ -11,13 +10,17 @@ keywords:
   - marketplace
   - eks
   - activate
+labels:
+  products:
+    - enterprise
+    - oss
 title: Activate a Grafana Enterprise license from AWS Marketplace on EKS
 weight: 200
 ---
 
 # Activate a Grafana Enterprise license from AWS Marketplace on EKS
 
-If you have purchased a Grafana Enterprise subscription through AWS Marketplace, you must activate it in order to use Grafana Enterprise data source plugins and features in Grafana.
+If you have purchased a Grafana Enterprise subscription through AWS Marketplace, you must activate it to use Grafana Enterprise data source plugins and features in Grafana.
 
 ## Before you begin:
 
@@ -34,9 +37,9 @@ To activate your license, complete the following tasks:
 
    For more information about installing Grafana on Kubernetes using the Helm Chart, refer to the [Grafana Helm Chart](https://github.com/grafana/helm-charts/tree/main/charts/grafana#readme).
 
-1. Use `kubectl set image deployment/my-release grafana=grafana/grafana-enterprise:<version>` to update the container image to Grafana Enterprise version 8.3.0 or later.
+1. Use `kubectl set image deployment/my-release grafana=grafana/grafana-enterprise:<version>` to update the container image.
 
-   For example, enter `grafana/grafana-enterprise:8.3.3`.
+   For example, enter `grafana/grafana-enterprise:11.3.0`.
 
 > Only Grafana Enterprise versions 8.3.0 and later support licenses granted through AWS Marketplace.
 
@@ -120,8 +123,8 @@ To restart Grafana on a Kubernetes cluster,
 
 1. Run the command `kubectl rollout restart deployment my-release`.
 
-1. After you update the service, navigate to your Grafana instance, sign in with Grafana Admin credentials, and navigate to the Statistics and Licensing page to validate that your license is active.
+1. After you update the service, navigate to your Grafana instance, sign in with Grafana Admin credentials, and navigate to **Administration > General > Stats and license** to validate that your license is active.
 
-For more information about restarting Grafana, refer to [Restart Grafana]({{< relref "../../../../setup-grafana/restart-grafana/" >}}).
+For more information about restarting Grafana, refer to [Restart Grafana]({{< relref "../../../../setup-grafana/start-restart-grafana/" >}}).
 
 > If you experience issues when you update the EKS cluster, refer to [Amazon EKS troubleshooting](https://docs.aws.amazon.com/eks/latest/userguide/troubleshooting.html).

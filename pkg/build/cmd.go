@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/urfave/cli/v2"
 )
 
 const (
@@ -28,6 +30,12 @@ func logError(message string, err error) int {
 	log.Println(message, err)
 
 	return 1
+}
+
+func RunCmdCLI(c *cli.Context) error {
+	os.Exit(RunCmd())
+
+	return nil
 }
 
 // RunCmd runs the build command and returns the exit code
@@ -146,6 +154,11 @@ func setup(goos string) {
 
 func doBuild(binaryName, pkg string, opts BuildOpts) error {
 	log.Println("building", binaryName, pkg)
+
+	if err := setBuildEnv(opts); err != nil {
+		return err
+	}
+
 	libcPart := ""
 	if opts.libc != "" {
 		libcPart = fmt.Sprintf("-%s", opts.libc)
@@ -194,9 +207,6 @@ func doBuild(binaryName, pkg string, opts BuildOpts) error {
 		return nil
 	}
 
-	if err := setBuildEnv(opts); err != nil {
-		return err
-	}
 	runPrint("go", "version")
 	libcPart = ""
 	if opts.libc != "" {
@@ -215,12 +225,32 @@ func ldflags(opts BuildOpts) (string, error) {
 		return "", err
 	}
 
+	commitSha := getGitSha()
+	if v := os.Getenv("COMMIT_SHA"); v != "" {
+		commitSha = v
+	}
+
+	var enterpriseCommitSha string
+	if opts.enterprise {
+		enterpriseCommitSha = getGitEnterpriseSha()
+		if v := os.Getenv("ENTERPRISE_COMMIT_SHA"); v != "" {
+			enterpriseCommitSha = v
+		}
+	}
+
+	buildBranch := getGitBranch()
+	if v := os.Getenv("BUILD_BRANCH"); v != "" {
+		buildBranch = v
+	}
 	var b bytes.Buffer
 	b.WriteString("-w")
 	b.WriteString(fmt.Sprintf(" -X main.version=%s", opts.version))
-	b.WriteString(fmt.Sprintf(" -X main.commit=%s", getGitSha()))
+	b.WriteString(fmt.Sprintf(" -X main.commit=%s", commitSha))
+	if enterpriseCommitSha != "" {
+		b.WriteString(fmt.Sprintf(" -X main.enterpriseCommit=%s", enterpriseCommitSha))
+	}
 	b.WriteString(fmt.Sprintf(" -X main.buildstamp=%d", buildStamp))
-	b.WriteString(fmt.Sprintf(" -X main.buildBranch=%s", getGitBranch()))
+	b.WriteString(fmt.Sprintf(" -X main.buildBranch=%s", buildBranch))
 	if v := os.Getenv("LDFLAGS"); v != "" {
 		b.WriteString(fmt.Sprintf(" -extldflags \"%s\"", v))
 	}

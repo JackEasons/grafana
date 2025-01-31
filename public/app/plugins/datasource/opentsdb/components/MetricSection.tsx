@@ -1,7 +1,7 @@
-import React, { useCallback, useState } from 'react';
+import debounce from 'debounce-promise';
 
 import { SelectableValue, toOption } from '@grafana/data';
-import { Select, Input, InlineFormLabel } from '@grafana/ui';
+import { Select, Input, InlineFormLabel, AsyncSelect, Stack, InlineLabel } from '@grafana/ui';
 
 import { OpenTsdbQuery } from '../types';
 
@@ -9,50 +9,29 @@ export interface MetricSectionProps {
   query: OpenTsdbQuery;
   onChange: (query: OpenTsdbQuery) => void;
   onRunQuery: () => void;
-  suggestMetrics: () => Promise<SelectableValue[]>;
+  suggestMetrics: (value: string) => Promise<SelectableValue[]>;
   aggregators: string[];
 }
 
 export function MetricSection({ query, onChange, onRunQuery, suggestMetrics, aggregators }: MetricSectionProps) {
-  const [state, setState] = useState<{
-    metrics?: Array<SelectableValue<string>>;
-    isLoading?: boolean;
-  }>({});
-
-  // We are matching words split with space
-  const splitSeparator = ' ';
-  const customFilterOption = useCallback((option: SelectableValue<string>, searchQuery: string) => {
-    const label = option.value ?? '';
-
-    const searchWords = searchQuery.split(splitSeparator);
-    return searchWords.reduce((acc, cur) => acc && label.toLowerCase().includes(cur.toLowerCase()), true);
-  }, []);
-
   const aggregatorOptions = aggregators.map((value: string) => toOption(value));
+  const metricSearch = debounce((query: string) => suggestMetrics(query), 350);
 
   return (
-    <div className="gf-form-inline" data-testid={testIds.section}>
-      <div className="gf-form">
+    <Stack gap={0.5} alignItems="flex-start" data-testid={testIds.section}>
+      <Stack gap={0}>
         <InlineFormLabel width={8} className="query-keyword">
           Metric
         </InlineFormLabel>
-        <Select
+        {/* metric async select: autocomplete calls opentsdb suggest API */}
+        <AsyncSelect
           width={25}
           inputId="opentsdb-metric-select"
-          className="gf-form-input"
           value={query.metric ? toOption(query.metric) : undefined}
           placeholder="Metric name"
           allowCustomValue
-          filterOption={customFilterOption}
-          onOpenMenu={async () => {
-            if (!state.metrics) {
-              setState({ isLoading: true });
-              const metrics = await suggestMetrics();
-              setState({ metrics, isLoading: undefined });
-            }
-          }}
-          isLoading={state.isLoading}
-          options={state.metrics}
+          loadOptions={metricSearch}
+          defaultOptions={[]}
           onChange={({ value }) => {
             if (value) {
               onChange({ ...query, metric: value });
@@ -60,14 +39,13 @@ export function MetricSection({ query, onChange, onRunQuery, suggestMetrics, agg
             }
           }}
         />
-      </div>
-      <div className="gf-form">
+      </Stack>
+      <Stack gap={0} alignItems="flex-start">
         <InlineFormLabel width={'auto'} className="query-keyword">
           Aggregator
         </InlineFormLabel>
         <Select
           inputId="opentsdb-aggregator-select"
-          className="gf-form-input"
           value={query.aggregator ? toOption(query.aggregator) : undefined}
           options={aggregatorOptions}
           onChange={({ value }) => {
@@ -77,8 +55,8 @@ export function MetricSection({ query, onChange, onRunQuery, suggestMetrics, agg
             }
           }}
         />
-      </div>
-      <div className="gf-form max-width-20">
+      </Stack>
+      <Stack gap={0}>
         <InlineFormLabel
           className="query-keyword"
           width={6}
@@ -96,11 +74,11 @@ export function MetricSection({ query, onChange, onRunQuery, suggestMetrics, agg
           }}
           onBlur={() => onRunQuery()}
         />
-      </div>
-      <div className="gf-form gf-form--grow">
-        <div className="gf-form-label gf-form-label--grow"></div>
-      </div>
-    </div>
+      </Stack>
+      <Stack gap={0} grow={1}>
+        <InlineLabel> </InlineLabel>
+      </Stack>
+    </Stack>
   );
 }
 

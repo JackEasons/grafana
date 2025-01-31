@@ -7,22 +7,23 @@ import (
 	"strings"
 
 	"github.com/grafana/grafana/pkg/infra/db"
-	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/infra/metrics"
+	"github.com/grafana/grafana/pkg/services/libraryelements/model"
 )
 
 type Pair struct {
 	key   string
-	value interface{}
+	value any
 }
 
-func selectLibraryElementByParam(params []Pair) (string, []interface{}) {
+func selectLibraryElementByParam(params []Pair) (string, []any) {
 	conditions := make([]string, 0, len(params))
-	values := make([]interface{}, 0, len(params))
+	values := make([]any, 0, len(params))
 	for _, p := range params {
 		conditions = append(conditions, "le."+p.key+"=?")
 		values = append(values, p.value)
 	}
-	return ` WHERE ` + strings.Join(conditions, " AND "), values
+	return strings.Join(conditions, " AND "), values
 }
 
 func writeParamSelectorSQL(builder *db.SQLBuilder, params ...Pair) {
@@ -32,23 +33,23 @@ func writeParamSelectorSQL(builder *db.SQLBuilder, params ...Pair) {
 	}
 }
 
-func writePerPageSQL(query searchLibraryElementsQuery, sqlStore db.DB, builder *db.SQLBuilder) {
-	if query.perPage != 0 {
-		offset := query.perPage * (query.page - 1)
-		builder.Write(sqlStore.GetDialect().LimitOffset(int64(query.perPage), int64(offset)))
+func writePerPageSQL(query model.SearchLibraryElementsQuery, sqlStore db.DB, builder *db.SQLBuilder) {
+	if query.PerPage != 0 {
+		offset := query.PerPage * (query.Page - 1)
+		builder.Write(sqlStore.GetDialect().LimitOffset(int64(query.PerPage), int64(offset)))
 	}
 }
 
-func writeKindSQL(query searchLibraryElementsQuery, builder *db.SQLBuilder) {
-	if models.LibraryElementKind(query.kind) == models.PanelElement || models.LibraryElementKind(query.kind) == models.VariableElement {
-		builder.Write(" AND le.kind = ?", query.kind)
+func writeKindSQL(query model.SearchLibraryElementsQuery, builder *db.SQLBuilder) {
+	if model.LibraryElementKind(query.Kind) == model.PanelElement || model.LibraryElementKind(query.Kind) == model.VariableElement {
+		builder.Write(" AND le.kind = ?", query.Kind)
 	}
 }
 
 func writeTypeFilterSQL(typeFilter []string, builder *db.SQLBuilder) {
 	if len(typeFilter) > 0 {
 		var sql bytes.Buffer
-		params := make([]interface{}, 0)
+		params := make([]any, 0)
 		sql.WriteString(` AND le.type IN (?` + strings.Repeat(",?", len(typeFilter)-1) + ")")
 		for _, filter := range typeFilter {
 			params = append(params, filter)
@@ -57,35 +58,38 @@ func writeTypeFilterSQL(typeFilter []string, builder *db.SQLBuilder) {
 	}
 }
 
-func writeSearchStringSQL(query searchLibraryElementsQuery, sqlStore db.DB, builder *db.SQLBuilder) {
-	if len(strings.TrimSpace(query.searchString)) > 0 {
-		builder.Write(" AND (le.name "+sqlStore.GetDialect().LikeStr()+" ?", "%"+query.searchString+"%")
-		builder.Write(" OR le.description "+sqlStore.GetDialect().LikeStr()+" ?)", "%"+query.searchString+"%")
+func writeSearchStringSQL(query model.SearchLibraryElementsQuery, sqlStore db.DB, builder *db.SQLBuilder) {
+	if len(strings.TrimSpace(query.SearchString)) > 0 {
+		builder.Write(" AND (le.name "+sqlStore.GetDialect().LikeStr()+" ?", "%"+query.SearchString+"%")
+		builder.Write(" OR le.description "+sqlStore.GetDialect().LikeStr()+" ?)", "%"+query.SearchString+"%")
 	}
 }
 
-func writeExcludeSQL(query searchLibraryElementsQuery, builder *db.SQLBuilder) {
-	if len(strings.TrimSpace(query.excludeUID)) > 0 {
-		builder.Write(" AND le.uid <> ?", query.excludeUID)
+func writeExcludeSQL(query model.SearchLibraryElementsQuery, builder *db.SQLBuilder) {
+	if len(strings.TrimSpace(query.ExcludeUID)) > 0 {
+		builder.Write(" AND le.uid <> ?", query.ExcludeUID)
 	}
 }
 
 type FolderFilter struct {
 	includeGeneralFolder bool
-	folderIDs            []string
-	folderUIDs           []string
-	parseError           error
+	// Deprecated: use FolderUID instead
+	folderIDs  []string
+	folderUIDs []string
+	parseError error
 }
 
-func parseFolderFilter(query searchLibraryElementsQuery) FolderFilter {
+func parseFolderFilter(query model.SearchLibraryElementsQuery) FolderFilter {
 	folderIDs := make([]string, 0)
 	folderUIDs := make([]string, 0)
-	hasFolderFilter := len(strings.TrimSpace(query.folderFilter)) > 0
-	hasFolderFilterUID := len(strings.TrimSpace(query.folderFilterUIDs)) > 0
+	// nolint:staticcheck
+	hasFolderFilter := len(strings.TrimSpace(query.FolderFilter)) > 0
+	hasFolderFilterUID := len(strings.TrimSpace(query.FolderFilterUIDs)) > 0
 
+	metrics.MFolderIDsServiceCount.WithLabelValues(metrics.LibraryElements).Inc()
 	result := FolderFilter{
 		includeGeneralFolder: true,
-		folderIDs:            folderIDs,
+		folderIDs:            folderIDs, // nolint:staticcheck
 		folderUIDs:           folderUIDs,
 		parseError:           nil,
 	}
@@ -97,7 +101,10 @@ func parseFolderFilter(query searchLibraryElementsQuery) FolderFilter {
 
 	if hasFolderFilter {
 		result.includeGeneralFolder = false
-		folderIDs = strings.Split(query.folderFilter, ",")
+		// nolint:staticcheck
+		folderIDs = strings.Split(query.FolderFilter, ",")
+		metrics.MFolderIDsServiceCount.WithLabelValues(metrics.LibraryElements).Inc()
+		// nolint:staticcheck
 		result.folderIDs = folderIDs
 		for _, filter := range folderIDs {
 			folderID, err := strconv.ParseInt(filter, 10, 64)
@@ -113,7 +120,7 @@ func parseFolderFilter(query searchLibraryElementsQuery) FolderFilter {
 
 	if hasFolderFilterUID {
 		result.includeGeneralFolder = false
-		folderUIDs = strings.Split(query.folderFilterUIDs, ",")
+		folderUIDs = strings.Split(query.FolderFilterUIDs, ",")
 		result.folderUIDs = folderUIDs
 
 		for _, folderUID := range folderUIDs {
@@ -129,7 +136,9 @@ func parseFolderFilter(query searchLibraryElementsQuery) FolderFilter {
 
 func (f *FolderFilter) writeFolderFilterSQL(includeGeneral bool, builder *db.SQLBuilder) error {
 	var sql bytes.Buffer
-	params := make([]interface{}, 0)
+	params := make([]any, 0)
+	metrics.MFolderIDsServiceCount.WithLabelValues(metrics.LibraryElements).Inc()
+	// nolint:staticcheck
 	for _, filter := range f.folderIDs {
 		folderID, err := strconv.ParseInt(filter, 10, 64)
 		if err != nil {
@@ -145,7 +154,7 @@ func (f *FolderFilter) writeFolderFilterSQL(includeGeneral bool, builder *db.SQL
 		builder.Write(sql.String(), params...)
 	}
 
-	paramsUIDs := make([]interface{}, 0)
+	paramsUIDs := make([]any, 0)
 	for _, folderUID := range f.folderUIDs {
 		if !includeGeneral && isUIDGeneralFolder(folderUID) {
 			continue
@@ -153,7 +162,7 @@ func (f *FolderFilter) writeFolderFilterSQL(includeGeneral bool, builder *db.SQL
 		paramsUIDs = append(paramsUIDs, folderUID)
 	}
 	if len(paramsUIDs) > 0 {
-		sql.WriteString(` AND dashboard.uid IN (?` + strings.Repeat(",?", len(paramsUIDs)-1) + ")")
+		sql.WriteString(` AND le.folder_uid IN (?` + strings.Repeat(",?", len(paramsUIDs)-1) + ")")
 		builder.Write(sql.String(), paramsUIDs...)
 	}
 

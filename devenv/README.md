@@ -13,8 +13,14 @@ Grafana uses [Docker](https://docker.com) to make the task of setting up databas
 
 ## Developer dashboards and data sources
 
+To setup developer dashboards and data sources
 ```bash
 ./setup.sh
+```
+
+To remove the setup developer dashboards and data sources
+```bash
+./setup.sh undev
 ```
 
 After restarting the Grafana server, there should be a number of data sources named `gdev-<type>` provisioned as well as
@@ -75,7 +81,7 @@ host = "localhost:1025"
 You can access the web UI at http://localhost:12080/#/
 
 ## Debugging setup in VS Code
-An example of launch.json is provided in `devenv/vscode/launch.json`. It basically does what Makefile and .bra.toml do. The 'program' field is set to the folder name so VS Code loads all *.go files in it instead of just main.go.
+An example of launch.json is provided in `.vscode/launch.json`. It basically does what Makefile and .bra.toml do. The 'program' field is set to the folder name so VS Code loads all *.go files in it instead of just main.go.
 
 ## Troubleshooting
 

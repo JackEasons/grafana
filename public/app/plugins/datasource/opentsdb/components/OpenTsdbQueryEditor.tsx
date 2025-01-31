@@ -1,8 +1,8 @@
 import { css } from '@emotion/css';
-import React, { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { GrafanaTheme2, QueryEditorProps, textUtil } from '@grafana/data';
-import { useStyles2 } from '@grafana/ui';
+import { useStyles2, Stack } from '@grafana/ui';
 
 import OpenTsDatasource from '../datasource';
 import { OpenTsdbOptions, OpenTsdbQuery } from '../types';
@@ -62,28 +62,30 @@ export function OpenTsdbQueryEditor({
     query.downsampleFillPolicy = 'none';
   }
 
-  datasource.getAggregators().then((aggs: string[]) => {
-    if (aggs.length !== 0) {
-      setAggregators(aggs);
-    }
-  });
+  useEffect(() => {
+    datasource.getAggregators().then((aggs: string[]) => {
+      if (aggs.length !== 0) {
+        setAggregators(aggs);
+      }
+    });
+  }, [datasource]);
 
-  datasource.getFilterTypes().then((filterTypes: string[]) => {
-    if (filterTypes.length !== 0) {
-      setFilterTypes(filterTypes);
-    }
-  });
+  useEffect(() => {
+    datasource.getFilterTypes().then((newFilterTypes: string[]) => {
+      if (newFilterTypes.length !== 0) {
+        setFilterTypes(newFilterTypes);
+      }
+    });
+  }, [datasource]);
 
-  // previously called as an autocomplete on every input,
-  // in this we call it once on init and filter in the MetricSection component
-  async function suggestMetrics(): Promise<Array<{ value: string; description: string }>> {
-    return datasource.metricFindQuery('metrics()').then(getTextValues);
+  async function suggestMetrics(value: string): Promise<Array<{ value: string; description: string }>> {
+    return datasource.metricFindQuery(`metrics(${value})`).then(getTextValues);
   }
 
   // previously called as an autocomplete on every input,
   // in this we call it once on init and filter in the MetricSection component
-  async function suggestTagValues(): Promise<Array<{ value: string; description: string }>> {
-    return datasource.metricFindQuery('suggest_tagv()').then(getTextValues);
+  async function suggestTagValues(value: string): Promise<Array<{ value: string; description: string }>> {
+    return datasource.metricFindQuery(`suggest_tagv(${value})`).then(getTextValues);
   }
 
   async function suggestTagKeys(query: OpenTsdbQuery): Promise<string[]> {
@@ -91,17 +93,26 @@ export function OpenTsdbQueryEditor({
   }
 
   function getTextValues(metrics: Array<{ text: string }>) {
-    return metrics.map((value: { text: string }) => {
+    const variables = datasource.getVariables().map((value) => {
+      return {
+        value: textUtil.escapeHtml(value),
+        description: value,
+      };
+    });
+
+    const values = metrics.map((value: { text: string }) => {
       return {
         value: textUtil.escapeHtml(value.text),
         description: value.text,
       };
     });
+
+    return variables.concat(values);
   }
 
   return (
     <div className={styles.container} data-testid={testIds.editor}>
-      <div className={styles.visualEditor}>
+      <Stack gap={0.5} direction="column" grow={1}>
         <MetricSection
           query={query}
           onChange={onChange}
@@ -136,22 +147,19 @@ export function OpenTsdbQueryEditor({
           tsdbVersion={tsdbVersion}
         />
         <RateSection query={query} onChange={onChange} onRunQuery={onRunQuery} tsdbVersion={tsdbVersion} />
-      </div>
+      </Stack>
     </div>
   );
 }
 
 function getStyles(theme: GrafanaTheme2) {
   return {
-    container: css`
-      display: flex;
-    `,
-    visualEditor: css`
-      flex-grow: 1;
-    `,
-    toggleButton: css`
-      margin-left: ${theme.spacing(0.5)};
-    `,
+    container: css({
+      display: 'flex',
+    }),
+    toggleButton: css({
+      marginLeft: theme.spacing(0.5),
+    }),
   };
 }
 

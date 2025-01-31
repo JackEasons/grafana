@@ -54,11 +54,16 @@ func (f *FakeOrgService) Search(ctx context.Context, query *org.SearchOrgsQuery)
 	return f.ExpectedOrgs, f.ExpectedError
 }
 
-func (f *FakeOrgService) GetByID(ctx context.Context, query *org.GetOrgByIdQuery) (*org.Org, error) {
+func (f *FakeOrgService) GetByID(ctx context.Context, query *org.GetOrgByIDQuery) (*org.Org, error) {
 	return f.ExpectedOrg, f.ExpectedError
 }
 
 func (f *FakeOrgService) GetByName(ctx context.Context, query *org.GetOrgByNameQuery) (*org.Org, error) {
+	for _, expectedOrg := range f.ExpectedOrgs {
+		if expectedOrg != nil && expectedOrg.Name == query.Name {
+			return &org.Org{ID: expectedOrg.ID, Name: expectedOrg.Name}, nil
+		}
+	}
 	return f.ExpectedOrg, f.ExpectedError
 }
 
@@ -70,12 +75,8 @@ func (f *FakeOrgService) UpdateAddress(ctx context.Context, cmd *org.UpdateOrgAd
 	return f.ExpectedError
 }
 
-func (f *FakeOrgService) Delete(ctx context.Context, cmd *org.DeleteOrgCommand) error {
-	return f.ExpectedError
-}
-
 func (f *FakeOrgService) GetOrCreate(ctx context.Context, orgName string) (int64, error) {
-	return 0, f.ExpectedError
+	return f.ExpectedOrg.ID, f.ExpectedError
 }
 
 func (f *FakeOrgService) AddOrgUser(ctx context.Context, cmd *org.AddOrgUserCommand) error {
@@ -98,4 +99,19 @@ func (f *FakeOrgService) RemoveOrgUser(ctx context.Context, cmd *org.RemoveOrgUs
 
 func (f *FakeOrgService) SearchOrgUsers(ctx context.Context, query *org.SearchOrgUsersQuery) (*org.SearchOrgUsersQueryResult, error) {
 	return f.ExpectedSearchOrgUsersResult, f.ExpectedError
+}
+
+func (f *FakeOrgService) RegisterDelete(query string) {
+}
+
+type FakeOrgDeletionService struct {
+	ExpectedError error
+}
+
+func NewOrgDeletionServiceFake() *FakeOrgDeletionService {
+	return &FakeOrgDeletionService{}
+}
+
+func (f *FakeOrgDeletionService) Delete(ctx context.Context, cmd *org.DeleteOrgCommand) error {
+	return f.ExpectedError
 }

@@ -5,13 +5,14 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/grafana/grafana/pkg/services/org"
-	"github.com/grafana/grafana/pkg/services/org/orgtest"
-	"github.com/grafana/grafana/pkg/services/pluginsettings"
+	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
-	"github.com/stretchr/testify/require"
+	"github.com/grafana/grafana/pkg/plugins"
+	"github.com/grafana/grafana/pkg/services/org"
+	"github.com/grafana/grafana/pkg/services/org/orgtest"
+	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginsettings"
+	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginstore"
 )
 
 func TestPluginProvisioner(t *testing.T) {
@@ -30,7 +31,7 @@ func TestPluginProvisioner(t *testing.T) {
 					{PluginID: "test-plugin", OrgID: 2, Enabled: true},
 					{PluginID: "test-plugin-2", OrgID: 3, Enabled: false},
 					{PluginID: "test-plugin", OrgName: "Org 4", Enabled: true, SecureJSONData: map[string]string{"token": "secret"}},
-					{PluginID: "test-plugin-2", OrgID: 1, Enabled: true, JSONData: map[string]interface{}{"test": true}},
+					{PluginID: "test-plugin-2", OrgID: 1, Enabled: true, JSONData: map[string]any{"test": true}},
 				},
 			},
 		}
@@ -38,7 +39,16 @@ func TestPluginProvisioner(t *testing.T) {
 		store := &mockStore{}
 		orgMock := orgtest.NewOrgServiceFake()
 		orgMock.ExpectedOrg = &org.Org{ID: 4}
-		ap := PluginProvisioner{log: log.New("test"), cfgProvider: reader, pluginSettings: store, orgService: orgMock}
+		ap := PluginProvisioner{
+			log:            log.New("test"),
+			cfgProvider:    reader,
+			pluginSettings: store,
+			orgService:     orgMock,
+			pluginStore: pluginstore.NewFakePluginStore(
+				pluginstore.Plugin{JSONData: plugins.JSONData{ID: "test-plugin"}},
+				pluginstore.Plugin{JSONData: plugins.JSONData{ID: "test-plugin-2"}},
+			),
+		}
 
 		err := ap.applyChanges(context.Background(), "")
 		require.NoError(t, err)
@@ -49,13 +59,13 @@ func TestPluginProvisioner(t *testing.T) {
 			ExpectedOrgID          int64
 			ExpectedEnabled        bool
 			ExpectedPluginVersion  string
-			ExpectedJSONData       map[string]interface{}
+			ExpectedJSONData       map[string]any
 			ExpectedSecureJSONData map[string]string
 		}{
 			{ExpectedPluginID: "test-plugin", ExpectedOrgID: 2, ExpectedEnabled: true, ExpectedPluginVersion: "2.0.1"},
 			{ExpectedPluginID: "test-plugin-2", ExpectedOrgID: 3, ExpectedEnabled: false},
 			{ExpectedPluginID: "test-plugin", ExpectedOrgID: 4, ExpectedEnabled: true, ExpectedSecureJSONData: map[string]string{"token": "secret"}},
-			{ExpectedPluginID: "test-plugin-2", ExpectedOrgID: 1, ExpectedEnabled: true, ExpectedJSONData: map[string]interface{}{"test": true}},
+			{ExpectedPluginID: "test-plugin-2", ExpectedOrgID: 1, ExpectedEnabled: true, ExpectedJSONData: map[string]any{"test": true}},
 		}
 
 		for index, tc := range testCases {
@@ -68,6 +78,30 @@ func TestPluginProvisioner(t *testing.T) {
 			require.Equal(t, tc.ExpectedJSONData, cmd.JSONData)
 			require.Equal(t, tc.ExpectedSecureJSONData, cmd.SecureJSONData)
 		}
+	})
+
+	t.Run("Should return error trying to disable an auto-enabled plugin", func(t *testing.T) {
+		cfg := []*pluginsAsConfig{
+			{
+				Apps: []*appFromConfig{
+					{PluginID: "test-plugin", OrgID: 2, Enabled: false},
+				},
+			},
+		}
+		reader := &testConfigReader{result: cfg}
+		store := &mockStore{}
+		ap := PluginProvisioner{
+			log:            log.New("test"),
+			cfgProvider:    reader,
+			pluginSettings: store,
+			pluginStore: pluginstore.NewFakePluginStore(
+				pluginstore.Plugin{JSONData: plugins.JSONData{ID: "test-plugin", AutoEnabled: true}},
+			),
+		}
+
+		err := ap.applyChanges(context.Background(), "")
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "plugin is auto enabled and cannot be disabled")
 	})
 }
 
@@ -84,13 +118,6 @@ type mockStore struct {
 	updateRequests []*pluginsettings.UpdateArgs
 }
 
-func (m *mockStore) GetOrgByNameHandler(_ context.Context, query *models.GetOrgByNameQuery) error {
-	if query.Name == "Org 4" {
-		query.Result = &models.Org{Id: 4}
-	}
-	return nil
-}
-
 func (m *mockStore) GetPluginSettingByPluginID(_ context.Context, args *pluginsettings.GetByPluginIDArgs) (*pluginsettings.DTO, error) {
 	if args.PluginID == "test-plugin" && args.OrgID == 2 {
 		return &pluginsettings.DTO{
@@ -98,7 +125,7 @@ func (m *mockStore) GetPluginSettingByPluginID(_ context.Context, args *pluginse
 		}, nil
 	}
 
-	return nil, models.ErrPluginSettingNotFound
+	return nil, pluginsettings.ErrPluginSettingNotFound
 }
 
 func (m *mockStore) UpdatePluginSetting(_ context.Context, args *pluginsettings.UpdateArgs) error {

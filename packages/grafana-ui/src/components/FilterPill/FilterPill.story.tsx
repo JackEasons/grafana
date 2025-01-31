@@ -1,18 +1,15 @@
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React, { useState } from 'react';
-
-import { withCenteredStory } from '@grafana/ui/src/utils/storybook/withCenteredStory';
+import { Meta, StoryFn } from '@storybook/react';
+import { useState } from 'react';
 
 import { getAvailableIcons } from '../../types';
-import { HorizontalGroup } from '../Layout/Layout';
+import { Stack } from '../Layout/Stack/Stack';
 
 import { FilterPill } from './FilterPill';
 import mdx from './FilterPill.mdx';
 
-const meta: ComponentMeta<typeof FilterPill> = {
+const meta: Meta<typeof FilterPill> = {
   title: 'General/FilterPill',
   component: FilterPill,
-  decorators: [withCenteredStory],
   argTypes: {
     icon: { control: { type: 'select', options: getAvailableIcons() } },
     onClick: { action: 'Pill Clicked' },
@@ -24,7 +21,7 @@ const meta: ComponentMeta<typeof FilterPill> = {
   },
 };
 
-export const Basic: ComponentStory<typeof FilterPill> = (args) => {
+export const Basic: StoryFn<typeof FilterPill> = (args) => {
   return <FilterPill {...args} />;
 };
 
@@ -33,11 +30,11 @@ export const Example = () => {
   const elements = ['Singapore', 'Paris', 'Stockholm', 'New York', 'London'];
 
   return (
-    <HorizontalGroup>
+    <Stack>
       {elements.map((item) => (
         <FilterPill key={item} label={item} selected={item === selected} onClick={() => setSelected(item)} />
       ))}
-    </HorizontalGroup>
+    </Stack>
   );
 };
 

@@ -1,31 +1,38 @@
 import { css } from '@emotion/css';
-import React from 'react';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom-v5-compat';
 
-import { DataSourceSettings } from '@grafana/data';
-import { Card, Tag, useStyles2 } from '@grafana/ui';
-import EmptyListCTA from 'app/core/components/EmptyListCTA/EmptyListCTA';
-import PageLoader from 'app/core/components/PageLoader/PageLoader';
+import { DataSourceSettings, GrafanaTheme2 } from '@grafana/data';
+import { config } from '@grafana/runtime';
+import { EmptyState, LinkButton, TextLink, useStyles2 } from '@grafana/ui';
 import { contextSrv } from 'app/core/core';
+import { Trans, t } from 'app/core/internationalization';
 import { StoreState, AccessControlAction, useSelector } from 'app/types';
 
-import { getDataSources, getDataSourcesCount, useDataSourcesRoutes, useLoadDataSources } from '../state';
+import { ROUTES } from '../../connections/constants';
+import { getDataSources, getDataSourcesCount, useLoadDataSources } from '../state';
+import { trackDataSourcesListViewed } from '../tracking';
 
+import { DataSourcesListCard } from './DataSourcesListCard';
 import { DataSourcesListHeader } from './DataSourcesListHeader';
 
 export function DataSourcesList() {
-  useLoadDataSources();
+  const { isLoading } = useLoadDataSources();
 
   const dataSources = useSelector((state) => getDataSources(state.dataSources));
   const dataSourcesCount = useSelector(({ dataSources }: StoreState) => getDataSourcesCount(dataSources));
-  const hasFetched = useSelector(({ dataSources }: StoreState) => dataSources.hasFetched);
   const hasCreateRights = contextSrv.hasPermission(AccessControlAction.DataSourcesCreate);
+  const hasWriteRights = contextSrv.hasPermission(AccessControlAction.DataSourcesWrite);
+  const hasExploreRights = contextSrv.hasAccessToExplore();
 
   return (
     <DataSourcesListView
       dataSources={dataSources}
       dataSourcesCount={dataSourcesCount}
-      isLoading={!hasFetched}
+      isLoading={isLoading}
       hasCreateRights={hasCreateRights}
+      hasWriteRights={hasWriteRights}
+      hasExploreRights={hasExploreRights}
     />
   );
 }
@@ -35,31 +42,69 @@ export type ViewProps = {
   dataSourcesCount: number;
   isLoading: boolean;
   hasCreateRights: boolean;
+  hasWriteRights: boolean;
+  hasExploreRights: boolean;
 };
 
-export function DataSourcesListView({ dataSources, dataSourcesCount, isLoading, hasCreateRights }: ViewProps) {
+export function DataSourcesListView({
+  dataSources,
+  dataSourcesCount,
+  isLoading,
+  hasCreateRights,
+  hasWriteRights,
+  hasExploreRights,
+}: ViewProps) {
   const styles = useStyles2(getStyles);
-  const dataSourcesRoutes = useDataSourcesRoutes();
+  const location = useLocation();
 
-  if (isLoading) {
-    return <PageLoader />;
-  }
+  useEffect(() => {
+    trackDataSourcesListViewed({
+      grafana_version: config.buildInfo.version,
+      path: location.pathname,
+    });
+  }, [location]);
 
-  if (dataSourcesCount === 0) {
+  if (!isLoading && dataSourcesCount === 0) {
     return (
-      <EmptyListCTA
-        buttonDisabled={!hasCreateRights}
-        title="No data sources defined"
-        buttonIcon="database"
-        buttonLink={dataSourcesRoutes.New}
-        buttonTitle="Add data source"
-        proTip="You can also define data sources through configuration files."
-        proTipLink="http://docs.grafana.org/administration/provisioning/#datasources?utm_source=grafana_ds_list"
-        proTipLinkTitle="Learn more"
-        proTipTarget="_blank"
-      />
+      <EmptyState
+        variant="call-to-action"
+        button={
+          <LinkButton disabled={!hasCreateRights} href={ROUTES.DataSourcesNew} icon="database" size="lg">
+            <Trans i18nKey="data-source-list.empty-state.button-title">Add data source</Trans>
+          </LinkButton>
+        }
+        message={t('data-source-list.empty-state.title', 'No data sources defined')}
+      >
+        <Trans i18nKey="data-source-list.empty-state.pro-tip">
+          You can also define data sources through configuration files.{' '}
+          <TextLink
+            external
+            href="http://docs.grafana.org/administration/provisioning/?utm_source=grafana_ds_list#data-sources"
+          >
+            Learn more
+          </TextLink>
+        </Trans>
+      </EmptyState>
     );
   }
+
+  const getDataSourcesList = () => {
+    if (isLoading) {
+      return new Array(20)
+        .fill(null)
+        .map((_, index) => <DataSourcesListCard.Skeleton key={index} hasExploreRights={hasExploreRights} />);
+    }
+
+    return dataSources.map((dataSource) => (
+      <li key={dataSource.uid}>
+        <DataSourcesListCard
+          dataSource={dataSource}
+          hasWriteRights={hasWriteRights}
+          hasExploreRights={hasExploreRights}
+        />
+      </li>
+    ));
+  };
 
   return (
     <>
@@ -67,40 +112,21 @@ export function DataSourcesListView({ dataSources, dataSourcesCount, isLoading, 
       <DataSourcesListHeader />
 
       {/* List */}
-      <ul className={styles.list}>
-        {dataSources.map((dataSource) => {
-          return (
-            <li key={dataSource.uid}>
-              <Card href={dataSourcesRoutes.Edit.replace(/:uid/gi, dataSource.uid)}>
-                <Card.Heading>{dataSource.name}</Card.Heading>
-                <Card.Figure>
-                  <img src={dataSource.typeLogoUrl} alt="" height="40px" width="40px" className={styles.logo} />
-                </Card.Figure>
-                <Card.Meta>
-                  {[
-                    dataSource.typeName,
-                    dataSource.url,
-                    dataSource.isDefault && <Tag key="default-tag" name={'default'} colorIndex={1} />,
-                  ]}
-                </Card.Meta>
-              </Card>
-            </li>
-          );
-        })}
-      </ul>
+      {dataSources.length === 0 && !isLoading ? (
+        <EmptyState variant="not-found" message={t('data-sources.empty-state.message', 'No data sources found')} />
+      ) : (
+        <ul className={styles.list}>{getDataSourcesList()}</ul>
+      )}
     </>
   );
 }
 
-const getStyles = () => {
+const getStyles = (theme: GrafanaTheme2) => {
   return {
     list: css({
       listStyle: 'none',
       display: 'grid',
       // gap: '8px', Add back when legacy support for old Card interface is dropped
-    }),
-    logo: css({
-      objectFit: 'contain',
     }),
   };
 };

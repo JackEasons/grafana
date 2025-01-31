@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { SelectableValue } from '@grafana/data';
-import { EditorField } from '@grafana/experimental';
+import { EditorField } from '@grafana/plugin-ui';
 import { Select } from '@grafana/ui';
 
 import CloudMonitoringDatasource from '../datasource';
@@ -22,7 +22,6 @@ export function Project({ refId, projectName, datasource, onChange, templateVari
 
   const projectsWithTemplateVariables = useMemo(
     () => [
-      projects,
       {
         label: 'Template Variables',
         options: templateVariableOptions,

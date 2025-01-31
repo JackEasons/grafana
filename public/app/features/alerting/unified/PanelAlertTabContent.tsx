@@ -1,27 +1,29 @@
 import { css } from '@emotion/css';
-import React, { FC } from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { Alert, CustomScrollbar, LoadingPlaceholder, useStyles2 } from '@grafana/ui';
+import { Alert, LoadingPlaceholder, ScrollContainer, useStyles2 } from '@grafana/ui';
+import { Trans } from 'app/core/internationalization';
 import { contextSrv } from 'app/core/services/context_srv';
-import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+import { DashboardModel } from 'app/features/dashboard/state/DashboardModel';
+import { PanelModel } from 'app/features/dashboard/state/PanelModel';
 
 import { NewRuleFromPanelButton } from './components/panel-alerts-tab/NewRuleFromPanelButton';
 import { RulesTable } from './components/rules/RulesTable';
 import { usePanelCombinedRules } from './hooks/usePanelCombinedRules';
 import { getRulesPermissions } from './utils/access-control';
+import { stringifyErrorLike } from './utils/misc';
 
 interface Props {
   dashboard: DashboardModel;
   panel: PanelModel;
 }
 
-export const PanelAlertTabContent: FC<Props> = ({ dashboard, panel }) => {
+export const PanelAlertTabContent = ({ dashboard, panel }: Props) => {
   const styles = useStyles2(getStyles);
   const { errors, loading, rules } = usePanelCombinedRules({
-    dashboard,
-    panel,
+    dashboardUID: dashboard.uid,
+    panelId: panel.id,
     poll: true,
   });
   const permissions = getRulesPermissions('grafana');
@@ -30,7 +32,7 @@ export const PanelAlertTabContent: FC<Props> = ({ dashboard, panel }) => {
   const alert = errors.length ? (
     <Alert title="Errors loading rules" severity="error">
       {errors.map((error, index) => (
-        <div key={index}>Failed to load Grafana rules state: {error.message || 'Unknown error.'}</div>
+        <div key={index}>Failed to load Grafana rules state: {stringifyErrorLike(error)}</div>
       ))}
     </Alert>
   ) : null;
@@ -46,7 +48,7 @@ export const PanelAlertTabContent: FC<Props> = ({ dashboard, panel }) => {
 
   if (rules.length) {
     return (
-      <CustomScrollbar autoHeightMin="100%">
+      <ScrollContainer minHeight="100%">
         <div className={styles.innerWrapper}>
           {alert}
           <RulesTable rules={rules} />
@@ -54,22 +56,30 @@ export const PanelAlertTabContent: FC<Props> = ({ dashboard, panel }) => {
             <NewRuleFromPanelButton className={styles.newButton} panel={panel} dashboard={dashboard} />
           )}
         </div>
-      </CustomScrollbar>
+      </ScrollContainer>
     );
   }
 
+  const isNew = !Boolean(dashboard.uid);
+
   return (
-    <div aria-label={selectors.components.PanelAlertTabContent.content} className={styles.noRulesWrapper}>
+    <div data-testid={selectors.components.PanelAlertTabContent.content} className={styles.noRulesWrapper}>
       {alert}
-      {!!dashboard.uid && (
+      {!isNew && (
         <>
-          <p>There are no alert rules linked to this panel.</p>
+          <p>
+            <Trans i18nKey="dashboard.panel-edit.alerting-tab.no-rules">
+              There are no alert rules linked to this panel.
+            </Trans>
+          </p>
           {!!dashboard.meta.canSave && canCreateRules && <NewRuleFromPanelButton panel={panel} dashboard={dashboard} />}
         </>
       )}
-      {!dashboard.uid && !!dashboard.meta.canSave && (
+      {isNew && !!dashboard.meta.canSave && (
         <Alert severity="info" title="Dashboard not saved">
-          Dashboard must be saved before alerts can be added.
+          <Trans i18nKey="dashboard.panel-edit.alerting-tab.dashboard-not-saved">
+            Dashboard must be saved before alerts can be added.
+          </Trans>
         </Alert>
       )}
     </div>
@@ -77,15 +87,15 @@ export const PanelAlertTabContent: FC<Props> = ({ dashboard, panel }) => {
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  newButton: css`
-    margin-top: ${theme.spacing(3)};
-  `,
-  innerWrapper: css`
-    padding: ${theme.spacing(2)};
-  `,
-  noRulesWrapper: css`
-    margin: ${theme.spacing(2)};
-    background-color: ${theme.colors.background.secondary};
-    padding: ${theme.spacing(3)};
-  `,
+  newButton: css({
+    marginTop: theme.spacing(3),
+  }),
+  innerWrapper: css({
+    padding: theme.spacing(2),
+  }),
+  noRulesWrapper: css({
+    margin: theme.spacing(2),
+    backgroundColor: theme.colors.background.secondary,
+    padding: theme.spacing(3),
+  }),
 });

@@ -1,39 +1,40 @@
 import { useMemo } from 'react';
 import useAsync from 'react-use/lib/useAsync';
 
-import { DataQueryError, DataSourceApi, PanelData, PanelPlugin } from '@grafana/data';
+import { DataSourceApi, PanelData, PanelPlugin } from '@grafana/data';
 import { getDataSourceSrv } from '@grafana/runtime';
 import { t } from 'app/core/internationalization';
-import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+import { DashboardModel } from 'app/features/dashboard/state/DashboardModel';
+import { PanelModel } from 'app/features/dashboard/state/PanelModel';
 import { InspectTab } from 'app/features/inspector/types';
 
 import { supportsDataQuery } from '../PanelEditor/utils';
-
-import { PanelInspectActionSupplier } from './PanelInspectActions';
 
 /**
  * Given PanelData return first data source supporting metadata inspector
  */
 export const useDatasourceMetadata = (data?: PanelData) => {
-  const state = useAsync(async () => {
-    const targets = data?.request?.targets || [];
+  const state = useAsync(async () => getDataSourceWithInspector(data), [data]);
+  return state.value;
+};
 
-    if (data && data.series && targets.length) {
-      for (const frame of data.series) {
-        if (frame.meta && frame.meta.custom) {
-          // get data source from first query
-          const dataSource = await getDataSourceSrv().get(targets[0].datasource);
-          if (dataSource && dataSource.components?.MetadataInspector) {
-            return dataSource;
-          }
+export async function getDataSourceWithInspector(data?: PanelData): Promise<DataSourceApi | undefined> {
+  const targets = data?.request?.targets || [];
+
+  if (data && data.series && targets.length) {
+    for (const frame of data.series) {
+      if (frame.meta && frame.meta.custom) {
+        // get data source from first query
+        const dataSource = await getDataSourceSrv().get(targets[0].datasource);
+        if (dataSource && dataSource.components?.MetadataInspector) {
+          return dataSource;
         }
       }
     }
+  }
 
-    return undefined;
-  }, [data]);
-  return state.value;
-};
+  return undefined;
+}
 
 /**
  * Configures tabs for PanelInspector
@@ -42,7 +43,7 @@ export const useInspectTabs = (
   panel: PanelModel,
   dashboard: DashboardModel,
   plugin: PanelPlugin | undefined | null,
-  error?: DataQueryError,
+  hasError?: boolean,
   metaDs?: DataSourceApi
 ) => {
   return useMemo(() => {
@@ -53,28 +54,18 @@ export const useInspectTabs = (
     }
 
     if (metaDs) {
-      tabs.push({ label: t('dashboard.inspect.meta-tab', 'Meta Data'), value: InspectTab.Meta });
+      tabs.push({ label: t('dashboard.inspect.meta-tab', 'Meta data'), value: InspectTab.Meta });
     }
 
     tabs.push({ label: t('dashboard.inspect.json-tab', 'JSON'), value: InspectTab.JSON });
 
-    if (error && error.message) {
+    if (hasError) {
       tabs.push({ label: t('dashboard.inspect.error-tab', 'Error'), value: InspectTab.Error });
-    }
-
-    // This is a quick internal hack to allow custom actions in inspect
-    // For 8.1, something like this should be exposed through grafana/runtime
-    const supplier = (window as any).grafanaPanelInspectActionSupplier as PanelInspectActionSupplier;
-    if (supplier && supplier.getActions(panel)?.length) {
-      tabs.push({
-        label: t('dashboard.inspect.actions-tab', 'Actions'),
-        value: InspectTab.Actions,
-      });
     }
 
     if (dashboard.meta.canEdit && supportsDataQuery(plugin)) {
       tabs.push({ label: t('dashboard.inspect.query-tab', 'Query'), value: InspectTab.Query });
     }
     return tabs;
-  }, [panel, plugin, metaDs, dashboard, error]);
+  }, [plugin, metaDs, dashboard, hasError]);
 };

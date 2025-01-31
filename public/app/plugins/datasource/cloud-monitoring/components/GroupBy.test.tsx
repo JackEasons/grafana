@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
+import userEvent from '@testing-library/user-event';
 import { openMenu, select } from 'react-select-event';
 
-import { createMockMetricQuery } from '../__mocks__/cloudMonitoringQuery';
+import { createMockTimeSeriesList } from '../__mocks__/cloudMonitoringQuery';
+import { MetricDescriptor } from '../types/types';
 
 import { GroupBy, Props } from './GroupBy';
 
@@ -12,10 +13,10 @@ const props: Props = {
   metricDescriptor: {
     valueType: '',
     metricKind: '',
-  } as any,
+  } as unknown as MetricDescriptor,
   variableOptionGroup: { options: [] },
   labels: [],
-  query: createMockMetricQuery(),
+  query: createMockTimeSeriesList(),
 };
 
 describe('GroupBy', () => {
@@ -37,6 +38,20 @@ describe('GroupBy', () => {
     expect(screen.getByText(option)).toBeInTheDocument();
 
     await select(groupBy, option, { container: document.body });
+    expect(onChange).toBeCalledWith(expect.objectContaining({ groupBys: expect.arrayContaining([option]) }));
+  });
+
+  it('can add a custom group by', async () => {
+    const onChange = jest.fn();
+    render(<GroupBy {...props} onChange={onChange} />);
+
+    const groupBy = screen.getByLabelText('Group by');
+    const option = 'metadata.custom.group_by';
+
+    await openMenu(groupBy);
+    expect(screen.queryByText(option)).not.toBeInTheDocument();
+    await userEvent.type(groupBy, `${option}{enter}`);
+
     expect(onChange).toBeCalledWith(expect.objectContaining({ groupBys: expect.arrayContaining([option]) }));
   });
 });

@@ -16,8 +16,8 @@ import (
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/infra/serverlock"
 	"github.com/grafana/grafana/pkg/infra/tracing"
-	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/annotations"
+	"github.com/grafana/grafana/pkg/services/dashboards"
 	"github.com/grafana/grafana/pkg/services/dashboardsnapshots"
 	dashver "github.com/grafana/grafana/pkg/services/dashboardversion"
 	"github.com/grafana/grafana/pkg/services/ngalert/image"
@@ -26,27 +26,6 @@ import (
 	tempuser "github.com/grafana/grafana/pkg/services/temp_user"
 	"github.com/grafana/grafana/pkg/setting"
 )
-
-func ProvideService(cfg *setting.Cfg, serverLockService *serverlock.ServerLockService,
-	shortURLService shorturls.Service, sqlstore db.DB, queryHistoryService queryhistory.Service,
-	dashboardVersionService dashver.Service, dashSnapSvc dashboardsnapshots.Service, deleteExpiredImageService *image.DeleteExpiredService,
-	tempUserService tempuser.Service, tracer tracing.Tracer, annotationCleaner annotations.Cleaner) *CleanUpService {
-	s := &CleanUpService{
-		Cfg:                       cfg,
-		ServerLockService:         serverLockService,
-		ShortURLService:           shortURLService,
-		QueryHistoryService:       queryHistoryService,
-		store:                     sqlstore,
-		log:                       log.New("cleanup"),
-		dashboardVersionService:   dashboardVersionService,
-		dashboardSnapshotService:  dashSnapSvc,
-		deleteExpiredImageService: deleteExpiredImageService,
-		tempUserService:           tempUserService,
-		tracer:                    tracer,
-		annotationCleaner:         annotationCleaner,
-	}
-	return s
-}
 
 type CleanUpService struct {
 	log                       log.Logger
@@ -61,6 +40,29 @@ type CleanUpService struct {
 	deleteExpiredImageService *image.DeleteExpiredService
 	tempUserService           tempuser.Service
 	annotationCleaner         annotations.Cleaner
+	dashboardService          dashboards.DashboardService
+}
+
+func ProvideService(cfg *setting.Cfg, serverLockService *serverlock.ServerLockService,
+	shortURLService shorturls.Service, sqlstore db.DB, queryHistoryService queryhistory.Service,
+	dashboardVersionService dashver.Service, dashSnapSvc dashboardsnapshots.Service, deleteExpiredImageService *image.DeleteExpiredService,
+	tempUserService tempuser.Service, tracer tracing.Tracer, annotationCleaner annotations.Cleaner, dashboardService dashboards.DashboardService) *CleanUpService {
+	s := &CleanUpService{
+		Cfg:                       cfg,
+		ServerLockService:         serverLockService,
+		ShortURLService:           shortURLService,
+		QueryHistoryService:       queryHistoryService,
+		store:                     sqlstore,
+		log:                       log.New("cleanup"),
+		dashboardVersionService:   dashboardVersionService,
+		dashboardSnapshotService:  dashSnapSvc,
+		deleteExpiredImageService: deleteExpiredImageService,
+		tempUserService:           tempUserService,
+		tracer:                    tracer,
+		annotationCleaner:         annotationCleaner,
+		dashboardService:          dashboardService,
+	}
+	return s
 }
 
 type cleanUpJob struct {
@@ -101,8 +103,13 @@ func (srv *CleanUpService) clean(ctx context.Context) {
 		{"delete expired images", srv.deleteExpiredImages},
 		{"cleanup old annotations", srv.cleanUpOldAnnotations},
 		{"expire old user invites", srv.expireOldUserInvites},
-		{"delete stale short URLs", srv.deleteStaleShortURLs},
 		{"delete stale query history", srv.deleteStaleQueryHistory},
+		{"expire old email verifications", srv.expireOldVerifications},
+		{"cleanup trash dashboards", srv.cleanUpTrashDashboards},
+	}
+
+	if srv.Cfg.ShortLinkExpiration > 0 {
+		cleanupJobs = append(cleanupJobs, cleanUpJob{"delete stale short URLs", srv.deleteStaleShortURLs})
 	}
 
 	logger := srv.log.FromContext(ctx)
@@ -135,11 +142,12 @@ func (srv *CleanUpService) cleanUpTmpFiles(ctx context.Context) {
 	folders := []string{
 		srv.Cfg.ImagesDir,
 		srv.Cfg.CSVsDir,
+		srv.Cfg.PDFsDir,
 	}
 
 	for _, f := range folders {
 		ctx, span := srv.tracer.Start(ctx, "delete stale files in temporary directory")
-		span.SetAttributes("directory", f, attribute.Key("directory").String(f))
+		span.SetAttributes(attribute.String("directory", f))
 		srv.cleanUpTmpFolder(ctx, f)
 		span.End()
 	}
@@ -227,7 +235,7 @@ func (srv *CleanUpService) expireOldUserInvites(ctx context.Context) {
 	logger := srv.log.FromContext(ctx)
 	maxInviteLifetime := srv.Cfg.UserInviteMaxLifetime
 
-	cmd := models.ExpireTempUsersCommand{
+	cmd := tempuser.ExpireTempUsersCommand{
 		OlderThan: time.Now().Add(-maxInviteLifetime),
 	}
 
@@ -238,10 +246,25 @@ func (srv *CleanUpService) expireOldUserInvites(ctx context.Context) {
 	}
 }
 
+func (srv *CleanUpService) expireOldVerifications(ctx context.Context) {
+	logger := srv.log.FromContext(ctx)
+	maxVerificationLifetime := srv.Cfg.VerificationEmailMaxLifetime
+
+	cmd := tempuser.ExpireTempUsersCommand{
+		OlderThan: time.Now().Add(-maxVerificationLifetime),
+	}
+
+	if err := srv.tempUserService.ExpireOldVerifications(ctx, &cmd); err != nil {
+		logger.Error("Problem expiring email verifications", "error", err.Error())
+	} else {
+		logger.Debug("Expired email verifications", "rows affected", cmd.NumExpired)
+	}
+}
+
 func (srv *CleanUpService) deleteStaleShortURLs(ctx context.Context) {
 	logger := srv.log.FromContext(ctx)
-	cmd := models.DeleteShortUrlCommand{
-		OlderThan: time.Now().Add(-time.Hour * 24 * 7),
+	cmd := shorturls.DeleteShortUrlCommand{
+		OlderThan: time.Now().Add(-time.Duration(srv.Cfg.ShortLinkExpiration*24) * time.Hour),
 	}
 	if err := srv.ShortURLService.DeleteStaleShortURLs(ctx, &cmd); err != nil {
 		logger.Error("Problem deleting stale short urls", "error", err.Error())
@@ -278,5 +301,15 @@ func (srv *CleanUpService) deleteStaleQueryHistory(ctx context.Context) {
 		logger.Error("Problem with enforcing row limit for query_history_star", "error", err.Error())
 	} else {
 		logger.Debug("Enforced row limit for query_history_star", "rows affected", rowsCount)
+	}
+}
+
+func (srv *CleanUpService) cleanUpTrashDashboards(ctx context.Context) {
+	logger := srv.log.FromContext(ctx)
+	affected, err := srv.dashboardService.CleanUpDeletedDashboards(ctx)
+	if err != nil {
+		logger.Error("Problem cleaning up deleted dashboards", "error", err)
+	} else {
+		logger.Debug("Cleaned up deleted dashboards", "dashboards affected", affected)
 	}
 }

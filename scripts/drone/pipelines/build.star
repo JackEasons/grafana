@@ -1,111 +1,183 @@
-load(
-    'scripts/drone/steps/lib.star',
-    'download_grabpl_step',
-    'build_image',
-    'identify_runner_step',
-    'wire_install_step',
-    'yarn_install_step',
-    'build_backend_step',
-    'build_frontend_step',
-    'build_frontend_package_step',
-    'build_plugins_step',
-    'package_step',
-    'grafana_server_step',
-    'e2e_tests_step',
-    'e2e_tests_artifacts',
-    'build_storybook_step',
-    'copy_packages_for_docker_step',
-    'build_docker_images_step',
-    'publish_images_step',
-    'postgres_integration_tests_step',
-    'mysql_integration_tests_step',
-    'redis_integration_tests_step',
-    'memcached_integration_tests_step',
-    'get_windows_steps',
-    'benchmark_ldap_step',
-    'enterprise_downstream_step',
-    'frontend_metrics_step',
-    'store_storybook_step',
-    'release_canary_npm_packages_step',
-    'upload_packages_step',
-    'upload_cdn_step',
-    'verify_gen_cue_step',
-    'verify_gen_jsonnet_step',
-    'test_a11y_frontend_step',
-    'trigger_oss',
-    'betterer_frontend_step',
-    'trigger_test_release',
-    'compile_build_cmd',
-    'cloud_plugins_e2e_tests_step',
-)
+"""This module contains the comprehensive build pipeline."""
 
 load(
-    'scripts/drone/utils/utils.star',
-    'pipeline',
+    "scripts/drone/steps/github.star",
+    "github_app_generate_token_step",
+    "github_app_pipeline_volumes",
+)
+load(
+    "scripts/drone/steps/lib.star",
+    "build_frontend_package_step",
+    "build_storybook_step",
+    "build_test_plugins_step",
+    "cloud_plugins_e2e_tests_step",
+    "compile_build_cmd",
+    "download_grabpl_step",
+    "e2e_tests_artifacts",
+    "e2e_tests_step",
+    "enterprise_downstream_step",
+    "frontend_metrics_step",
+    "grafana_server_step",
+    "identify_runner_step",
+    "playwright_e2e_report_post_link",
+    "playwright_e2e_report_upload",
+    "playwright_e2e_tests_step",
+    "publish_images_step",
+    "release_canary_npm_packages_step",
+    "store_storybook_step",
+    "test_a11y_frontend_step",
+    "trigger_oss",
+    "update_package_json_version",
+    "upload_cdn_step",
+    "upload_packages_step",
+    "verify_gen_cue_step",
+    "verify_gen_jsonnet_step",
+    "yarn_install_step",
+)
+load(
+    "scripts/drone/steps/rgm.star",
+    "rgm_artifacts_step",
+)
+load(
+    "scripts/drone/utils/images.star",
+    "images",
+)
+load(
+    "scripts/drone/utils/utils.star",
+    "pipeline",
 )
 
-def build_e2e(trigger, ver_mode, edition):
-    environment = {'EDITION': edition}
-    variants = ['linux-amd64', 'linux-amd64-musl', 'darwin-amd64', 'windows-amd64',]
+# This function isn't actually unused but I don't know why the linter thinks it is...
+# @unused
+def build_e2e(trigger, ver_mode):
+    """Perform e2e building, testing, and publishing.
+
+    Args:
+      trigger: controls which events can trigger the pipeline execution.
+      ver_mode: used in the naming of the pipeline. Either 'pr' or 'main'.
+
+    Returns:
+      Drone pipeline.
+    """
+
+    environment = {"EDITION": "oss"}
     init_steps = [
+        github_app_generate_token_step(),
         identify_runner_step(),
         download_grabpl_step(),
         compile_build_cmd(),
-        verify_gen_cue_step(edition="oss"),
-        verify_gen_jsonnet_step(edition="oss"),
-        wire_install_step(),
+        verify_gen_cue_step(),
+        verify_gen_jsonnet_step(),
         yarn_install_step(),
     ]
+
     build_steps = []
-    if ver_mode == 'pr':
-        build_steps.extend([trigger_test_release()])
-        build_steps.extend([enterprise_downstream_step(edition=edition, ver_mode=ver_mode)])
-    build_steps.extend([
-        build_backend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_package_step(edition=edition, ver_mode=ver_mode),
-        build_plugins_step(edition=edition, ver_mode=ver_mode),
-   ])
-    if ver_mode == 'main':
-        build_steps.extend([package_step(edition=edition, ver_mode=ver_mode)])
-    elif ver_mode == 'pr':
-        build_steps.extend([package_step(edition=edition, ver_mode=ver_mode, variants=variants)])
 
-    build_steps.extend([
-        grafana_server_step(edition=edition),
-        e2e_tests_step('dashboards-suite', edition=edition),
-        e2e_tests_step('smoke-tests-suite', edition=edition),
-        e2e_tests_step('panels-suite', edition=edition),
-        e2e_tests_step('various-suite', edition=edition),
-        cloud_plugins_e2e_tests_step('cloud-plugins-suite', edition=edition, cloud='azure', trigger=trigger_oss),
-        e2e_tests_artifacts(edition=edition),
-        build_storybook_step(edition=edition, ver_mode=ver_mode),
-        copy_packages_for_docker_step(),
-        test_a11y_frontend_step(ver_mode=ver_mode, edition=edition),
-    ])
-    if ver_mode == 'main':
+    create_packages = rgm_artifacts_step(
+        alpine = images["alpine"],
+        artifacts = [
+            "targz:grafana:linux/amd64",
+            "targz:grafana:linux/arm64",
+            "targz:grafana:linux/arm/v7",
+            "docker:grafana:linux/amd64",
+            "docker:grafana:linux/amd64:ubuntu",
+            "docker:grafana:linux/arm64",
+            "docker:grafana:linux/arm64:ubuntu",
+            "docker:grafana:linux/arm/v7",
+            "docker:grafana:linux/arm/v7:ubuntu",
+        ],
+        file = "packages.txt",
+        tag_format = "{{ .version_base }}-{{ .buildID }}-{{ .arch }}",
+        ubuntu = images["ubuntu"],
+        ubuntu_tag_format = "{{ .version_base }}-{{ .buildID }}-ubuntu-{{ .arch }}",
+    )
+
+    publish_docker = publish_images_step(
+        depends_on = [create_packages["name"]],
+        docker_repo = "grafana",
+        trigger = trigger_oss,
+        ver_mode = ver_mode,
+    )
+
+    if ver_mode == "pr":
+        build_steps.extend(
+            [
+                build_frontend_package_step(),
+                enterprise_downstream_step(ver_mode = ver_mode),
+            ],
+        )
+    else:
+        # The only other event or "ver_mode" where this is used is 'main'
+        update_package_json = update_package_json_version()
+        create_packages["depends_on"] = [update_package_json["name"]]
+
         build_steps.extend([
-            store_storybook_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss),
-            frontend_metrics_step(edition=edition, trigger=trigger_oss)
+            update_package_json,
+            build_frontend_package_step(depends_on = ["update-package-json-version"]),
         ])
 
-    if ver_mode == 'main':
-        build_steps.extend([
-            build_docker_images_step(edition=edition, ver_mode=ver_mode, publish=False),
-            build_docker_images_step(edition=edition, ver_mode=ver_mode, ubuntu=True, publish=False),
-            publish_images_step(edition=edition, ver_mode=ver_mode, mode='', docker_repo='grafana', trigger=trigger_oss),
-            publish_images_step(edition=edition, ver_mode=ver_mode, mode='', docker_repo='grafana-oss', trigger=trigger_oss),
-            release_canary_npm_packages_step(edition, trigger=trigger_oss),
-            upload_packages_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss),
-            upload_cdn_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss)
-        ])
-    elif ver_mode == 'pr':
-        build_steps.extend([build_docker_images_step(edition=edition, ver_mode=ver_mode, archs=['amd64', ])])
+    build_steps.extend(
+        [
+            create_packages,
+            publish_docker,
+            build_test_plugins_step(),
+            grafana_server_step(),
+            e2e_tests_step("dashboards-suite"),
+            e2e_tests_step("old-arch/dashboards-suite"),
+            e2e_tests_step("smoke-tests-suite"),
+            e2e_tests_step("old-arch/smoke-tests-suite"),
+            e2e_tests_step("panels-suite"),
+            e2e_tests_step("old-arch/panels-suite"),
+            e2e_tests_step("various-suite"),
+            e2e_tests_step("old-arch/various-suite"),
+            cloud_plugins_e2e_tests_step(
+                "cloud-plugins-suite",
+                cloud = "azure",
+                trigger = trigger_oss,
+            ),
+            playwright_e2e_tests_step(),
+            playwright_e2e_report_upload(),
+            playwright_e2e_report_post_link(),
+            e2e_tests_artifacts(),
+            build_storybook_step(ver_mode = ver_mode),
+            test_a11y_frontend_step(ver_mode = ver_mode),
+        ],
+    )
 
-    publish_suffix = ''
-    if ver_mode == 'main':
-        publish_suffix = '-publish'
+    if ver_mode == "main":
+        build_steps.extend(
+            [
+                store_storybook_step(trigger = trigger_oss, ver_mode = ver_mode),
+                frontend_metrics_step(trigger = trigger_oss),
+                publish_images_step(
+                    depends_on = [create_packages["name"]],
+                    docker_repo = "grafana-oss",
+                    trigger = trigger_oss,
+                    ver_mode = ver_mode,
+                ),
+                release_canary_npm_packages_step(trigger = trigger_oss),
+                upload_packages_step(
+                    depends_on = [create_packages["name"]],
+                    trigger = trigger_oss,
+                    ver_mode = ver_mode,
+                ),
+                upload_cdn_step(
+                    depends_on = [create_packages["name"]],
+                    trigger = trigger_oss,
+                    ver_mode = ver_mode,
+                ),
+            ],
+        )
+
+    publish_suffix = ""
+    if ver_mode == "main":
+        publish_suffix = "-publish"
 
     return pipeline(
-        name='{}-build-e2e{}'.format(ver_mode, publish_suffix), edition="oss", trigger=trigger, services=[], steps=init_steps + build_steps, environment=environment,
+        name = "{}-build-e2e{}".format(ver_mode, publish_suffix),
+        environment = environment,
+        services = [],
+        steps = init_steps + build_steps,
+        trigger = trigger,
+        volumes = github_app_pipeline_volumes(),
     )

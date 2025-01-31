@@ -1,5 +1,7 @@
 package definitions
 
+import "github.com/grafana/grafana/pkg/apimachinery/errutil"
+
 // swagger:model
 type NotFound struct{}
 
@@ -9,5 +11,12 @@ type Ack struct{}
 // swagger:model
 type ValidationError struct {
 	// example: error message
-	Msg string `json:"msg"`
+	Message string `json:"message"`
+}
+
+// swagger:model
+type ForbiddenError struct {
+	// The response message
+	// in: body
+	Body errutil.PublicError `json:"body"`
 }

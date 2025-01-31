@@ -1,23 +1,23 @@
-import { render, screen } from '@testing-library/react';
-import React, { ComponentType } from 'react';
-import { Provider } from 'react-redux';
-import { BrowserRouter } from 'react-router-dom';
-import { getGrafanaContextMock } from 'test/mocks/getGrafanaContextMock';
+import { screen } from '@testing-library/react';
+import { lazy, ComponentType } from 'react';
+import { render } from 'test/test-utils';
 
 import { setEchoSrv } from '@grafana/runtime';
 
-import { configureStore } from '../../store/configureStore';
-import { GrafanaContext } from '../context/GrafanaContext';
 import { Echo } from '../services/echo/Echo';
 
 import { GrafanaRoute, Props } from './GrafanaRoute';
+import { GrafanaRouteComponentProps } from './types';
 
+const mockLocation = {
+  search: '?query=hello&test=asd',
+  pathname: '',
+  state: undefined,
+  hash: '',
+};
 function setup(overrides: Partial<Props>) {
-  const store = configureStore();
   const props: Props = {
-    location: { search: '?query=hello&test=asd' } as any,
-    history: {} as any,
-    match: {} as any,
+    location: mockLocation,
     route: {
       path: '/',
       component: () => <div />,
@@ -25,15 +25,7 @@ function setup(overrides: Partial<Props>) {
     ...overrides,
   };
 
-  render(
-    <BrowserRouter>
-      <GrafanaContext.Provider value={getGrafanaContextMock()}>
-        <Provider store={store}>
-          <GrafanaRoute {...props} />
-        </Provider>
-      </GrafanaContext.Provider>
-    </BrowserRouter>
-  );
+  render(<GrafanaRoute {...props} />);
 }
 
 describe('GrafanaRoute', () => {
@@ -42,24 +34,24 @@ describe('GrafanaRoute', () => {
   });
 
   it('Parses search', () => {
-    let capturedProps: any;
-    const PageComponent = (props: any) => {
+    let capturedProps: GrafanaRouteComponentProps;
+    const PageComponent = (props: GrafanaRouteComponentProps) => {
       capturedProps = props;
       return <div />;
     };
 
     setup({ route: { component: PageComponent, path: '' } });
-    expect(capturedProps.queryParams.query).toBe('hello');
+    expect(capturedProps!.queryParams.query).toBe('hello');
   });
 
   it('Shows loading on lazy load', async () => {
-    const PageComponent = React.lazy(() => {
+    const PageComponent = lazy(() => {
       return new Promise<{ default: ComponentType }>(() => {});
     });
 
     setup({ route: { component: PageComponent, path: '' } });
 
-    expect(await screen.findByText('Loading...')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Loading')).toBeInTheDocument();
   });
 
   it('Shows error on page error', async () => {

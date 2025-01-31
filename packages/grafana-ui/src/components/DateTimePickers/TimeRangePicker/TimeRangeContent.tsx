@@ -1,8 +1,8 @@
 import { css } from '@emotion/css';
-import React, { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useId, useState } from 'react';
+import * as React from 'react';
 
 import {
-  dateMath,
   DateTime,
   dateTimeFormat,
   dateTimeParse,
@@ -15,12 +15,15 @@ import {
 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 
-import { Icon, Tooltip } from '../..';
-import { useStyles2 } from '../../..';
+import { useStyles2 } from '../../../themes/ThemeContext';
 import { t, Trans } from '../../../utils/i18n';
 import { Button } from '../../Button';
 import { Field } from '../../Forms/Field';
+import { Icon } from '../../Icon/Icon';
 import { Input } from '../../Input/Input';
+import { Tooltip } from '../../Tooltip/Tooltip';
+import { WeekStart } from '../WeekStartPicker';
+import { isValid } from '../utils';
 
 import TimePickerCalendar from './TimePickerCalendar';
 
@@ -32,6 +35,8 @@ interface Props {
   fiscalYearStartMonth?: number;
   roundup?: boolean;
   isReversed?: boolean;
+  onError?: (error?: string) => void;
+  weekStart?: WeekStart;
 }
 
 interface InputState {
@@ -46,13 +51,25 @@ const ERROR_MESSAGES = {
 };
 
 export const TimeRangeContent = (props: Props) => {
-  const { value, isFullscreen = false, timeZone, onApply: onApplyFromProps, isReversed, fiscalYearStartMonth } = props;
+  const {
+    value,
+    isFullscreen = false,
+    timeZone,
+    onApply: onApplyFromProps,
+    isReversed,
+    fiscalYearStartMonth,
+    onError,
+    weekStart,
+  } = props;
   const [fromValue, toValue] = valueToState(value.raw.from, value.raw.to, timeZone);
   const style = useStyles2(getStyles);
 
   const [from, setFrom] = useState<InputState>(fromValue);
   const [to, setTo] = useState<InputState>(toValue);
   const [isOpen, setOpen] = useState(false);
+
+  const fromFieldId = useId();
+  const toFieldId = useId();
 
   // Synchronize internal state with external value
   useEffect(() => {
@@ -95,6 +112,29 @@ export const TimeRangeContent = (props: Props) => {
     }
   };
 
+  const onCopy = () => {
+    const raw: RawTimeRange = { from: from.value, to: to.value };
+    navigator.clipboard.writeText(JSON.stringify(raw));
+  };
+
+  const onPaste = async () => {
+    const raw = await navigator.clipboard.readText();
+    let range;
+
+    try {
+      range = JSON.parse(raw);
+    } catch (error) {
+      if (onError) {
+        onError(raw);
+      }
+      return;
+    }
+
+    const [fromValue, toValue] = valueToState(range.from, range.to, timeZone);
+    setFrom(fromValue);
+    setTo(toValue);
+  };
+
   const fiscalYear = rangeUtil.convertRawToRange({ from: 'now/fy', to: 'now/fy' }, timeZone, fiscalYearStartMonth);
   const fiscalYearMessage = t('time-picker.range-content.fiscal-year', 'Fiscal year');
 
@@ -112,7 +152,8 @@ export const TimeRangeContent = (props: Props) => {
 
   const icon = (
     <Button
-      aria-label={selectors.components.TimePicker.calendar.openButton}
+      aria-label={t('time-picker.range-content.open-input-calendar', 'Open calendar')}
+      data-testid={selectors.components.TimePicker.calendar.openButton}
       icon="calendar-alt"
       variant="secondary"
       type="button"
@@ -129,11 +170,12 @@ export const TimeRangeContent = (props: Props) => {
           error={from.errorMessage}
         >
           <Input
+            id={fromFieldId}
             onClick={(event) => event.stopPropagation()}
             onChange={(event) => onChange(event.currentTarget.value, to.value)}
             addonAfter={icon}
             onKeyDown={submitOnEnter}
-            aria-label={selectors.components.TimePicker.fromField}
+            data-testid={selectors.components.TimePicker.fromField}
             value={from.value}
           />
         </Field>
@@ -142,30 +184,50 @@ export const TimeRangeContent = (props: Props) => {
       <div className={style.fieldContainer}>
         <Field label={t('time-picker.range-content.to-input', 'To')} invalid={to.invalid} error={to.errorMessage}>
           <Input
+            id={toFieldId}
             onClick={(event) => event.stopPropagation()}
             onChange={(event) => onChange(from.value, event.currentTarget.value)}
             addonAfter={icon}
             onKeyDown={submitOnEnter}
-            aria-label={selectors.components.TimePicker.toField}
+            data-testid={selectors.components.TimePicker.toField}
             value={to.value}
           />
         </Field>
         {fyTooltip}
       </div>
-      <Button data-testid={selectors.components.TimePicker.applyTimeRange} type="button" onClick={onApply}>
-        <Trans i18nKey="time-picker.range-content.apply-button">Apply time range</Trans>
-      </Button>
+      <div className={style.buttonsContainer}>
+        <Button
+          data-testid={selectors.components.TimePicker.copyTimeRange}
+          icon="copy"
+          variant="secondary"
+          tooltip={t('time-picker.copy-paste.tooltip-copy', 'Copy time range to clipboard')}
+          type="button"
+          onClick={onCopy}
+        />
+        <Button
+          data-testid={selectors.components.TimePicker.pasteTimeRange}
+          icon="clipboard-alt"
+          variant="secondary"
+          tooltip={t('time-picker.copy-paste.tooltip-paste', 'Paste time range')}
+          type="button"
+          onClick={onPaste}
+        />
+        <Button data-testid={selectors.components.TimePicker.applyTimeRange} type="button" onClick={onApply}>
+          <Trans i18nKey="time-picker.range-content.apply-button">Apply time range</Trans>
+        </Button>
+      </div>
 
       <TimePickerCalendar
         isFullscreen={isFullscreen}
         isOpen={isOpen}
-        from={dateTimeParse(from.value)}
-        to={dateTimeParse(to.value)}
+        from={dateTimeParse(from.value, { timeZone })}
+        to={dateTimeParse(to.value, { timeZone })}
         onApply={onApply}
         onClose={() => setOpen(false)}
         onChange={onChange}
         timeZone={timeZone}
         isReversed={isReversed}
+        weekStart={weekStart}
       />
     </div>
   );
@@ -205,30 +267,28 @@ function valueAsString(value: DateTime | string, timeZone?: TimeZone): string {
   if (isDateTime(value)) {
     return dateTimeFormat(value, { timeZone });
   }
+
+  if (value.endsWith('Z')) {
+    const dt = dateTimeParse(value, { timeZone: 'utc', format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' });
+    return dateTimeFormat(dt, { timeZone });
+  }
+
   return value;
-}
-
-function isValid(value: string, roundUp?: boolean, timeZone?: TimeZone): boolean {
-  if (isDateTime(value)) {
-    return value.isValid();
-  }
-
-  if (dateMath.isMathString(value)) {
-    return dateMath.isValid(value);
-  }
-
-  const parsed = dateTimeParse(value, { roundUp, timeZone });
-  return parsed.isValid();
 }
 
 function getStyles(theme: GrafanaTheme2) {
   return {
-    fieldContainer: css`
-      display: flex;
-    `,
-    tooltip: css`
-      padding-left: ${theme.spacing(1)};
-      padding-top: ${theme.spacing(3)};
-    `,
+    fieldContainer: css({
+      display: 'flex',
+    }),
+    buttonsContainer: css({
+      display: 'flex',
+      gap: theme.spacing(0.5),
+      marginTop: theme.spacing(1),
+    }),
+    tooltip: css({
+      paddingLeft: theme.spacing(1),
+      paddingTop: theme.spacing(3),
+    }),
   };
 }

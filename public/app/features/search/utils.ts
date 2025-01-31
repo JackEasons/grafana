@@ -14,6 +14,18 @@ export const hasFilters = (query: SearchState) => {
   return Boolean(query.query || query.tag?.length > 0 || query.starred || query.sort);
 };
 
+/** Cleans up old local storage values that remembered many open folders */
+export const cleanupOldExpandedFolders = () => {
+  const keyPrefix = SECTION_STORAGE_KEY + '.';
+
+  for (let index = 0; index < window.localStorage.length; index++) {
+    const lsKey = window.localStorage.key(index);
+    if (lsKey?.startsWith(keyPrefix)) {
+      window.localStorage.removeItem(lsKey);
+    }
+  }
+};
+
 /**
  * Get storage key for a dashboard folder by its title
  * @param title
@@ -28,16 +40,15 @@ export const getSectionStorageKey = (title = 'General') => {
  * @param folder
  */
 export const parseRouteParams = (params: UrlQueryMap) => {
-  const cleanedParams = Object.entries(params).reduce((obj, [key, val]) => {
+  const cleanedParams = Object.entries(params).reduce<Partial<SearchState>>((obj, [key, val]) => {
     if (!val) {
       return obj;
     } else if (key === 'tag' && !Array.isArray(val)) {
       return { ...obj, tag: [val] as string[] };
-    } else if (key === 'sort') {
-      return { ...obj, sort: { value: val } };
     }
+
     return { ...obj, [key]: val };
-  }, {} as Partial<SearchState>);
+  }, {});
 
   if (params.folder) {
     const folderStr = `folder:${params.folder}`;

@@ -5,44 +5,76 @@ import (
 	"errors"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel"
 
+	"github.com/grafana/grafana/pkg/apimachinery/identity"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/infra/metrics"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
-	"github.com/grafana/grafana/pkg/services/user"
-	"github.com/grafana/grafana/pkg/setting"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 )
+
+var tracer = otel.Tracer("github.com/grafana/grafana/pkg/services/accesscontrol/acimpl")
 
 var _ accesscontrol.AccessControl = new(AccessControl)
 
-func ProvideAccessControl(cfg *setting.Cfg) *AccessControl {
+func ProvideAccessControl(features featuremgmt.FeatureToggles) *AccessControl {
 	logger := log.New("accesscontrol")
+
 	return &AccessControl{
-		cfg, logger, accesscontrol.NewResolvers(logger),
+		features,
+		logger,
+		accesscontrol.NewResolvers(logger),
 	}
 }
 
+func ProvideAccessControlTest() *AccessControl {
+	return ProvideAccessControl(featuremgmt.WithFeatures())
+}
+
 type AccessControl struct {
-	cfg       *setting.Cfg
+	features  featuremgmt.FeatureToggles
 	log       log.Logger
 	resolvers accesscontrol.Resolvers
 }
 
-func (a *AccessControl) Evaluate(ctx context.Context, user *user.SignedInUser, evaluator accesscontrol.Evaluator) (bool, error) {
+func (a *AccessControl) Evaluate(ctx context.Context, user identity.Requester, evaluator accesscontrol.Evaluator) (bool, error) {
+	ctx, span := tracer.Start(ctx, "accesscontrol.acimpl.Evaluate")
+	defer span.End()
+
+	return a.evaluate(ctx, user, evaluator)
+}
+
+func (a *AccessControl) evaluate(ctx context.Context, user identity.Requester, evaluator accesscontrol.Evaluator) (bool, error) {
+	ctx, span := tracer.Start(ctx, "accesscontrol.acimpl.evaluate")
+	defer span.End()
+
 	timer := prometheus.NewTimer(metrics.MAccessEvaluationsSummary)
 	defer timer.ObserveDuration()
 	metrics.MAccessEvaluationCount.Inc()
 
-	if !verifyPermissions(user) {
-		a.log.Warn("no permissions set for user", "userID", user.UserID, "orgID", user.OrgID, "login", user.Login)
+	if user == nil || user.IsNil() {
+		a.log.Warn("No entity set for access control evaluation")
 		return false, nil
 	}
+
+	// If the user is in no organization, then the evaluation must happen based on the user's global permissions
+	permissions := user.GetPermissions()
+	if user.GetOrgID() == accesscontrol.NoOrgID {
+		permissions = user.GetGlobalPermissions()
+	}
+	if len(permissions) == 0 {
+		a.debug(ctx, user, "No permissions set", evaluator)
+		return false, nil
+	}
+
+	a.debug(ctx, user, "Evaluating permissions", evaluator)
 	// Test evaluation without scope resolver first, this will prevent 403 for wildcard scopes when resource does not exist
-	if evaluator.Evaluate(user.Permissions[user.OrgID]) {
+	if evaluator.Evaluate(permissions) {
 		return true, nil
 	}
 
-	resolvedEvaluator, err := evaluator.MutateScopes(ctx, a.resolvers.GetScopeAttributeMutator(user.OrgID))
+	resolvedEvaluator, err := evaluator.MutateScopes(ctx, a.resolvers.GetScopeAttributeMutator(user.GetOrgID()))
 	if err != nil {
 		if errors.Is(err, accesscontrol.ErrResolverNotFound) {
 			return false, nil
@@ -50,17 +82,25 @@ func (a *AccessControl) Evaluate(ctx context.Context, user *user.SignedInUser, e
 		return false, err
 	}
 
-	return resolvedEvaluator.Evaluate(user.Permissions[user.OrgID]), nil
+	a.debug(ctx, user, "Evaluating resolved permissions", resolvedEvaluator)
+	return resolvedEvaluator.Evaluate(permissions), nil
 }
 
 func (a *AccessControl) RegisterScopeAttributeResolver(prefix string, resolver accesscontrol.ScopeAttributeResolver) {
 	a.resolvers.AddScopeAttributeResolver(prefix, resolver)
 }
 
-func (a *AccessControl) IsDisabled() bool {
-	return accesscontrol.IsDisabled(a.cfg)
+func (a *AccessControl) WithoutResolvers() accesscontrol.AccessControl {
+	return &AccessControl{
+		features:  a.features,
+		log:       a.log,
+		resolvers: accesscontrol.NewResolvers(a.log),
+	}
 }
 
-func verifyPermissions(u *user.SignedInUser) bool {
-	return u.Permissions != nil || u.Permissions[u.OrgID] != nil
+func (a *AccessControl) debug(ctx context.Context, ident identity.Requester, msg string, eval accesscontrol.Evaluator) {
+	ctx, span := tracer.Start(ctx, "accesscontrol.acimpl.debug")
+	defer span.End()
+
+	a.log.FromContext(ctx).Debug(msg, "id", ident.GetID(), "orgID", ident.GetOrgID(), "permissions", eval.GoString())
 }

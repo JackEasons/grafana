@@ -1,5 +1,6 @@
 import { DataFrameView, SelectableValue } from '@grafana/data';
 import { TermCount } from 'app/core/components/TagFilter/TagFilter';
+import { PermissionLevelString } from 'app/types';
 
 export interface FacetField {
   field: string;
@@ -11,9 +12,12 @@ export interface SearchQuery {
   location?: string;
   sort?: string;
   ds_uid?: string;
+  ds_type?: string;
+  saved_query_uid?: string; // TODO: not implemented yet
   tags?: string[];
   kind?: string[];
   panel_type?: string;
+  name?: string[];
   uid?: string[];
   facet?: FacetField[];
   explain?: boolean;
@@ -23,6 +27,8 @@ export interface SearchQuery {
   limit?: number;
   from?: number;
   starred?: boolean;
+  permission?: PermissionLevelString;
+  deleted?: boolean;
 }
 
 export interface DashboardQueryResult {
@@ -34,10 +40,15 @@ export interface DashboardQueryResult {
   tags: string[];
   location: string; // url that can be split
   ds_uid: string[];
+  isDeleted?: boolean;
+  permanentlyDeleteDate?: Date;
 
   // debugging fields
   score: number;
   explain: {};
+
+  // enterprise sends extra properties through for sorting (views, errors, etc)
+  [key: string]: unknown;
 }
 
 export interface LocationInfo {
@@ -75,4 +86,9 @@ export interface GrafanaSearcher {
 
   /** Gets the default sort used for the Folder view */
   getFolderViewSort: () => string;
+}
+
+export interface NestedFolderDTO {
+  uid: string;
+  title: string;
 }

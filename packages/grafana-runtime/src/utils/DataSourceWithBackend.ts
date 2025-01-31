@@ -2,32 +2,36 @@ import { lastValueFrom, merge, Observable, of } from 'rxjs';
 import { catchError, switchMap } from 'rxjs/operators';
 
 import {
-  DataSourceApi,
+  DataFrame,
+  dataFrameToJSON,
+  DataQuery,
   DataQueryRequest,
   DataQueryResponse,
+  TestDataSourceResponse,
+  DataSourceApi,
   DataSourceInstanceSettings,
-  DataQuery,
   DataSourceJsonData,
-  ScopedVars,
-  makeClassES5Compatible,
-  DataFrame,
-  parseLiveChannelAddress,
-  getDataSourceRef,
   DataSourceRef,
-  dataFrameToJSON,
+  getDataSourceRef,
+  makeClassES5Compatible,
+  parseLiveChannelAddress,
+  ScopedVars,
+  AdHocVariableFilter,
 } from '@grafana/data';
 
+import { reportInteraction } from '../analytics/utils';
 import { config } from '../config';
 import {
+  BackendSrvRequest,
+  FetchResponse,
   getBackendSrv,
   getDataSourceSrv,
   getGrafanaLiveSrv,
-  StreamingFrameOptions,
   StreamingFrameAction,
-  BackendSrvRequest,
-  FetchResponse,
+  StreamingFrameOptions,
 } from '../services';
 
+import { publicDashboardQueryHandler } from './publicDashboardQueryHandler';
 import { BackendDataSourceResponse, toDataQueryResponse } from './queryResponse';
 
 /**
@@ -40,14 +44,14 @@ export const ExpressionDatasourceRef = Object.freeze({
 });
 
 /**
- * @internal
+ * @public
  */
 export function isExpressionReference(ref?: DataSourceRef | string | null): boolean {
   if (!ref) {
     return false;
   }
-  const v = (ref as any).type ?? ref;
-  return v === ExpressionDatasourceRef.type || v === '-100'; // -100 was a legacy accident that should be removed
+  const v = typeof ref === 'string' ? ref : ref.type;
+  return v === ExpressionDatasourceRef.type || v === ExpressionDatasourceRef.name || v === '-100'; // -100 was a legacy accident that should be removed
 }
 
 export class HealthCheckError extends Error {
@@ -75,8 +79,12 @@ export enum HealthStatus {
 enum PluginRequestHeaders {
   PluginID = 'X-Plugin-Id', // can be used for routing
   DatasourceUID = 'X-Datasource-Uid', // can be used for routing/ load balancing
-  DashboardUID = 'X-Dashboard-Uid', // mainly useful for debuging slow queries
-  PanelID = 'X-Panel-Id', // mainly useful for debuging slow queries
+  DashboardUID = 'X-Dashboard-Uid', // mainly useful for debugging slow queries
+  PanelID = 'X-Panel-Id', // mainly useful for debugging slow queries
+  PanelPluginId = 'X-Panel-Plugin-Id',
+  QueryGroupID = 'X-Query-Group-Id', // mainly useful to find related queries with query splitting
+  FromExpression = 'X-Grafana-From-Expr', // used by datasources to identify expression queries
+  SkipQueryCache = 'X-Cache-Skip', // used by datasources to skip the query cache
 }
 
 /**
@@ -88,7 +96,7 @@ enum PluginRequestHeaders {
  *
  * @public
  */
-export type HealthCheckResultDetails = Record<string, any> | undefined;
+export type HealthCheckResultDetails = Record<string, unknown> | undefined;
 
 /**
  * Describes the payload returned when checking the health of a data source
@@ -110,7 +118,7 @@ export interface HealthCheckResult {
  */
 class DataSourceWithBackend<
   TQuery extends DataQuery = DataQuery,
-  TOptions extends DataSourceJsonData = DataSourceJsonData
+  TOptions extends DataSourceJsonData = DataSourceJsonData,
 > extends DataSourceApi<TQuery, TOptions> {
   constructor(instanceSettings: DataSourceInstanceSettings<TOptions>) {
     super(instanceSettings);
@@ -120,17 +128,17 @@ class DataSourceWithBackend<
    * Ideally final -- any other implementation may not work as expected
    */
   query(request: DataQueryRequest<TQuery>): Observable<DataQueryResponse> {
-    const { intervalMs, maxDataPoints, range, requestId, hideFromInspector = false } = request;
-    let targets = request.targets;
-
-    if (this.filterQuery) {
-      targets = targets.filter((q) => this.filterQuery!(q));
+    if (config.publicDashboardAccessToken) {
+      return publicDashboardQueryHandler(request);
     }
+
+    const { intervalMs, maxDataPoints, queryCachingTTL, range, requestId, hideFromInspector = false } = request;
+    let targets = request.targets;
 
     let hasExpr = false;
     const pluginIDs = new Set<string>();
     const dsUIDs = new Set<string>();
-    const queries = targets.map((q) => {
+    const queries: DataQuery[] = targets.map((q) => {
       let datasource = this.getRef();
       let datasourceId = this.id;
       let shouldApplyTemplateVariables = true;
@@ -167,11 +175,12 @@ class DataSourceWithBackend<
         dsUIDs.add(datasource.uid);
       }
       return {
-        ...(shouldApplyTemplateVariables ? this.applyTemplateVariables(q, request.scopedVars) : q),
+        ...(shouldApplyTemplateVariables ? this.applyTemplateVariables(q, request.scopedVars, request.filters) : q),
         datasource,
         datasourceId, // deprecated!
         intervalMs,
         maxDataPoints,
+        queryCachingTTL,
       };
     });
 
@@ -180,13 +189,11 @@ class DataSourceWithBackend<
       return of({ data: [] });
     }
 
-    const body: any = { queries };
-
-    if (range) {
-      body.range = range;
-      body.from = range.from.valueOf().toString();
-      body.to = range.to.valueOf().toString();
-    }
+    const body = {
+      queries,
+      from: range?.from.valueOf().toString(),
+      to: range?.to.valueOf().toString(),
+    };
 
     if (config.featureToggles.queryOverLive) {
       return getGrafanaLiveSrv().getQueryData({
@@ -195,19 +202,48 @@ class DataSourceWithBackend<
       });
     }
 
-    let url = '/api/ds/query';
-    if (hasExpr) {
-      url += '?expression=true';
-    }
-
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = request.headers ?? {};
     headers[PluginRequestHeaders.PluginID] = Array.from(pluginIDs).join(', ');
     headers[PluginRequestHeaders.DatasourceUID] = Array.from(dsUIDs).join(', ');
+
+    let url = '/api/ds/query?ds_type=' + this.type;
+
+    // Use the new query service
+    if (config.featureToggles.queryServiceFromUI) {
+      if (!(config.featureToggles.queryService || config.featureToggles.grafanaAPIServerWithExperimentalAPIs)) {
+        console.warn('feature toggle queryServiceFromUI also requires the queryService to be running');
+      } else {
+        if (!hasExpr && dsUIDs.size === 1) {
+          // TODO? can we talk directly to the apiserver?
+        }
+        url = `/apis/query.grafana.app/v0alpha1/namespaces/${config.namespace}/query?ds_type=' + this.type`;
+      }
+    }
+
+    if (hasExpr) {
+      headers[PluginRequestHeaders.FromExpression] = 'true';
+      url += '&expression=true';
+    }
+
+    // Appending request ID to url to facilitate client-side performance metrics. See #65244 for more context.
+    if (requestId) {
+      url += `&requestId=${requestId}`;
+    }
+
     if (request.dashboardUID) {
       headers[PluginRequestHeaders.DashboardUID] = request.dashboardUID;
+      if (request.panelId) {
+        headers[PluginRequestHeaders.PanelID] = `${request.panelId}`;
+      }
     }
-    if (request.panelId) {
-      headers[PluginRequestHeaders.PanelID] = `${request.panelId}`;
+    if (request.panelPluginId) {
+      headers[PluginRequestHeaders.PanelPluginId] = `${request.panelPluginId}`;
+    }
+    if (request.queryGroupId) {
+      headers[PluginRequestHeaders.QueryGroupID] = `${request.queryGroupId}`;
+    }
+    if (request.skipQueryCache) {
+      headers[PluginRequestHeaders.SkipQueryCache] = 'true';
     }
     return getBackendSrv()
       .fetch<BackendDataSourceResponse>({
@@ -220,7 +256,7 @@ class DataSourceWithBackend<
       })
       .pipe(
         switchMap((raw) => {
-          const rsp = toDataQueryResponse(raw, queries as DataQuery[]);
+          const rsp = toDataQueryResponse(raw, queries);
           // Check if any response should subscribe to a live stream
           if (rsp.data?.length && rsp.data.find((f: DataFrame) => f.meta?.channel)) {
             return toStreamingDataResponse(rsp, request, this.streamOptionsProvider);
@@ -244,12 +280,12 @@ class DataSourceWithBackend<
   /**
    * Apply template variables for explore
    */
-  interpolateVariablesInQueries(queries: TQuery[], scopedVars: ScopedVars | {}): TQuery[] {
-    return queries.map((q) => this.applyTemplateVariables(q, scopedVars) as TQuery);
+  interpolateVariablesInQueries(queries: TQuery[], scopedVars: ScopedVars, filters?: AdHocVariableFilter[]): TQuery[] {
+    return queries.map((q) => this.applyTemplateVariables(q, scopedVars, filters));
   }
 
   /**
-   * Override to apply template variables.  The result is usually also `TQuery`, but sometimes this can
+   * Override to apply template variables and adhoc filters.  The result is usually also `TQuery`, but sometimes this can
    * be used to modify the query structure before sending to the backend.
    *
    * NOTE: if you do modify the structure or use template variables, alerting queries may not work
@@ -257,7 +293,7 @@ class DataSourceWithBackend<
    *
    * @virtual
    */
-  applyTemplateVariables(query: TQuery, scopedVars: ScopedVars): Record<string, any> {
+  applyTemplateVariables(query: TQuery, scopedVars: ScopedVars, filters?: AdHocVariableFilter[]) {
     return query;
   }
 
@@ -281,7 +317,7 @@ class DataSourceWithBackend<
         method: 'GET',
         headers: options?.headers ? { ...options.headers, ...headers } : headers,
         params: params ?? options?.params,
-        url: `/api/datasources/${this.id}/resources/${path}`,
+        url: `/api/datasources/uid/${this.uid}/resources/${path}`,
       })
     );
     return result.data;
@@ -290,7 +326,7 @@ class DataSourceWithBackend<
   /**
    * Send a POST request to the datasource resource path
    */
-  async postResource<T = any>(
+  async postResource<T = unknown>(
     path: string,
     data?: BackendSrvRequest['data'],
     options?: Partial<BackendSrvRequest>
@@ -302,7 +338,7 @@ class DataSourceWithBackend<
         method: 'POST',
         headers: options?.headers ? { ...options.headers, ...headers } : headers,
         data: data ?? { ...data },
-        url: `/api/datasources/${this.id}/resources/${path}`,
+        url: `/api/datasources/uid/${this.uid}/resources/${path}`,
       })
     );
     return result.data;
@@ -315,20 +351,29 @@ class DataSourceWithBackend<
     return lastValueFrom(
       getBackendSrv().fetch<HealthCheckResult>({
         method: 'GET',
-        url: `/api/datasources/${this.id}/health`,
+        url: `/api/datasources/uid/${this.uid}/health`,
         showErrorAlert: false,
         headers: this.getRequestHeaders(),
       })
     )
-      .then((v: FetchResponse) => v.data as HealthCheckResult)
-      .catch((err) => err.data as HealthCheckResult);
+      .then((v: FetchResponse<HealthCheckResult>) => v.data)
+      .catch((err) => {
+        let properties: Record<string, string> = {
+          plugin_id: this.meta?.id || '',
+          plugin_version: this.meta?.info?.version || '',
+          datasource_healthcheck_status: err?.data?.status || 'error',
+          datasource_healthcheck_message: err?.data?.message || '',
+        };
+        reportInteraction('datasource_health_check_completed', properties);
+        return err.data;
+      });
   }
 
   /**
    * Checks the plugin health
    * see public/app/features/datasources/state/actions.ts for what needs to be returned here
    */
-  async testDatasource(): Promise<any> {
+  async testDatasource(): Promise<TestDataSourceResponse> {
     return this.callHealthCheck().then((res) => {
       if (res.status === HealthStatus.OK) {
         return {
@@ -337,7 +382,11 @@ class DataSourceWithBackend<
         };
       }
 
-      throw new HealthCheckError(res.message, res.details);
+      return Promise.reject({
+        status: 'error',
+        message: res.message,
+        error: new HealthCheckError(res.message, res.details),
+      });
     });
   }
 }
@@ -360,7 +409,7 @@ export function toStreamingDataResponse<TQuery extends DataQuery = DataQuery>(
   for (const f of rsp.data) {
     const addr = parseLiveChannelAddress(f.meta?.channel);
     if (addr) {
-      const frame = f as DataFrame;
+      const frame: DataFrame = f;
       streams.push(
         live.getDataStream({
           addr,

@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/influxdb/intro/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Intro paragraph
 ---
 

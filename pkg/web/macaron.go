@@ -1,6 +1,3 @@
-//go:build go1.3
-// +build go1.3
-
 // Copyright 2014 The Macaron Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License"): you may
@@ -19,11 +16,10 @@
 package web
 
 import (
-	_ "unsafe"
-
 	"context"
 	"net/http"
 	"strings"
+	_ "unsafe"
 )
 
 const _VERSION = "1.3.4.0805"
@@ -46,7 +42,7 @@ func Version() string {
 // Handler can be any callable function.
 // Macaron attempts to inject services into the handler's argument list,
 // and panics if an argument could not be fulfilled via dependency injection.
-type Handler interface{}
+type Handler any
 
 //go:linkname hack_wrap github.com/grafana/grafana/pkg/api/response.wrap_handler
 func hack_wrap(Handler) http.HandlerFunc
@@ -141,6 +137,17 @@ func mwFromHandler(handler Handler) Middleware {
 			next.ServeHTTP(ctx.Resp, ctx.Req)
 		})
 	}
+}
+
+// a convenience function that is provided for users of contexthandler package (standalone apiservers)
+// who have an implicit dependency on Macron in context but don't want to take a dependency on
+// router additionally
+func EmptyMacaronMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		m := New()
+		c := m.createContext(writer, request)
+		next.ServeHTTP(writer, c.Req) // since c.Req has the newer context attached
+	})
 }
 
 func (m *Macaron) createContext(rw http.ResponseWriter, req *http.Request) *Context {

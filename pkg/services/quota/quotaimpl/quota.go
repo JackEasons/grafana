@@ -2,21 +2,25 @@ package quotaimpl
 
 import (
 	"context"
-	"fmt"
 	"sync"
+
+	"go.opentelemetry.io/otel"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/grafana/grafana/pkg/infra/db"
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
+	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	"github.com/grafana/grafana/pkg/services/quota"
 	"github.com/grafana/grafana/pkg/setting"
-	"golang.org/x/sync/errgroup"
 )
 
-type serviceDisabled struct {
-}
+// tracer is the global tracer for the quota service. Tracer pulls the globally
+// initialized tracer from the opentelemetry package.
+var tracer = otel.Tracer("github.com/grafana/grafana/pkg/services/quota/quotaimpl/service")
 
-func (s *serviceDisabled) QuotaReached(c *models.ReqContext, targetSrv quota.TargetSrv) (bool, error) {
+type serviceDisabled struct{}
+
+func (s *serviceDisabled) QuotaReached(c *contextmodel.ReqContext, targetSrv quota.TargetSrv) (bool, error) {
 	return false, nil
 }
 
@@ -33,7 +37,7 @@ func (s *serviceDisabled) CheckQuotaReached(ctx context.Context, targetSrv quota
 }
 
 func (s *serviceDisabled) DeleteQuotaForUser(ctx context.Context, userID int64) error {
-	return quota.ErrDisabled
+	return nil
 }
 
 func (s *serviceDisabled) RegisterQuotaReporter(e *quota.NewUsageReporter) error {
@@ -76,21 +80,25 @@ func (s *service) IsDisabled() bool {
 }
 
 // QuotaReached checks that quota is reached for a target. Runs CheckQuotaReached and take context and scope parameters from the request context
-func (s *service) QuotaReached(c *models.ReqContext, targetSrv quota.TargetSrv) (bool, error) {
+func (s *service) QuotaReached(c *contextmodel.ReqContext, targetSrv quota.TargetSrv) (bool, error) {
 	// No request context means this is a background service, like LDAP Background Sync
 	if c == nil {
 		return false, nil
 	}
+	ctx, span := tracer.Start(c.Req.Context(), "quota-service.QuotaReached")
+	defer span.End()
 
 	params := &quota.ScopeParameters{}
 	if c.IsSignedIn {
-		params.OrgID = c.OrgID
+		params.OrgID = c.SignedInUser.GetOrgID()
 		params.UserID = c.UserID
 	}
-	return s.CheckQuotaReached(c.Req.Context(), targetSrv, params)
+	return s.CheckQuotaReached(ctx, targetSrv, params)
 }
 
 func (s *service) GetQuotasByScope(ctx context.Context, scope quota.Scope, id int64) ([]quota.QuotaDTO, error) {
+	ctx, span := tracer.Start(ctx, "quota-service.GetQuotasByScope")
+	defer span.End()
 	if err := scope.Validate(); err != nil {
 		return nil, err
 	}
@@ -104,10 +112,7 @@ func (s *service) GetQuotasByScope(ctx context.Context, scope quota.Scope, id in
 		scopeParams.UserID = id
 	}
 
-	c, err := s.getContext(ctx)
-	if err != nil {
-		return nil, err
-	}
+	c := quota.FromContext(ctx, s.targetToSrv)
 	customLimits, err := s.store.Get(c, &scopeParams)
 	if err != nil {
 		return nil, err
@@ -160,6 +165,8 @@ func (s *service) GetQuotasByScope(ctx context.Context, scope quota.Scope, id in
 }
 
 func (s *service) Update(ctx context.Context, cmd *quota.UpdateQuotaCmd) error {
+	ctx, span := tracer.Start(ctx, "quota-service.Update")
+	defer span.End()
 	targetFound := false
 	knownTargets, err := s.defaultLimits.Targets()
 	if err != nil {
@@ -175,16 +182,15 @@ func (s *service) Update(ctx context.Context, cmd *quota.UpdateQuotaCmd) error {
 		return quota.ErrInvalidTarget.Errorf("unknown quota target: %s", cmd.Target)
 	}
 
-	c, err := s.getContext(ctx)
-	if err != nil {
-		return err
-	}
+	c := quota.FromContext(ctx, s.targetToSrv)
 	return s.store.Update(c, cmd)
 }
 
 // CheckQuotaReached check that quota is reached for a target. If ScopeParameters are not defined, only global scope is checked
 func (s *service) CheckQuotaReached(ctx context.Context, targetSrv quota.TargetSrv, scopeParams *quota.ScopeParameters) (bool, error) {
-	targetSrvLimits, err := s.getOverridenLimits(ctx, targetSrv, scopeParams)
+	ctx, span := tracer.Start(ctx, "quota-service.CheckQuotaReached")
+	defer span.End()
+	targetSrvLimits, err := s.getOverriddenLimits(ctx, targetSrv, scopeParams)
 	if err != nil {
 		return false, err
 	}
@@ -205,9 +211,24 @@ func (s *service) CheckQuotaReached(ctx context.Context, targetSrv quota.TargetS
 		case limit == 0:
 			return true, nil
 		default:
+			scope, err := t.GetScope()
+			if err != nil {
+				return false, quota.ErrFailedToGetScope.Errorf("failed to get the scope for target: %s", t)
+			}
+
+			// do not check user quota if the user information is not available (eg no user is signed in)
+			if scope == quota.UserScope && (scopeParams == nil || scopeParams.UserID == 0) {
+				continue
+			}
+
+			// do not check user quota if the org information is not available (eg no user is signed in)
+			if scope == quota.OrgScope && (scopeParams == nil || scopeParams.OrgID == 0) {
+				continue
+			}
+
 			u, ok := targetUsage.Get(t)
 			if !ok {
-				return false, fmt.Errorf("no usage for target:%s", t)
+				return false, quota.ErrUsageFoundForTarget.Errorf("no usage for target:%s", t)
 			}
 			if u >= limit {
 				return true, nil
@@ -218,10 +239,9 @@ func (s *service) CheckQuotaReached(ctx context.Context, targetSrv quota.TargetS
 }
 
 func (s *service) DeleteQuotaForUser(ctx context.Context, userID int64) error {
-	c, err := s.getContext(ctx)
-	if err != nil {
-		return err
-	}
+	ctx, span := tracer.Start(ctx, "quota-service.DeleteQuotaForUser")
+	defer span.End()
+	c := quota.FromContext(ctx, s.targetToSrv)
 	return s.store.DeleteByUser(c, userID)
 }
 
@@ -281,13 +301,12 @@ func (s *service) getReporters() <-chan reporter {
 	return ch
 }
 
-func (s *service) getOverridenLimits(ctx context.Context, targetSrv quota.TargetSrv, scopeParams *quota.ScopeParameters) (map[quota.Tag]int64, error) {
+func (s *service) getOverriddenLimits(ctx context.Context, targetSrv quota.TargetSrv, scopeParams *quota.ScopeParameters) (map[quota.Tag]int64, error) {
+	ctx, span := tracer.Start(ctx, "quota-service.getOverriddenLimits")
+	defer span.End()
 	targetSrvLimits := make(map[quota.Tag]int64)
 
-	c, err := s.getContext(ctx)
-	if err != nil {
-		return nil, err
-	}
+	c := quota.FromContext(ctx, s.targetToSrv)
 	customLimits, err := s.store.Get(c, scopeParams)
 	if err != nil {
 		return targetSrvLimits, err
@@ -316,6 +335,8 @@ func (s *service) getOverridenLimits(ctx context.Context, targetSrv quota.Target
 }
 
 func (s *service) getUsage(ctx context.Context, scopeParams *quota.ScopeParameters) (*quota.Map, error) {
+	ctx, span := tracer.Start(ctx, "quota-service.getUsage")
+	defer span.End()
 	usage := &quota.Map{}
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -336,8 +357,4 @@ func (s *service) getUsage(ctx context.Context, scopeParams *quota.ScopeParamete
 	}
 
 	return usage, nil
-}
-
-func (s *service) getContext(ctx context.Context) (quota.Context, error) {
-	return quota.FromContext(ctx, s.targetToSrv), nil
 }

@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/panels/repeat-panel-intro/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Repeat panel intro
 ---
 

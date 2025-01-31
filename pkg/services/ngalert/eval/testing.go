@@ -67,8 +67,29 @@ func WithState(state State) ResultMutator {
 	}
 }
 
+func WithError(err error) ResultMutator {
+	return func(r *Result) {
+		r.State = Error
+		r.Error = err
+	}
+}
+
 func WithLabels(labels data.Labels) ResultMutator {
 	return func(r *Result) {
 		r.Instance = labels
 	}
+}
+
+func WithValues(values map[string]NumberValueCapture) ResultMutator {
+	return func(r *Result) {
+		r.Values = values
+	}
+}
+
+type FakeLoadedMetricsReader struct {
+	fingerprints map[data.Fingerprint]struct{}
+}
+
+func (f FakeLoadedMetricsReader) Read() map[data.Fingerprint]struct{} {
+	return f.fingerprints
 }

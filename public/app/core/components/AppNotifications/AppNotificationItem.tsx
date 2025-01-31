@@ -1,10 +1,9 @@
 import { css } from '@emotion/css';
-import React from 'react';
 import { useEffectOnce } from 'react-use';
 
 import { GrafanaTheme2 } from '@grafana/data';
-import { config } from '@grafana/runtime';
 import { Alert, useStyles2 } from '@grafana/ui';
+import { Trans } from 'app/core/internationalization';
 import { AppNotification, timeoutMap } from 'app/types';
 
 interface Props {
@@ -21,7 +20,8 @@ export default function AppNotificationItem({ appNotification, onClearNotificati
     }, timeoutMap[appNotification.severity]);
   });
 
-  const showTraceId = config.featureToggles.tracing && appNotification.traceId;
+  const hasBody = appNotification.component || appNotification.text || appNotification.traceId;
+  const traceId = appNotification.traceId;
 
   return (
     <Alert
@@ -30,10 +30,16 @@ export default function AppNotificationItem({ appNotification, onClearNotificati
       onRemove={() => onClearNotification(appNotification.id)}
       elevated
     >
-      <div className={styles.wrapper}>
-        <span>{appNotification.component || appNotification.text}</span>
-        {showTraceId && <span className={styles.trace}>Trace ID: {appNotification.traceId}</span>}
-      </div>
+      {hasBody && (
+        <div className={styles.wrapper}>
+          <span>{appNotification.component || appNotification.text}</span>
+          {traceId && (
+            <span className={styles.trace}>
+              <Trans i18nKey="app-notification.item.trace-id">Trace ID: {{ traceId }}</Trans>
+            </span>
+          )}
+        </div>
+      )}
     </Alert>
   );
 }

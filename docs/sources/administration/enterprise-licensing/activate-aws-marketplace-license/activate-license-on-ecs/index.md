@@ -1,8 +1,7 @@
 ---
 aliases:
-  - /docs/grafana/latest/enterprise/activate-aws-marketplace-license/activate-license-on-ecs/
-  - /docs/grafana/latest/enterprise/license/activate-aws-marketplace-license/activate-license-on-ecs/
-  - /docs/grafana/latest/administration/enterprise-licensing/activate-aws-marketplace-license/activate-license-on-ecs/
+  - ../../../enterprise/activate-aws-marketplace-license/activate-license-on-ecs/
+  - ../../../enterprise/license/activate-aws-marketplace-license/activate-license-on-ecs/
 description: Activate a Grafana Enterprise license from AWS Marketplace on ECS
 keywords:
   - grafana
@@ -11,6 +10,10 @@ keywords:
   - aws
   - marketplace
   - activate
+labels:
+  products:
+    - enterprise
+    - oss
 title: Activate a Grafana Enterprise license from AWS Marketplace on ECS
 weight: 250
 ---
@@ -32,9 +35,9 @@ To activate your license, complete the following tasks.
 
    For more information about deploying an application on Amazon ECS, refer to [Creating an Amazon ECS service](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/create-service.html).
 
-1. As you create the Amazon ECS service, use the Grafana Enterprise version 8.3.0 or later container image.
+1. As you create the Amazon ECS service, use the intended Grafana Enterprise container image version.
 
-   For example, enter `grafana/grafana-enterprise:8.3.3`.
+   For example, enter `grafana/grafana-enterprise:11.3.0`.
 
    > Only Grafana Enterprise versions 8.3.0 and later support licenses granted through AWS Marketplace.
 
@@ -109,6 +112,6 @@ In this task you configure Grafana Enterprise to validate the license with AWS i
 ### Task 4: Start or restart Grafana
 
 1. To restart Grafana and activate your license, update the service running Grafana to use the latest revision of the task definition that you created.
-1. After you update the service, navigate to your Grafana instance, sign in with Grafana Admin credentials, and navigate to the **Statistics and Licensing** page to validate that your license is active.
+1. After you update the service, navigate to your Grafana instance, sign in with Grafana Admin credentials, and navigate to **Administration > General > Stats and license** to validate that your license is active.
 
 For more information about validating that your license is active, refer to [Grafana Enterprise license restrictions]({{< relref "../../#grafana-enterprise-license-restrictions" >}}).

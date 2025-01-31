@@ -10,6 +10,7 @@ import {
   AnnotationSupport,
   DataFrame,
   DataSourceApi,
+  DataTransformContext,
   Field,
   FieldType,
   getFieldDisplayName,
@@ -34,7 +35,7 @@ export const standardAnnotationSupport: AnnotationSupport = {
         mappings: {},
       };
     }
-    return json as AnnotationQuery;
+    return json;
   },
 
   /**
@@ -66,8 +67,12 @@ export function singleFrameFromPanelData(): OperatorFunction<DataFrame[], DataFr
           return of(data[0]);
         }
 
+        const ctx: DataTransformContext = {
+          interpolate: (v: string) => v,
+        };
+
         return of(data).pipe(
-          standardTransformers.mergeTransformer.operator({}),
+          standardTransformers.mergeTransformer.operator({}, ctx),
           map((d) => d[0])
         );
       })
@@ -84,7 +89,7 @@ interface AnnotationEventFieldSetter {
 
 export interface AnnotationFieldInfo {
   key: keyof AnnotationEvent;
-
+  label?: string;
   split?: string;
   field?: (frame: DataFrame) => Field | undefined;
   placeholder?: string;
@@ -98,7 +103,7 @@ export const annotationEventNames: AnnotationFieldInfo[] = [
     field: (frame: DataFrame) => frame.fields.find((f) => f.type === FieldType.time),
     placeholder: 'time, or the first time field',
   },
-  { key: 'timeEnd', help: 'When this field is defined, the annotation will be treated as a range' },
+  { key: 'timeEnd', label: 'end time', help: 'When this field is defined, the annotation will be treated as a range' },
   {
     key: 'title',
   },
@@ -128,7 +133,7 @@ export const publicDashboardEventNames: AnnotationFieldInfo[] = [
 // Given legacy infrastructure, alert events are passed though the same annotation
 // pipeline, but include fields that should not be exposed generally
 const alertEventAndAnnotationFields: AnnotationFieldInfo[] = [
-  ...(config.isPublicDashboardView ? publicDashboardEventNames : []),
+  ...(config.publicDashboardAccessToken ? publicDashboardEventNames : []),
   ...annotationEventNames,
   { key: 'userId' },
   { key: 'login' },
@@ -213,12 +218,12 @@ export function getAnnotationsFromData(
         };
 
         for (const f of fields) {
-          let v: any = undefined;
+          let v = undefined;
 
           if (f.text) {
             v = f.text; // TODO support templates!
           } else if (f.field) {
-            v = f.field.values.get(i);
+            v = f.field.values[i];
             if (v !== undefined && f.regex) {
               const match = f.regex.exec(v);
               if (match) {
@@ -231,7 +236,7 @@ export function getAnnotationsFromData(
             if (f.split && typeof v === 'string') {
               v = v.split(',');
             }
-            (anno as any)[f.key] = v;
+            anno[f.key] = v;
           }
         }
 
@@ -252,7 +257,6 @@ const legacyRunner = [
   'loki',
   'elasticsearch',
   'grafana-opensearch-datasource', // external
-  'grafana-splunk-datasource', // external
 ];
 
 /**

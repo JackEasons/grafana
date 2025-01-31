@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/grafana/pkg/api/response"
 	"github.com/grafana/grafana/pkg/api/routing"
 	"github.com/grafana/grafana/pkg/middleware"
-	"github.com/grafana/grafana/pkg/models"
+	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	"github.com/grafana/grafana/pkg/util"
 	"github.com/grafana/grafana/pkg/web"
 )
@@ -57,7 +57,7 @@ func (s *standardStorageService) RegisterHTTPRoutes(storageRoute routing.RouteRe
 	storageRoute.Get("/config", reqGrafanaAdmin, routing.Wrap(s.getConfig))
 }
 
-func (s *standardStorageService) doWrite(c *models.ReqContext) response.Response {
+func (s *standardStorageService) doWrite(c *contextmodel.ReqContext) response.Response {
 	scope, path := getPathAndScope(c)
 	cmd := &WriteValueRequest{}
 	if err := web.Bind(c.Req, cmd); err != nil {
@@ -68,10 +68,10 @@ func (s *standardStorageService) doWrite(c *models.ReqContext) response.Response
 	if err != nil {
 		return response.Error(http.StatusBadRequest, "save error", err)
 	}
-	return response.JSON(200, rsp)
+	return response.JSON(http.StatusOK, rsp)
 }
 
-func (s *standardStorageService) doUpload(c *models.ReqContext) response.Response {
+func (s *standardStorageService) doUpload(c *contextmodel.ReqContext) response.Response {
 	type rspInfo struct {
 		Message string `json:"message,omitempty"`
 		Path    string `json:"path,omitempty"`
@@ -85,7 +85,7 @@ func (s *standardStorageService) doUpload(c *models.ReqContext) response.Respons
 	if err := c.Req.ParseMultipartForm(MAX_UPLOAD_SIZE); err != nil {
 		rsp.Message = fmt.Sprintf("Please limit file uploaded under %s", util.ByteCountSI(MAX_UPLOAD_SIZE))
 		rsp.Error = true
-		return response.JSON(400, rsp)
+		return response.JSON(http.StatusBadRequest, rsp)
 	}
 	message := getMultipartFormValue(c.Req, "message")
 	overwriteExistingFile := getMultipartFormValue(c.Req, "overwriteExistingFile") != "false" // must explicitly overwrite
@@ -99,7 +99,7 @@ func (s *standardStorageService) doUpload(c *models.ReqContext) response.Respons
 		if path == "" && folder == "" {
 			rsp.Message = "please specify the upload folder or full path"
 			rsp.Error = true
-			return response.JSON(400, rsp)
+			return response.JSON(http.StatusBadRequest, rsp)
 		}
 
 		for _, fileHeader := range fileHeaders {
@@ -107,15 +107,15 @@ func (s *standardStorageService) doUpload(c *models.ReqContext) response.Respons
 			// open each file to copy contents
 			file, err := fileHeader.Open()
 			if err != nil {
-				return response.Error(500, "Internal Server Error", err)
+				return response.Error(http.StatusInternalServerError, "Internal Server Error", err)
 			}
 			err = file.Close()
 			if err != nil {
-				return response.Error(500, "Internal Server Error", err)
+				return response.Error(http.StatusInternalServerError, "Internal Server Error", err)
 			}
 			data, err := io.ReadAll(file)
 			if err != nil {
-				return response.Error(500, "Internal Server Error", err)
+				return response.Error(http.StatusInternalServerError, "Internal Server Error", err)
 			}
 
 			if path == "" {
@@ -147,7 +147,7 @@ func (s *standardStorageService) doUpload(c *models.ReqContext) response.Respons
 		}
 	}
 
-	return response.JSON(200, rsp)
+	return response.JSON(http.StatusOK, rsp)
 }
 
 func getMultipartFormValue(req *http.Request, key string) string {
@@ -158,16 +158,16 @@ func getMultipartFormValue(req *http.Request, key string) string {
 	return v[0]
 }
 
-func (s *standardStorageService) read(c *models.ReqContext) response.Response {
+func (s *standardStorageService) read(c *contextmodel.ReqContext) response.Response {
 	// full path is api/storage/read/upload/example.jpg, but we only want the part after read
 	scope, path := getPathAndScope(c)
 	file, err := s.Read(c.Req.Context(), c.SignedInUser, scope+"/"+path)
 	if err != nil {
-		return response.Error(400, "cannot call read", err)
+		return response.Error(http.StatusBadRequest, "cannot call read", err)
 	}
 
 	if file == nil || file.Contents == nil {
-		return response.Error(404, "file does not exist", err)
+		return response.Error(http.StatusNotFound, "file does not exist", err)
 	}
 
 	// set the correct content type for svg
@@ -177,102 +177,103 @@ func (s *standardStorageService) read(c *models.ReqContext) response.Response {
 	return response.Respond(200, file.Contents)
 }
 
-func (s *standardStorageService) getOptions(c *models.ReqContext) response.Response {
+func (s *standardStorageService) getOptions(c *contextmodel.ReqContext) response.Response {
 	scope, path := getPathAndScope(c)
 	opts, err := s.getWorkflowOptions(c.Req.Context(), c.SignedInUser, scope+"/"+path)
 	if err != nil {
-		return response.Error(400, err.Error(), err)
+		return response.Error(http.StatusBadRequest, err.Error(), err)
 	}
-	return response.JSON(200, opts)
+	return response.JSON(http.StatusOK, opts)
 }
 
-func (s *standardStorageService) doDelete(c *models.ReqContext) response.Response {
+func (s *standardStorageService) doDelete(c *contextmodel.ReqContext) response.Response {
 	// full path is api/storage/delete/upload/example.jpg, but we only want the part after upload
 	scope, path := getPathAndScope(c)
 
 	err := s.Delete(c.Req.Context(), c.SignedInUser, scope+"/"+path)
 	if err != nil {
-		return response.Error(400, "failed to delete the file: "+err.Error(), err)
+		return response.Error(http.StatusBadRequest, "failed to delete the file: "+err.Error(), err)
 	}
-	return response.JSON(200, map[string]interface{}{
+	return response.JSON(http.StatusOK, map[string]any{
 		"message": "Removed file from storage",
 		"success": true,
 		"path":    path,
 	})
 }
 
-func (s *standardStorageService) doDeleteFolder(c *models.ReqContext) response.Response {
+func (s *standardStorageService) doDeleteFolder(c *contextmodel.ReqContext) response.Response {
 	body, err := io.ReadAll(c.Req.Body)
 	if err != nil {
-		return response.Error(500, "error reading bytes", err)
+		return response.Error(http.StatusInternalServerError, "error reading bytes", err)
 	}
 
 	cmd := &DeleteFolderCmd{}
 	err = json.Unmarshal(body, cmd)
 	if err != nil {
-		return response.Error(400, "error parsing body", err)
+		return response.Error(http.StatusBadRequest, "error parsing body", err)
 	}
 
 	if cmd.Path == "" {
-		return response.Error(400, "empty path", err)
+		return response.Error(http.StatusBadRequest, "empty path", err)
 	}
 
 	// full path is api/storage/delete/upload/example.jpg, but we only want the part after upload
 	_, path := getPathAndScope(c)
 	if err := s.DeleteFolder(c.Req.Context(), c.SignedInUser, cmd); err != nil {
-		return response.Error(400, "failed to delete the folder: "+err.Error(), err)
+		return response.Error(http.StatusBadRequest, "failed to delete the folder: "+err.Error(), err)
 	}
 
-	return response.JSON(200, map[string]interface{}{
+	return response.JSON(http.StatusOK, map[string]any{
 		"message": "Removed folder from storage",
 		"success": true,
 		"path":    path,
 	})
 }
 
-func (s *standardStorageService) doCreateFolder(c *models.ReqContext) response.Response {
+func (s *standardStorageService) doCreateFolder(c *contextmodel.ReqContext) response.Response {
 	body, err := io.ReadAll(c.Req.Body)
 	if err != nil {
-		return response.Error(500, "error reading bytes", err)
+		return response.Error(http.StatusInternalServerError, "error reading bytes", err)
 	}
 
 	cmd := &CreateFolderCmd{}
 	err = json.Unmarshal(body, cmd)
 	if err != nil {
-		return response.Error(400, "error parsing body", err)
+		return response.Error(http.StatusBadRequest, "error parsing body", err)
 	}
 
 	if cmd.Path == "" {
-		return response.Error(400, "empty path", err)
+		return response.Error(http.StatusBadRequest, "empty path", err)
 	}
 
 	if err := s.CreateFolder(c.Req.Context(), c.SignedInUser, cmd); err != nil {
-		return response.Error(400, "failed to create the folder: "+err.Error(), err)
+		return response.Error(http.StatusBadRequest, "failed to create the folder: "+err.Error(), err)
 	}
 
-	return response.JSON(200, map[string]interface{}{
+	return response.JSON(http.StatusOK, map[string]any{
 		"message": "Folder created",
 		"success": true,
 		"path":    cmd.Path,
 	})
 }
 
-func (s *standardStorageService) list(c *models.ReqContext) response.Response {
+func (s *standardStorageService) list(c *contextmodel.ReqContext) response.Response {
 	params := web.Params(c.Req)
 	path := params["*"]
-	frame, err := s.List(c.Req.Context(), c.SignedInUser, path)
+	// maxFiles of 0 will result in default behaviour from wrapper
+	frame, err := s.List(c.Req.Context(), c.SignedInUser, path, 0)
 	if err != nil {
-		return response.Error(400, "error reading path", err)
+		return response.Error(http.StatusBadRequest, "error reading path", err)
 	}
 	if frame == nil {
-		return response.Error(404, "not found", nil)
+		return response.Error(http.StatusNotFound, "not found", nil)
 	}
 	return response.JSONStreaming(http.StatusOK, frame)
 }
 
-func (s *standardStorageService) getConfig(c *models.ReqContext) response.Response {
+func (s *standardStorageService) getConfig(c *contextmodel.ReqContext) response.Response {
 	roots := make([]RootStorageMeta, 0)
-	orgId := c.OrgID
+	orgId := c.SignedInUser.GetOrgID()
 	t := s.tree
 	t.assureOrgIsInitialized(orgId)
 
@@ -280,5 +281,5 @@ func (s *standardStorageService) getConfig(c *models.ReqContext) response.Respon
 	for _, s := range storages {
 		roots = append(roots, s.Meta())
 	}
-	return response.JSON(200, roots)
+	return response.JSON(http.StatusOK, roots)
 }

@@ -1,8 +1,8 @@
-import React, { FC, useCallback } from 'react';
+import { useCallback } from 'react';
 
 import { SelectableValue, StandardEditorProps } from '@grafana/data';
 import { InlineField, InlineFieldRow, RadioButtonGroup } from '@grafana/ui/src';
-import { BackgroundImageSize } from 'app/features/canvas';
+import { BackgroundImageSize } from 'app/plugins/panel/canvas/panelcfg.gen';
 
 const options: Array<SelectableValue<BackgroundImageSize>> = [
   { value: BackgroundImageSize.Original, label: 'Original' },
@@ -12,9 +12,7 @@ const options: Array<SelectableValue<BackgroundImageSize>> = [
   { value: BackgroundImageSize.Tile, label: 'Tile' },
 ];
 
-export const BackgroundSizeEditor: FC<StandardEditorProps<string, undefined, undefined>> = (props) => {
-  const { value, onChange } = props;
-
+export const BackgroundSizeEditor = ({ value, onChange }: StandardEditorProps<string, undefined, undefined>) => {
   const imageSize = value ?? BackgroundImageSize.Cover;
 
   const onImageSizeChange = useCallback(

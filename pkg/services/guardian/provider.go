@@ -3,40 +3,43 @@ package guardian
 import (
 	"context"
 
-	"github.com/grafana/grafana/pkg/infra/db"
+	"github.com/grafana/grafana/pkg/apimachinery/identity"
+	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/dashboards"
+	"github.com/grafana/grafana/pkg/services/folder"
 	"github.com/grafana/grafana/pkg/services/team"
-	"github.com/grafana/grafana/pkg/services/user"
+	"github.com/grafana/grafana/pkg/setting"
 )
 
 type Provider struct{}
 
 func ProvideService(
-	store db.DB, ac accesscontrol.AccessControl,
-	folderPermissionsService accesscontrol.FolderPermissionsService, dashboardPermissionsService accesscontrol.DashboardPermissionsService,
+	cfg *setting.Cfg, ac accesscontrol.AccessControl,
 	dashboardService dashboards.DashboardService, teamService team.Service,
+	folderService folder.Service,
 ) *Provider {
-	if !ac.IsDisabled() {
-		// TODO: Fix this hack, see https://github.com/grafana/grafana-enterprise/issues/2935
-		InitAccessControlGuardian(store, ac, folderPermissionsService, dashboardPermissionsService, dashboardService)
-	} else {
-		InitLegacyGuardian(store, dashboardService, teamService)
-	}
+	// TODO: Fix this hack, see https://github.com/grafana/grafana-enterprise/issues/2935
+	InitAccessControlGuardian(cfg, ac, dashboardService, folderService, log.New("guardian"))
 	return &Provider{}
 }
 
-func InitLegacyGuardian(store db.DB, dashSvc dashboards.DashboardService, teamSvc team.Service) {
-	New = func(ctx context.Context, dashId int64, orgId int64, user *user.SignedInUser) DashboardGuardian {
-		return newDashboardGuardian(ctx, dashId, orgId, user, store, dashSvc, teamSvc)
-	}
-}
-
 func InitAccessControlGuardian(
-	store db.DB, ac accesscontrol.AccessControl, folderPermissionsService accesscontrol.FolderPermissionsService,
-	dashboardPermissionsService accesscontrol.DashboardPermissionsService, dashboardService dashboards.DashboardService,
+	cfg *setting.Cfg, ac accesscontrol.AccessControl, dashboardService dashboards.DashboardService, folderService folder.Service, logger log.Logger,
 ) {
-	New = func(ctx context.Context, dashId int64, orgId int64, user *user.SignedInUser) DashboardGuardian {
-		return NewAccessControlDashboardGuardian(ctx, dashId, user, store, ac, folderPermissionsService, dashboardPermissionsService, dashboardService)
+	New = func(ctx context.Context, dashId int64, orgId int64, user identity.Requester) (DashboardGuardian, error) {
+		return NewAccessControlDashboardGuardian(ctx, cfg, dashId, user, ac, dashboardService, folderService, logger)
+	}
+
+	NewByDashboard = func(ctx context.Context, dash *dashboards.Dashboard, orgId int64, user identity.Requester) (DashboardGuardian, error) {
+		return NewAccessControlDashboardGuardianByDashboard(ctx, cfg, dash, user, ac, dashboardService, folderService, logger)
+	}
+
+	NewByFolderUID = func(ctx context.Context, folderUID string, orgId int64, user identity.Requester) (DashboardGuardian, error) {
+		return NewAccessControlFolderGuardianByUID(ctx, cfg, folderUID, user, ac, dashboardService, folderService)
+	}
+
+	NewByFolder = func(ctx context.Context, f *folder.Folder, orgId int64, user identity.Requester) (DashboardGuardian, error) {
+		return NewAccessControlFolderGuardian(ctx, cfg, f, user, ac, orgId, dashboardService, folderService)
 	}
 }

@@ -32,8 +32,7 @@ func OrgRedirect(cfg *setting.Cfg, userSvc user.Service) web.Handler {
 			return
 		}
 
-		cmd := user.SetUsingOrgCommand{UserID: ctx.UserID, OrgID: orgId}
-		if err := userSvc.SetUsingOrg(ctx.Req.Context(), &cmd); err != nil {
+		if err := userSvc.Update(ctx.Req.Context(), &user.UpdateUserCommand{UserID: ctx.UserID, OrgID: &orgId}); err != nil {
 			if ctx.IsApiRequest() {
 				ctx.JsonApiErr(404, "Not found", nil)
 			} else {
@@ -51,7 +50,7 @@ func OrgRedirect(cfg *setting.Cfg, userSvc user.Service) web.Handler {
 			qs = fmt.Sprintf("%s&kiosk", urlParams.Encode())
 		}
 
-		newURL := fmt.Sprintf("%s%s?%s", cfg.AppURL, strings.TrimPrefix(c.Req.URL.Path, "/"), qs)
+		newURL := fmt.Sprintf("%s%s?%s", cfg.AppSubURL, strings.TrimPrefix(c.Req.URL.Path, "/"), qs)
 
 		c.Redirect(newURL, 302)
 	}

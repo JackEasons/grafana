@@ -2,25 +2,25 @@ package test
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/ini.v1"
 	"xorm.io/xorm"
 
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/sqlstore/migrations"
 	acmig "github.com/grafana/grafana/pkg/services/sqlstore/migrations/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/sqlstore/migrator"
 	"github.com/grafana/grafana/pkg/services/sqlstore/sqlutil"
+	"github.com/grafana/grafana/pkg/services/team"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/setting"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type rawPermission struct {
@@ -44,6 +44,7 @@ var (
 	users = []user.User{
 		{
 			ID:      1,
+			UID:     "u1",
 			Email:   "viewer1@example.org",
 			Name:    "viewer1",
 			Login:   "viewer1",
@@ -53,6 +54,7 @@ var (
 		},
 		{
 			ID:      2,
+			UID:     "u2",
 			Email:   "viewer2@example.org",
 			Name:    "viewer2",
 			Login:   "viewer2",
@@ -62,6 +64,7 @@ var (
 		},
 		{
 			ID:      3,
+			UID:     "u3",
 			Email:   "editor1@example.org",
 			Name:    "editor1",
 			Login:   "editor1",
@@ -71,6 +74,7 @@ var (
 		},
 		{
 			ID:      4,
+			UID:     "u4",
 			Email:   "admin1@example.org",
 			Name:    "admin1",
 			Login:   "admin1",
@@ -80,6 +84,7 @@ var (
 		},
 		{
 			ID:      5,
+			UID:     "u5",
 			Email:   "editor2@example.org",
 			Name:    "editor2",
 			Login:   "editor2",
@@ -96,37 +101,6 @@ func convertToRawPermissions(permissions []accesscontrol.Permission) []rawPermis
 		raw[i] = rawPermission{Action: p.Action, Scope: p.Scope}
 	}
 	return raw
-}
-
-func getDBType() string {
-	dbType := migrator.SQLite
-
-	// environment variable present for test db?
-	if db, present := os.LookupEnv("GRAFANA_TEST_DB"); present {
-		dbType = db
-	}
-	return dbType
-}
-
-func getTestDB(t *testing.T, dbType string) sqlutil.TestDB {
-	switch dbType {
-	case "mysql":
-		return sqlutil.MySQLTestDB()
-	case "postgres":
-		return sqlutil.PostgresTestDB()
-	default:
-		f, err := os.CreateTemp(".", "grafana-test-db-")
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			err := os.Remove(f.Name())
-			require.NoError(t, err)
-		})
-
-		return sqlutil.TestDB{
-			DriverName: "sqlite3",
-			ConnStr:    f.Name(),
-		}
-	}
 }
 
 func TestMigrations(t *testing.T) {
@@ -151,8 +125,8 @@ func TestMigrations(t *testing.T) {
 		{
 			desc: "with editors can admin",
 			config: &setting.Cfg{
-				EditorsCanAdmin:        true,
-				IsFeatureToggleEnabled: func(key string) bool { return key == "accesscontrol" },
+				EditorsCanAdmin: true,
+				Raw:             ini.Empty(),
 			},
 			expectedRolePerms: map[string][]rawPermission{
 				"managed:users:1:permissions": {{Action: "teams:read", Scope: team1Scope}},
@@ -179,9 +153,8 @@ func TestMigrations(t *testing.T) {
 		},
 		{
 			desc: "without editors can admin",
-			config: &setting.Cfg{
-				IsFeatureToggleEnabled: func(key string) bool { return key == "accesscontrol" },
-			},
+			// nolint:staticcheck
+			config: setting.NewCfgWithFeatures(featuremgmt.WithFeatures("accesscontrol").IsEnabledGlobally),
 			expectedRolePerms: map[string][]rawPermission{
 				"managed:users:1:permissions": {{Action: "teams:read", Scope: team1Scope}},
 				"managed:users:2:permissions": {{Action: "teams:read", Scope: team1Scope}},
@@ -247,16 +220,28 @@ func TestMigrations(t *testing.T) {
 
 func setupTestDB(t *testing.T) *xorm.Engine {
 	t.Helper()
-	dbType := getDBType()
-	testDB := getTestDB(t, dbType)
+	dbType := sqlutil.GetTestDBType()
+	testDB, err := sqlutil.GetTestDB(dbType)
+	require.NoError(t, err)
+
+	t.Cleanup(testDB.Cleanup)
 
 	x, err := xorm.NewEngine(testDB.DriverName, testDB.ConnStr)
 	require.NoError(t, err)
 
-	err = migrator.NewDialect(x).CleanDB()
+	t.Cleanup(func() {
+		if err := x.Close(); err != nil {
+			fmt.Printf("failed to close xorm engine: %v", err)
+		}
+	})
+
+	err = migrator.NewDialect(x.DriverName()).CleanDB(x)
 	require.NoError(t, err)
 
-	mg := migrator.NewMigrator(x, &setting.Cfg{Logger: log.New("acmigration.test")})
+	mg := migrator.NewMigrator(x, &setting.Cfg{
+		Logger: log.New("acmigration.test"),
+		Raw:    ini.Empty(),
+	})
 	migrations := &migrations.OSSMigrations{}
 	migrations.AddMigration(mg)
 
@@ -273,38 +258,38 @@ func setupTeams(t *testing.T, x *xorm.Engine) {
 	require.NoError(t, errInsertUsers)
 	require.Equal(t, int64(5), usersCount, "needed 5 users for this test to run")
 
-	orgUsers := []models.OrgUser{
+	orgUsers := []org.OrgUser{
 		{
-			OrgId:   1,
-			UserId:  1,
+			OrgID:   1,
+			UserID:  1,
 			Role:    org.RoleViewer,
 			Created: now,
 			Updated: now,
 		},
 		{
-			OrgId:   1,
-			UserId:  2,
+			OrgID:   1,
+			UserID:  2,
 			Role:    org.RoleViewer,
 			Created: now,
 			Updated: now,
 		},
 		{
-			OrgId:   1,
-			UserId:  3,
+			OrgID:   1,
+			UserID:  3,
 			Role:    org.RoleEditor,
 			Created: now,
 			Updated: now,
 		},
 		{
-			OrgId:   1,
-			UserId:  4,
+			OrgID:   1,
+			UserID:  4,
 			Role:    org.RoleAdmin,
 			Created: now,
 			Updated: now,
 		},
 		{
-			OrgId:   2,
-			UserId:  5,
+			OrgID:   2,
+			UserID:  5,
 			Role:    org.RoleEditor,
 			Created: now,
 			Updated: now,
@@ -315,16 +300,16 @@ func setupTeams(t *testing.T, x *xorm.Engine) {
 	require.Equal(t, int64(5), orgUsersCount, "needed 5 users for this test to run")
 
 	// Setup teams (and members)
-	teams := []models.Team{
+	teams := []team.Team{
 		{
-			OrgId:   1,
+			OrgID:   1,
 			Name:    "teamOrg1",
 			Email:   "teamorg1@example.org",
 			Created: now,
 			Updated: now,
 		},
 		{
-			OrgId:   2,
+			OrgID:   2,
 			Name:    "teamOrg2",
 			Email:   "teamorg2@example.org",
 			Created: now,
@@ -335,54 +320,54 @@ func setupTeams(t *testing.T, x *xorm.Engine) {
 	require.NoError(t, errInsertTeams)
 	require.Equal(t, int64(2), teamCount, "needed 2 teams for this test to run")
 
-	members := []models.TeamMember{
+	members := []team.TeamMember{
 		{
 			// Can have viewer permissions
-			OrgId:      1,
-			TeamId:     1,
-			UserId:     1,
+			OrgID:      1,
+			TeamID:     1,
+			UserID:     1,
 			External:   false,
-			Permission: 0,
+			Permission: team.PermissionTypeMember,
 			Created:    now,
 			Updated:    now,
 		},
 		{
 			// Cannot have admin permissions
-			OrgId:      1,
-			TeamId:     1,
-			UserId:     2,
+			OrgID:      1,
+			TeamID:     1,
+			UserID:     2,
 			External:   false,
-			Permission: models.PERMISSION_ADMIN,
+			Permission: team.PermissionTypeAdmin,
 			Created:    now,
 			Updated:    now,
 		},
 		{
 			// Can have admin permissions
-			OrgId:      1,
-			TeamId:     1,
-			UserId:     3,
+			OrgID:      1,
+			TeamID:     1,
+			UserID:     3,
 			External:   false,
-			Permission: models.PERMISSION_ADMIN,
+			Permission: team.PermissionTypeAdmin,
 			Created:    now,
 			Updated:    now,
 		},
 		{
 			// Can have admin permissions
-			OrgId:      1,
-			TeamId:     1,
-			UserId:     4,
+			OrgID:      1,
+			TeamID:     1,
+			UserID:     4,
 			External:   false,
-			Permission: models.PERMISSION_ADMIN,
+			Permission: team.PermissionTypeAdmin,
 			Created:    now,
 			Updated:    now,
 		},
 		{
 			// Can have viewer permissions
-			OrgId:      2,
-			TeamId:     2,
-			UserId:     5,
+			OrgID:      2,
+			TeamID:     2,
+			UserID:     5,
 			External:   false,
-			Permission: 0,
+			Permission: team.PermissionTypeMember,
 			Created:    now,
 			Updated:    now,
 		},

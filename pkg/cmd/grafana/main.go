@@ -5,18 +5,33 @@ import (
 	"os"
 
 	"github.com/fatih/color"
-	gcli "github.com/grafana/grafana/pkg/cmd/grafana-cli/commands"
-	gsrv "github.com/grafana/grafana/pkg/cmd/grafana-server/commands"
 	"github.com/urfave/cli/v2"
+
+	gcli "github.com/grafana/grafana/pkg/cmd/grafana-cli/commands"
+	"github.com/grafana/grafana/pkg/cmd/grafana-server/commands"
+	"github.com/grafana/grafana/pkg/server"
+	"github.com/grafana/grafana/pkg/services/apiserver/standalone"
 )
 
 // The following variables cannot be constants, since they can be overridden through the -X link flag
 var version = "9.2.0"
-var commit = "NA"
+var commit = gcli.DefaultCommitValue
+var enterpriseCommit = gcli.DefaultCommitValue
 var buildBranch = "main"
 var buildstamp string
 
 func main() {
+	app := MainApp()
+
+	if err := app.Run(os.Args); err != nil {
+		fmt.Printf("%s: %s %s\n", color.RedString("Error"), color.RedString("✗"), err)
+		os.Exit(1)
+	}
+
+	os.Exit(0)
+}
+
+func MainApp() *cli.App {
 	app := &cli.App{
 		Name:  "grafana",
 		Usage: "Grafana server and command line interface",
@@ -29,31 +44,32 @@ func main() {
 		Version: version,
 		Commands: []*cli.Command{
 			gcli.CLICommand(version),
-			{
-				Name:  "server",
-				Usage: "server <server options>",
-				Action: func(context *cli.Context) error {
-					os.Exit(gsrv.RunServer(gsrv.ServerOptions{
-						Version:     version,
-						Commit:      commit,
-						BuildBranch: buildBranch,
-						BuildStamp:  buildstamp,
-						Args:        context.Args().Slice(),
-					}))
-					return nil
-				},
-				SkipFlagParsing: true,
-			},
+			commands.ServerCommand(version, commit, enterpriseCommit, buildBranch, buildstamp),
 		},
-		CommandNotFound: cmdNotFound,
+		CommandNotFound:      cmdNotFound,
+		EnableBashCompletion: true,
 	}
 
-	if err := app.Run(os.Args); err != nil {
-		fmt.Printf("%s: %s %s\n", color.RedString("Error"), color.RedString("✗"), err)
-		os.Exit(1)
+	// Set the global build info
+	buildInfo := standalone.BuildInfo{
+		Version:          version,
+		Commit:           commit,
+		EnterpriseCommit: enterpriseCommit,
+		BuildBranch:      buildBranch,
+		BuildStamp:       buildstamp,
+	}
+	commands.SetBuildInfo(buildInfo)
+
+	// Add the enterprise command line to build an api server
+	f, err := server.InitializeAPIServerFactory()
+	if err == nil {
+		cmd := f.GetCLICommand(buildInfo)
+		if cmd != nil {
+			app.Commands = append(app.Commands, cmd)
+		}
 	}
 
-	os.Exit(0)
+	return app
 }
 
 func cmdNotFound(c *cli.Context, command string) {

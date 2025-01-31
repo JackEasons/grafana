@@ -1,6 +1,6 @@
 ---
 aliases:
-  - /docs/grafana/latest/data-sources/google-cloud-monitoring/query-editor/
+  - ../../data-sources/google-cloud-monitoring/query-editor/
 description: Guide for using the Google Cloud Monitoring data source's query editor
 keywords:
   - grafana
@@ -8,27 +8,48 @@ keywords:
   - cloud
   - monitoring
   - queries
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 menuTitle: Query editor
 title: Google Cloud Monitoring query editor
 weight: 300
+refs:
+  annotate-visualizations:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/annotate-visualizations/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/annotate-visualizations/
+  query-transform-data:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/
+  add-template-variables-add-interval-variable:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/variables/add-template-variables/#add-an-interval-variable
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/variables/add-template-variables/#add-an-interval-variable
 ---
 
 # Google Cloud Monitoring query editor
 
 This topic explains querying specific to the Google Cloud Monitoring data source.
-For general documentation on querying data sources in Grafana, see [Query and transform data]({{< relref "../../../panels-visualizations/query-transform-data" >}}).
+For general documentation on querying data sources in Grafana, see [Query and transform data](ref:query-transform-data).
 
 ## Choose a query editing mode
 
 The Google Cloud Monitoring query editor helps you build queries for two types of data, which both return time series data:
 
-- [Metrics]({{< relref "#query-metrics" >}})
+- [Metrics](#query-metrics)
 
-  You can also create [Monitoring Query Language (MQL)]({{< relref "#use-the-monitoring-query-language" >}}) queries.
+  You can also create [Monitoring Query Language (MQL)](#use-the-monitoring-query-language) queries.
 
-- [Service Level Objectives (SLO)]({{< relref "#query-service-level-objectives" >}})
+- [Service Level Objectives (SLO)](#query-service-level-objectives)
 
-You also use the query editor when you [annotate]({{< relref "#apply-annotations" >}}) visualizations.
+You also use the query editor when you [annotate](#apply-annotations) visualizations.
 
 ## Query metrics
 
@@ -45,8 +66,17 @@ The metrics query editor helps you select metrics, group and aggregate by labels
 1. _(Optional)_ Use the plus and minus icons in the filter and group-by sections to add and remove filters or group-by clauses.
 
 Google Cloud Monitoring supports several metrics types, such as `GAUGE`, `DELTA,` and `CUMULATIVE`.
-Each supports different aggregation options, such as reducers and aligners.
-The metrics query editor lists available aggregation methods for a selected metric, and sets a default reducer and aligner when you select a metric.
+Each supports different aggregation options, such as reducers and aligners. Additionally, metrics have specific value types that can be either scalar or a distribution.
+
+The metrics query editor lists available aggregation methods for a selected metric, and sets a default aggregation, reducer and aligner when you select a metric.
+
+In the case that the metric value type is a distribution, the aggregation will be set by default to the mean. For scalar value types, there is no aggregation by default.
+
+The various metrics are documented [here](https://cloud.google.com/monitoring/api/metrics_gcp) and further details on the kinds and types of metrics can be found [here](https://cloud.google.com/monitoring/api/v3/kinds-and-types).
+
+{{% admonition type="note" %}}
+Distribution metrics are typically best visualized as either a heatmap or histogram. When visualizing in this way, aggregation is not necessary. However, for other visualization types, performance degradation may be observed when attempting to query distribution metrics that are not aggregated due to the number of potential buckets that can be returned. For more information on how to visualize distribution metrics refer to [this page](https://cloud.google.com/monitoring/charts/charting-distribution-metrics).
+{{% /admonition %}}
 
 ### Apply a filter
 
@@ -114,7 +144,7 @@ You can align all data points received in a fixed length of time by applying an 
 #### Select an alignment function
 
 During alignment, all data points are received in a fixed interval.
-Within each interval, as defined by the [alignment period]({{< relref "#alignment-period" >}})), and for each time series, the data is aggregated into a single point.
+Within each interval, as defined by the [alignment period](#alignment-period)), and for each time series, the data is aggregated into a single point.
 The value of that point is determined by the type of alignment function you use.
 
 For more information on alignment functions, refer to [alignment metric selector](https://cloud.google.com/monitoring/charts/metrics-selector#alignment).
@@ -134,7 +164,7 @@ The default values for "cloud monitoring auto" are:
 
 The other automatic option is "grafana auto", which automatically sets the Group By time depending on the time range chosen and width of the time series panel.
 
-For more information about "grafana auto", refer to [Interval variable]({{< relref "../../../dashboards/variables/add-template-variables/#add-an-interval-variable" >}}).
+For more information about "grafana auto", refer to [Interval variable](ref:add-template-variables-add-interval-variable).
 
 You can also choose fixed time intervals to group by, like `1h` or `1d`.
 
@@ -177,8 +207,6 @@ An expected result would look like: `gce_instance - compute.googleapis.com/insta
 
 ### Deep-link from Grafana panels to the Google Cloud Console Metrics Explorer
 
-> **Note:** Available in Grafana v7.1 and higher.
-
 {{< figure src="/static/img/docs/v71/cloudmonitoring_deep_linking.png" max-width="500px" class="docs-image--no-shadow" caption="Google Cloud Monitoring deep linking" >}}
 
 You can click on a time series in the panel to access a context menu, which contains a link to **View in Metrics Explorer in Google Cloud Console**.
@@ -199,8 +227,6 @@ If the query editor rows return different units, Grafana uses the unit from the 
 
 ### Use the Monitoring Query Language
 
-> **Note:** Available in Grafana v7.4 and higher.
-
 The Monitoring Query Language (MQL) query builder helps you query and display MQL results in time series format.
 To understand basic MQL concepts, refer to [Introduction to Monitoring Query Language](https://cloud.google.com/monitoring/mql).
 
@@ -209,20 +235,16 @@ To understand basic MQL concepts, refer to [Introduction to Monitoring Query Lan
 **To create an MQL query:**
 
 1. Select the **Metrics** option in the **Query Type** dropdown.
-1. Select **<> Edit MQL** next to the **Query Type** field.
-   This toggles the MQL query builder mode.
 1. Select a project from the **Project** dropdown.
 1. Enter your MQL query in the text area.
 
 ### Set alias patterns for MQL queries
 
-MQL queries use the same alias patterns as [metric queries]({{< relref "#set-alias-patterns" >}}).
+MQL queries use the same alias patterns as [metric queries](#set-alias-patterns).
 
 However, `{{metric.service}}` is not supported, and `{{metric.type}}` and `{{metric.name}}` show the time series key in the response.
 
 ## Query Service Level Objectives
-
-> **Note:** Available in Grafana v7.0 and higher.
 
 {{< figure src="/static/img/docs/google-cloud-monitoring/slo-query-builder-8-0.png" max-width="400px" class="docs-image--no-shadow" caption="Service Level Objectives (SLO) query editor" >}}
 
@@ -261,13 +283,22 @@ The **Alias By** field helps you control the format of legend keys for SLO queri
 
 ### Alignment period and group-by time for SLO queries
 
-SLO queries use the same alignment period functionality as [metric queries]({{< relref "#define-the-alignment-period" >}}).
+SLO queries use the same alignment period functionality as [metric queries](#define-the-alignment-period).
+
+### Create a Prometheus query
+
+**To create an Prometheus query:**
+
+1. Select the **PromQL** option in the **Query Type** dropdown.
+1. Select a project from the **Project** dropdown.
+1. Enter your Prometheus query in the text area.
+1. Enter a Min Step interval. The **Min step** setting defines the lower bounds on the interval between data points. For example, set this to `1h` to hint that measurements are taken hourly. This setting supports the `$__interval` and `$__rate_interval` macros.
 
 ## Apply annotations
 
 {{< figure src="/static/img/docs/google-cloud-monitoring/annotations-8-0.png" max-width= "400px" class="docs-image--right" >}}
 
-[Annotations]({{< relref "../../../dashboards/build-dashboards/annotate-visualizations" >}}) overlay rich event information on top of graphs.
+[Annotations](ref:annotate-visualizations) overlay rich event information on top of graphs.
 You can add annotation queries in the Dashboard menu's Annotations view.
 
 Rendering annotations is expensive, and it's important to limit the number of rows returned.

@@ -1,12 +1,13 @@
 import { isFunction } from 'lodash';
-import React, { FC } from 'react';
 
 import { ThresholdsConfig, ThresholdsMode, VizOrientation, getFieldConfigWithMinMax } from '@grafana/data';
+import { BarGaugeDisplayMode, BarGaugeValueMode, TableCellDisplayMode } from '@grafana/schema';
 
-import { BarGauge, BarGaugeDisplayMode } from '../BarGauge/BarGauge';
+import { BarGauge } from '../BarGauge/BarGauge';
 import { DataLinksContextMenu, DataLinksContextMenuApi } from '../DataLinks/DataLinksContextMenu';
 
-import { TableCellProps, TableCellDisplayMode } from './types';
+import { TableCellProps } from './types';
+import { getAlignmentFactor, getCellOptions } from './utils';
 
 const defaultScale: ThresholdsConfig = {
   mode: ThresholdsMode.Absolute,
@@ -22,8 +23,10 @@ const defaultScale: ThresholdsConfig = {
   ],
 };
 
-export const BarGaugeCell: FC<TableCellProps> = (props) => {
-  const { field, innerWidth, tableStyles, cell, cellProps, row } = props;
+export const BarGaugeCell = (props: TableCellProps) => {
+  const { field, innerWidth, tableStyles, cell, cellProps, row, actions } = props;
+  const displayValue = field.display!(cell.value);
+  const cellOptions = getCellOptions(field);
 
   let config = getFieldConfigWithMinMax(field, false);
   if (!config.thresholds) {
@@ -33,13 +36,15 @@ export const BarGaugeCell: FC<TableCellProps> = (props) => {
     };
   }
 
-  const displayValue = field.display!(cell.value);
-  let barGaugeMode = BarGaugeDisplayMode.Gradient;
+  // Set default display mode and update if defined
+  // and update the valueMode if defined
+  let barGaugeMode: BarGaugeDisplayMode = BarGaugeDisplayMode.Gradient;
+  let valueDisplayMode: BarGaugeValueMode | undefined = undefined;
 
-  if (field.config.custom && field.config.custom.displayMode === TableCellDisplayMode.LcdGauge) {
-    barGaugeMode = BarGaugeDisplayMode.Lcd;
-  } else if (field.config.custom && field.config.custom.displayMode === TableCellDisplayMode.BasicGauge) {
-    barGaugeMode = BarGaugeDisplayMode.Basic;
+  if (cellOptions.type === TableCellDisplayMode.Gauge) {
+    barGaugeMode = cellOptions.mode ?? BarGaugeDisplayMode.Gradient;
+    valueDisplayMode =
+      cellOptions.valueDisplayMode !== undefined ? cellOptions.valueDisplayMode : BarGaugeValueMode.Text;
   }
 
   const getLinks = () => {
@@ -51,6 +56,8 @@ export const BarGaugeCell: FC<TableCellProps> = (props) => {
   };
 
   const hasLinks = Boolean(getLinks().length);
+  const hasActions = Boolean(actions?.length);
+  const alignmentFactors = getAlignmentFactor(field, displayValue, cell.row.index);
 
   const renderComponent = (menuProps: DataLinksContextMenuApi) => {
     const { openMenu, targetClassName } = menuProps;
@@ -65,36 +72,25 @@ export const BarGaugeCell: FC<TableCellProps> = (props) => {
         value={displayValue}
         orientation={VizOrientation.Horizontal}
         theme={tableStyles.theme}
+        alignmentFactors={alignmentFactors}
         onClick={openMenu}
         className={targetClassName}
         itemSpacing={1}
         lcdCellWidth={8}
         displayMode={barGaugeMode}
+        valueDisplayMode={valueDisplayMode}
       />
     );
   };
 
   return (
     <div {...cellProps} className={tableStyles.cellContainer}>
-      {hasLinks && (
-        <DataLinksContextMenu links={getLinks} style={{ display: 'flex', width: '100%' }}>
+      {hasLinks || hasActions ? (
+        <DataLinksContextMenu links={getLinks} actions={actions} style={{ display: 'flex', width: '100%' }}>
           {(api) => renderComponent(api)}
         </DataLinksContextMenu>
-      )}
-      {!hasLinks && (
-        <BarGauge
-          width={innerWidth}
-          height={tableStyles.cellHeightInner}
-          field={config}
-          display={field.display}
-          text={{ valueSize: 14 }}
-          value={displayValue}
-          orientation={VizOrientation.Horizontal}
-          theme={tableStyles.theme}
-          itemSpacing={1}
-          lcdCellWidth={8}
-          displayMode={barGaugeMode}
-        />
+      ) : (
+        renderComponent({})
       )}
     </div>
   );

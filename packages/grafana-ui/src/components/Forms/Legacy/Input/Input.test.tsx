@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 
 import { ValidationEvents } from '../../../../types';
 import { EventsWithValidation } from '../../../../utils';
@@ -29,7 +28,8 @@ describe('Input', () => {
     render(<Input validationEvents={testBlurValidation} placeholder={PLACEHOLDER_TEXT} />);
     const inputEl = screen.getByPlaceholderText(PLACEHOLDER_TEXT);
     await userEvent.type(inputEl, 'abcde');
-    inputEl.blur();
+    // blur the field
+    await userEvent.click(document.body);
     await screen.findByText(TEST_ERROR_MESSAGE);
   });
 
@@ -37,7 +37,8 @@ describe('Input', () => {
     render(<Input validationEvents={testBlurValidation} placeholder={PLACEHOLDER_TEXT} />);
     const inputEl = screen.getByPlaceholderText(PLACEHOLDER_TEXT);
     await userEvent.type(inputEl, 'Hi');
-    inputEl.blur();
+    // blur the field
+    await userEvent.click(document.body);
     const errorMessage = screen.queryByText(TEST_ERROR_MESSAGE);
     expect(errorMessage).not.toBeInTheDocument();
   });

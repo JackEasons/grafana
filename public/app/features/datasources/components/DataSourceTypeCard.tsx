@@ -1,5 +1,4 @@
 import { css, cx } from '@emotion/css';
-import React from 'react';
 
 import { DataSourcePluginMeta, GrafanaTheme2 } from '@grafana/data';
 import { selectors as e2eSelectors } from '@grafana/e2e-selectors';
@@ -14,6 +13,7 @@ export function DataSourceTypeCard({ onClick, dataSourcePlugin }: Props) {
   const isPhantom = dataSourcePlugin.module === 'phantom';
   const isClickable = !isPhantom && !dataSourcePlugin.unlicensed;
   const learnMoreLink = dataSourcePlugin.info?.links?.length > 0 ? dataSourcePlugin.info.links[0] : null;
+  const learnMoreLinkTarget = learnMoreLink?.target ?? '_blank';
 
   const styles = useStyles2(getStyles);
 
@@ -47,10 +47,9 @@ export function DataSourceTypeCard({ onClick, dataSourcePlugin }: Props) {
           <LinkButton
             aria-label={`${dataSourcePlugin.name}, learn more.`}
             href={`${learnMoreLink.url}?utm_source=grafana_add_ds`}
-            icon="external-link-alt"
             onClick={(e) => e.stopPropagation()}
             rel="noopener"
-            target="_blank"
+            target={learnMoreLinkTarget}
             variant="secondary"
           >
             {learnMoreLink.name}

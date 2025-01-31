@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/basics/grafana-cloud/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Grafana Cloud
 ---
 

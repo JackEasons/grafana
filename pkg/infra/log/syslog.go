@@ -4,6 +4,7 @@
 package log
 
 import (
+	"fmt"
 	"log/syslog"
 	"os"
 
@@ -23,7 +24,7 @@ type SysLogHandler struct {
 	logger   log.Logger
 }
 
-var selector = func(keyvals ...interface{}) syslog.Priority {
+var selector = func(keyvals ...any) syslog.Priority {
 	for i := 0; i < len(keyvals); i += 2 {
 		if keyvals[i] == level.Key() {
 			val := keyvals[i+1]
@@ -55,10 +56,18 @@ func NewSyslog(sec *ini.Section, format Formatedlogger) *SysLogHandler {
 	handler.Tag = sec.Key("tag").MustString("")
 
 	if err := handler.Init(); err != nil {
+		fmt.Printf("Failed to init syslog handler. Error: %v\n", err)
 		root.Error("Failed to init syslog log handler", "error", err)
 		os.Exit(1)
 	}
 	handler.logger = gokitsyslog.NewSyslogLogger(handler.syslog, format, gokitsyslog.PrioritySelectorOption(selector))
+
+	if err := handler.Log("msg", "syslog logger initialized"); err != nil {
+		fmt.Printf("Failed to log to syslog handler. Error: %v\n", err)
+		root.Error("Failed to log to syslog log handler", "error", err)
+		os.Exit(1)
+	}
+
 	return handler
 }
 
@@ -75,7 +84,7 @@ func (sw *SysLogHandler) Init() error {
 	return nil
 }
 
-func (sw *SysLogHandler) Log(keyvals ...interface{}) error {
+func (sw *SysLogHandler) Log(keyvals ...any) error {
 	err := sw.logger.Log(keyvals...)
 	return err
 }

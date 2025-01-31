@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/services/datasources"
+	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginstore"
+	"github.com/grafana/grafana/pkg/services/store/entity"
 )
 
 const (
@@ -22,16 +23,16 @@ var getNow = func() time.Time { return time.Now() }
 
 type ResolutionInfo struct {
 	OK        bool      `json:"ok"`
-	Key       string    `json:"key,omitempty"`  // GRN? UID?
+	Key       string    `json:"key,omitempty"`  // k8s key
 	Warning   string    `json:"kind,omitempty"` // old syntax?  (name>uid) references a renamed object?
 	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-type ObjectReferenceResolver interface {
-	Resolve(ctx context.Context, ref *models.ObjectExternalReference) (ResolutionInfo, error)
+type EntityReferenceResolver interface {
+	Resolve(ctx context.Context, ref *entity.EntityExternalReference) (ResolutionInfo, error)
 }
 
-func ProvideObjectReferenceResolver(ds datasources.DataSourceService, pluginStore plugins.Store) ObjectReferenceResolver {
+func ProvideEntityReferenceResolver(ds datasources.DataSourceService, pluginStore pluginstore.Store) EntityReferenceResolver {
 	return &standardReferenceResolver{
 		pluginStore: pluginStore,
 		ds: dsCache{
@@ -42,23 +43,23 @@ func ProvideObjectReferenceResolver(ds datasources.DataSourceService, pluginStor
 }
 
 type standardReferenceResolver struct {
-	pluginStore plugins.Store
+	pluginStore pluginstore.Store
 	ds          dsCache
 }
 
-func (r *standardReferenceResolver) Resolve(ctx context.Context, ref *models.ObjectExternalReference) (ResolutionInfo, error) {
+func (r *standardReferenceResolver) Resolve(ctx context.Context, ref *entity.EntityExternalReference) (ResolutionInfo, error) {
 	if ref == nil {
 		return ResolutionInfo{OK: false, Timestamp: getNow()}, fmt.Errorf("ref is nil")
 	}
 
-	switch ref.Kind {
-	case models.StandardKindDataSource:
+	switch ref.Family {
+	case entity.StandardKindDataSource:
 		return r.resolveDatasource(ctx, ref)
 
-	case models.ExternalEntityReferencePlugin:
+	case entity.ExternalEntityReferencePlugin:
 		return r.resolvePlugin(ctx, ref)
 
-		// case models.ExternalEntityReferenceRuntime:
+		// case entity.ExternalEntityReferenceRuntime:
 		// 	return ResolutionInfo{
 		// 		OK:        false,
 		// 		Timestamp: getNow(),
@@ -73,8 +74,8 @@ func (r *standardReferenceResolver) Resolve(ctx context.Context, ref *models.Obj
 	}, nil
 }
 
-func (r *standardReferenceResolver) resolveDatasource(ctx context.Context, ref *models.ObjectExternalReference) (ResolutionInfo, error) {
-	ds, err := r.ds.getDS(ctx, ref.UID)
+func (r *standardReferenceResolver) resolveDatasource(ctx context.Context, ref *entity.EntityExternalReference) (ResolutionInfo, error) {
+	ds, err := r.ds.getDS(ctx, ref.Identifier)
 	if err != nil || ds == nil || ds.UID == "" {
 		return ResolutionInfo{
 			OK:        false,
@@ -99,8 +100,8 @@ func (r *standardReferenceResolver) resolveDatasource(ctx context.Context, ref *
 	return res, nil
 }
 
-func (r *standardReferenceResolver) resolvePlugin(ctx context.Context, ref *models.ObjectExternalReference) (ResolutionInfo, error) {
-	p, ok := r.pluginStore.Plugin(ctx, ref.UID)
+func (r *standardReferenceResolver) resolvePlugin(ctx context.Context, ref *entity.EntityExternalReference) (ResolutionInfo, error) {
+	p, ok := r.pluginStore.Plugin(ctx, ref.Identifier)
 	if !ok {
 		return ResolutionInfo{
 			OK:        false,

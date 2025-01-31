@@ -4,57 +4,56 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+
 	"github.com/grafana/grafana/pkg/api/dtos"
 	"github.com/grafana/grafana/pkg/api/response"
-	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/services/publicdashboards/internal/tokens"
+	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	. "github.com/grafana/grafana/pkg/services/publicdashboards/models"
+	"github.com/grafana/grafana/pkg/services/publicdashboards/validation"
 	"github.com/grafana/grafana/pkg/web"
 )
 
-// ViewPublicDashboard Gets public dashboard
-// GET /api/public/dashboards/:accessToken
-func (api *Api) ViewPublicDashboard(c *models.ReqContext) response.Response {
+// swagger:route GET /public/dashboards/{accessToken} dashboard_public viewPublicDashboard
+//
+//	Get public dashboard for view
+//
+// Responses:
+// 200: viewPublicDashboardResponse
+// 400: badRequestPublicError
+// 401: unauthorisedPublicError
+// 403: forbiddenPublicError
+// 404: notFoundPublicError
+// 500: internalServerPublicError
+func (api *Api) ViewPublicDashboard(c *contextmodel.ReqContext) response.Response {
 	accessToken := web.Params(c.Req)[":accessToken"]
-	if !tokens.IsValidAccessToken(accessToken) {
+	if !validation.IsValidAccessToken(accessToken) {
 		return response.Err(ErrInvalidAccessToken.Errorf("ViewPublicDashboard: invalid access token"))
 	}
 
-	pubdash, dash, err := api.PublicDashboardService.FindPublicDashboardAndDashboardByAccessToken(
-		c.Req.Context(),
-		accessToken,
-	)
+	dto, err := api.PublicDashboardService.GetPublicDashboardForView(c.Req.Context(), accessToken)
 	if err != nil {
 		return response.Err(err)
 	}
 
-	meta := dtos.DashboardMeta{
-		Slug:                       dash.Slug,
-		Type:                       models.DashTypeDB,
-		CanStar:                    false,
-		CanSave:                    false,
-		CanEdit:                    false,
-		CanAdmin:                   false,
-		CanDelete:                  false,
-		Created:                    dash.Created,
-		Updated:                    dash.Updated,
-		Version:                    dash.Version,
-		IsFolder:                   false,
-		FolderId:                   dash.FolderId,
-		PublicDashboardAccessToken: pubdash.AccessToken,
-		PublicDashboardUID:         pubdash.Uid,
-	}
-
-	dto := dtos.DashboardFullWithMeta{Meta: meta, Dashboard: dash.Data}
-
 	return response.JSON(http.StatusOK, dto)
 }
 
-// QueryPublicDashboard returns all results for a given panel on a public dashboard
-// POST /api/public/dashboard/:accessToken/panels/:panelId/query
-func (api *Api) QueryPublicDashboard(c *models.ReqContext) response.Response {
+// swagger:route POST /public/dashboards/{accessToken}/panels/{panelId}/query dashboard_public queryPublicDashboard
+//
+//	Get results for a given panel on a public dashboard
+//
+// Responses:
+// 200: queryPublicDashboardResponse
+// 400: badRequestPublicError
+// 401: unauthorisedPublicError
+// 404: panelNotFoundPublicError
+// 404: notFoundPublicError
+// 403: forbiddenPublicError
+// 500: internalServerPublicError
+func (api *Api) QueryPublicDashboard(c *contextmodel.ReqContext) response.Response {
 	accessToken := web.Params(c.Req)[":accessToken"]
-	if !tokens.IsValidAccessToken(accessToken) {
+	if !validation.IsValidAccessToken(accessToken) {
 		return response.Err(ErrInvalidAccessToken.Errorf("QueryPublicDashboard: invalid access token"))
 	}
 
@@ -68,20 +67,29 @@ func (api *Api) QueryPublicDashboard(c *models.ReqContext) response.Response {
 		return response.Err(ErrBadRequest.Errorf("QueryPublicDashboard: error parsing request: %v", err))
 	}
 
-	resp, err := api.PublicDashboardService.GetQueryDataResponse(c.Req.Context(), c.SkipCache, reqDTO, panelId, accessToken)
+	resp, err := api.PublicDashboardService.GetQueryDataResponse(c.Req.Context(), c.SkipDSCache, reqDTO, panelId, accessToken)
 	if err != nil {
 		return response.Err(err)
 	}
 
-	return toJsonStreamingResponse(api.Features, resp)
+	return toJsonStreamingResponse(c.Req.Context(), api.features, resp)
 }
 
-// GetAnnotations returns annotations for a public dashboard
-// GET /api/public/dashboards/:accessToken/annotations
-func (api *Api) GetAnnotations(c *models.ReqContext) response.Response {
+// swagger:route GET /public/dashboards/{accessToken}/annotations dashboard_public getPublicAnnotations
+//
+//	Get annotations for a public dashboard
+//
+// Responses:
+// 200: getPublicAnnotationsResponse
+// 400: badRequestPublicError
+// 404: notFoundPublicError
+// 401: unauthorisedPublicError
+// 403: forbiddenPublicError
+// 500: internalServerPublicError
+func (api *Api) GetPublicAnnotations(c *contextmodel.ReqContext) response.Response {
 	accessToken := web.Params(c.Req)[":accessToken"]
-	if !tokens.IsValidAccessToken(accessToken) {
-		return response.Err(ErrInvalidAccessToken.Errorf("GetAnnotations: invalid access token"))
+	if !validation.IsValidAccessToken(accessToken) {
+		return response.Err(ErrInvalidAccessToken.Errorf("GetPublicAnnotations: invalid access token"))
 	}
 
 	reqDTO := AnnotationsQueryDTO{
@@ -95,4 +103,42 @@ func (api *Api) GetAnnotations(c *models.ReqContext) response.Response {
 	}
 
 	return response.JSON(http.StatusOK, annotations)
+}
+
+// swagger:response viewPublicDashboardResponse
+type ViewPublicDashboardResponse struct {
+	// in: body
+	Body dtos.DashboardFullWithMeta `json:"body"`
+}
+
+// swagger:parameters viewPublicDashboard
+type ViewPublicDashboardParams struct {
+	// in: path
+	AccessToken string `json:"accessToken"`
+}
+
+// swagger:response queryPublicDashboardResponse
+type QueryPublicDashboardResponse struct {
+	// in: body
+	Body backend.QueryDataResponse `json:"body"`
+}
+
+// swagger:parameters queryPublicDashboard
+type QueryPublicDashboardParams struct {
+	// in: path
+	AccessToken string `json:"accessToken"`
+	// in: path
+	PanelId int64 `json:"panelId"`
+}
+
+// swagger:response getPublicAnnotationsResponse
+type GetPublicAnnotationsResponse struct {
+	// in: body
+	Body []AnnotationEvent `json:"body"`
+}
+
+// swagger:parameters getPublicAnnotations
+type GetPublicAnnotationsParams struct {
+	// in: path
+	AccessToken string `json:"accessToken"`
 }

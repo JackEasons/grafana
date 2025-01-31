@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/common/model"
+
 	"github.com/grafana/grafana/pkg/services/ngalert/models"
 	"github.com/grafana/grafana/pkg/services/provisioning/values"
-
-	"github.com/prometheus/common/model"
+	"github.com/grafana/grafana/pkg/util"
 )
 
 type RuleDelete struct {
@@ -31,11 +32,11 @@ type AlertRuleGroupV1 struct {
 	Rules    []AlertRuleV1      `json:"rules" yaml:"rules"`
 }
 
-func (ruleGroupV1 *AlertRuleGroupV1) MapToModel() (AlertRuleGroup, error) {
-	ruleGroup := AlertRuleGroup{}
-	ruleGroup.Name = ruleGroupV1.Name.Value()
-	if strings.TrimSpace(ruleGroup.Name) == "" {
-		return AlertRuleGroup{}, errors.New("rule group has no name set")
+func (ruleGroupV1 *AlertRuleGroupV1) MapToModel() (models.AlertRuleGroupWithFolderFullpath, error) {
+	ruleGroup := models.AlertRuleGroupWithFolderFullpath{AlertRuleGroup: &models.AlertRuleGroup{}}
+	ruleGroup.Title = ruleGroupV1.Name.Value()
+	if strings.TrimSpace(ruleGroup.Title) == "" {
+		return models.AlertRuleGroupWithFolderFullpath{}, errors.New("rule group has no name set")
 	}
 	ruleGroup.OrgID = ruleGroupV1.OrgID.Value()
 	if ruleGroup.OrgID < 1 {
@@ -43,43 +44,46 @@ func (ruleGroupV1 *AlertRuleGroupV1) MapToModel() (AlertRuleGroup, error) {
 	}
 	interval, err := model.ParseDuration(ruleGroupV1.Interval.Value())
 	if err != nil {
-		return AlertRuleGroup{}, err
+		return models.AlertRuleGroupWithFolderFullpath{}, err
 	}
-	ruleGroup.Interval = time.Duration(interval)
-	ruleGroup.Folder = ruleGroupV1.Folder.Value()
-	if strings.TrimSpace(ruleGroup.Folder) == "" {
-		return AlertRuleGroup{}, errors.New("rule group has no folder set")
+	ruleGroup.Interval = int64(time.Duration(interval).Seconds())
+	ruleGroup.FolderFullpath = ruleGroupV1.Folder.Value()
+	if strings.TrimSpace(ruleGroup.FolderFullpath) == "" {
+		return models.AlertRuleGroupWithFolderFullpath{}, errors.New("rule group has no folder set")
 	}
 	for _, ruleV1 := range ruleGroupV1.Rules {
 		rule, err := ruleV1.mapToModel(ruleGroup.OrgID)
 		if err != nil {
-			return AlertRuleGroup{}, err
+			return models.AlertRuleGroupWithFolderFullpath{}, err
 		}
 		ruleGroup.Rules = append(ruleGroup.Rules, rule)
 	}
 	return ruleGroup, nil
 }
 
-type AlertRuleGroup struct {
-	OrgID    int64
-	Name     string
-	Folder   string
-	Interval time.Duration
-	Rules    []models.AlertRule
+type AlertRuleV1 struct {
+	UID                  values.StringValue      `json:"uid" yaml:"uid"`
+	Title                values.StringValue      `json:"title" yaml:"title"`
+	Condition            values.StringValue      `json:"condition" yaml:"condition"`
+	Data                 []QueryV1               `json:"data" yaml:"data"`
+	DasboardUID          values.StringValue      `json:"dasboardUid" yaml:"dasboardUid"` // TODO: Grandfathered typo support. TODO: This should be removed in V2.
+	DashboardUID         values.StringValue      `json:"dashboardUid" yaml:"dashboardUid"`
+	PanelID              values.Int64Value       `json:"panelId" yaml:"panelId"`
+	NoDataState          values.StringValue      `json:"noDataState" yaml:"noDataState"`
+	ExecErrState         values.StringValue      `json:"execErrState" yaml:"execErrState"`
+	For                  values.StringValue      `json:"for" yaml:"for"`
+	Annotations          values.StringMapValue   `json:"annotations" yaml:"annotations"`
+	Labels               values.StringMapValue   `json:"labels" yaml:"labels"`
+	IsPaused             values.BoolValue        `json:"isPaused" yaml:"isPaused"`
+	NotificationSettings *NotificationSettingsV1 `json:"notification_settings" yaml:"notification_settings"`
+	Record               *RecordV1               `json:"record" yaml:"record"`
 }
 
-type AlertRuleV1 struct {
-	UID          values.StringValue    `json:"uid" yaml:"uid"`
-	Title        values.StringValue    `json:"title" yaml:"title"`
-	Condition    values.StringValue    `json:"condition" yaml:"condition"`
-	Data         []QueryV1             `json:"data" yaml:"data"`
-	DashboardUID values.StringValue    `json:"dasboardUid" yaml:"dashboardUid"`
-	PanelID      values.Int64Value     `json:"panelId" yaml:"panelId"`
-	NoDataState  values.StringValue    `json:"noDataState" yaml:"noDataState"`
-	ExecErrState values.StringValue    `json:"execErrState" yaml:"execErrState"`
-	For          values.StringValue    `json:"for" yaml:"for"`
-	Annotations  values.StringMapValue `json:"annotations" yaml:"annotations"`
-	Labels       values.StringMapValue `json:"labels" yaml:"labels"`
+func withFallback(value, fallback string) *string {
+	if value == "" {
+		return &fallback
+	}
+	return &value
 }
 
 func (rule *AlertRuleV1) mapToModel(orgID int64) (models.AlertRule, error) {
@@ -93,13 +97,20 @@ func (rule *AlertRuleV1) mapToModel(orgID int64) (models.AlertRule, error) {
 		return models.AlertRule{}, fmt.Errorf("rule '%s' failed to parse: no UID set", alertRule.Title)
 	}
 	alertRule.OrgID = orgID
-	duration, err := model.ParseDuration(rule.For.Value())
-	if err != nil {
-		return models.AlertRule{}, fmt.Errorf("rule '%s' failed to parse: %w", alertRule.Title, err)
+
+	duration := model.Duration(0)
+	if rule.For.Value() != "" {
+		var err error
+		duration, err = model.ParseDuration(rule.For.Value())
+		if err != nil {
+			return models.AlertRule{}, fmt.Errorf("rule '%s' failed to parse 'for' field: %w", alertRule.Title, err)
+		}
 	}
 	alertRule.For = time.Duration(duration)
+
+	dasboardUID := rule.DasboardUID.Value()
 	dashboardUID := rule.DashboardUID.Value()
-	alertRule.DashboardUID = &dashboardUID
+	alertRule.DashboardUID = withFallback(dashboardUID, dasboardUID) // Use correct spelling over supported typo.
 	panelID := rule.PanelID.Value()
 	alertRule.PanelID = &panelID
 	execErrStateValue := strings.TrimSpace(rule.ExecErrState.Value())
@@ -135,6 +146,21 @@ func (rule *AlertRuleV1) mapToModel(orgID int64) (models.AlertRule, error) {
 	}
 	if len(alertRule.Data) == 0 {
 		return models.AlertRule{}, fmt.Errorf("rule '%s' failed to parse: no data set", alertRule.Title)
+	}
+	alertRule.IsPaused = rule.IsPaused.Value()
+	if rule.NotificationSettings != nil {
+		ns, err := rule.NotificationSettings.mapToModel()
+		if err != nil {
+			return models.AlertRule{}, fmt.Errorf("rule '%s' failed to parse: %w", alertRule.Title, err)
+		}
+		alertRule.NotificationSettings = append(alertRule.NotificationSettings, ns)
+	}
+	if rule.Record != nil {
+		record, err := rule.Record.mapToModel()
+		if err != nil {
+			return models.AlertRule{}, fmt.Errorf("rule '%s' failed to parse: %w", alertRule.Title, err)
+		}
+		alertRule.Record = &record
 	}
 	return alertRule, nil
 }
@@ -173,5 +199,85 @@ func (queryV1 *QueryV1) mapToModel() (models.AlertQuery, error) {
 		DatasourceUID:     queryV1.DatasourceUID.Value(),
 		RelativeTimeRange: queryV1.RelativeTimeRange,
 		Model:             rawMessage,
+	}, nil
+}
+
+type NotificationSettingsV1 struct {
+	Receiver          values.StringValue   `json:"receiver" yaml:"receiver"`
+	GroupBy           []values.StringValue `json:"group_by,omitempty" yaml:"group_by"`
+	GroupWait         values.StringValue   `json:"group_wait,omitempty" yaml:"group_wait"`
+	GroupInterval     values.StringValue   `json:"group_interval,omitempty" yaml:"group_interval"`
+	RepeatInterval    values.StringValue   `json:"repeat_interval,omitempty" yaml:"repeat_interval"`
+	MuteTimeIntervals []values.StringValue `json:"mute_time_intervals,omitempty" yaml:"mute_time_intervals"`
+}
+
+func (nsV1 *NotificationSettingsV1) mapToModel() (models.NotificationSettings, error) {
+	if nsV1.Receiver.Value() == "" {
+		return models.NotificationSettings{}, fmt.Errorf("receiver must not be empty")
+	}
+	var gw, gi, ri *model.Duration
+	if nsV1.GroupWait.Value() != "" {
+		dur, err := model.ParseDuration(nsV1.GroupWait.Value())
+		if err != nil {
+			return models.NotificationSettings{}, fmt.Errorf("failed to parse group wait: %w", err)
+		}
+		gw = util.Pointer(dur)
+	}
+	if nsV1.GroupInterval.Value() != "" {
+		dur, err := model.ParseDuration(nsV1.GroupInterval.Value())
+		if err != nil {
+			return models.NotificationSettings{}, fmt.Errorf("failed to parse group interval: %w", err)
+		}
+		gi = util.Pointer(dur)
+	}
+	if nsV1.RepeatInterval.Value() != "" {
+		dur, err := model.ParseDuration(nsV1.RepeatInterval.Value())
+		if err != nil {
+			return models.NotificationSettings{}, fmt.Errorf("failed to parse repeat interval: %w", err)
+		}
+		ri = util.Pointer(dur)
+	}
+
+	var groupBy []string
+	if len(nsV1.GroupBy) > 0 {
+		groupBy = make([]string, 0, len(nsV1.GroupBy))
+		for _, value := range nsV1.GroupBy {
+			if value.Value() == "" {
+				continue
+			}
+			groupBy = append(groupBy, value.Value())
+		}
+	}
+
+	var mute []string
+	if len(nsV1.MuteTimeIntervals) > 0 {
+		mute = make([]string, 0, len(nsV1.MuteTimeIntervals))
+		for _, value := range nsV1.MuteTimeIntervals {
+			if value.Value() == "" {
+				continue
+			}
+			mute = append(mute, value.Value())
+		}
+	}
+
+	return models.NotificationSettings{
+		Receiver:          nsV1.Receiver.Value(),
+		GroupBy:           groupBy,
+		GroupWait:         gw,
+		GroupInterval:     gi,
+		RepeatInterval:    ri,
+		MuteTimeIntervals: mute,
+	}, nil
+}
+
+type RecordV1 struct {
+	Metric values.StringValue `json:"metric" yaml:"metric"`
+	From   values.StringValue `json:"from" yaml:"from"`
+}
+
+func (record *RecordV1) mapToModel() (models.Record, error) {
+	return models.Record{
+		Metric: record.Metric.Value(),
+		From:   record.From.Value(),
 	}, nil
 }

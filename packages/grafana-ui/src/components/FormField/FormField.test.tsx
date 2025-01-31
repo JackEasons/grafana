@@ -1,6 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 
 import { FormField, Props } from './FormField';
 
@@ -42,8 +41,6 @@ describe('FormField', () => {
     screen.getAllByRole('textbox')[0].focus();
     await userEvent.tab();
 
-    await waitFor(() => {
-      screen.getByText(tooltip);
-    });
+    expect(await screen.findByText(tooltip)).toBeInTheDocument();
   });
 });

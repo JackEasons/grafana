@@ -1,8 +1,7 @@
 import { css } from '@emotion/css';
-import React, { FC } from 'react';
 
 import { dateTimeFormat, GrafanaTheme2, TimeZone } from '@grafana/data';
-import { Button, DeleteButton, HorizontalGroup, Icon, Tooltip, useTheme2 } from '@grafana/ui';
+import { Button, DeleteButton, Icon, Stack, Tooltip, useTheme2 } from '@grafana/ui';
 import { contextSrv } from 'app/core/core';
 import { AccessControlAction } from 'app/types';
 
@@ -15,7 +14,7 @@ interface Props {
   onMigrate: (apiKey: ApiKey) => void;
 }
 
-export const ApiKeysTable: FC<Props> = ({ apiKeys, timeZone, onDelete, onMigrate }) => {
+export const ApiKeysTable = ({ apiKeys, timeZone, onDelete, onMigrate }: Props) => {
   const theme = useTheme2();
   const styles = getStyles(theme);
 
@@ -26,6 +25,7 @@ export const ApiKeysTable: FC<Props> = ({ apiKeys, timeZone, onDelete, onMigrate
           <th>Name</th>
           <th>Role</th>
           <th>Expires</th>
+          <th>Last used at</th>
           <th style={{ width: '34px' }} />
         </tr>
       </thead>
@@ -47,8 +47,9 @@ export const ApiKeysTable: FC<Props> = ({ apiKeys, timeZone, onDelete, onMigrate
                     </span>
                   )}
                 </td>
+                <td>{formatLastUsedAtDate(timeZone, key.lastUsedAt)}</td>
                 <td>
-                  <HorizontalGroup justify="flex-end">
+                  <Stack justifyContent="flex-end">
                     <Button size="sm" onClick={() => onMigrate(key)}>
                       Migrate to service account
                     </Button>
@@ -58,7 +59,7 @@ export const ApiKeysTable: FC<Props> = ({ apiKeys, timeZone, onDelete, onMigrate
                       onConfirm={() => onDelete(key)}
                       disabled={!contextSrv.hasPermissionInMetadata(AccessControlAction.ActionAPIKeysDelete, key)}
                     />
-                  </HorizontalGroup>
+                  </Stack>
                 </td>
               </tr>
             );
@@ -69,6 +70,13 @@ export const ApiKeysTable: FC<Props> = ({ apiKeys, timeZone, onDelete, onMigrate
   );
 };
 
+function formatLastUsedAtDate(timeZone: TimeZone, lastUsedAt?: string): string {
+  if (!lastUsedAt) {
+    return 'Never';
+  }
+  return dateTimeFormat(lastUsedAt, { timeZone });
+}
+
 function formatDate(expiration: string | undefined, timeZone: TimeZone): string {
   if (!expiration) {
     return 'No expiration date';
@@ -77,10 +85,11 @@ function formatDate(expiration: string | undefined, timeZone: TimeZone): string 
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  tableRow: (isExpired: boolean) => css`
-    color: ${isExpired ? theme.colors.text.secondary : theme.colors.text.primary};
-  `,
-  tooltipContainer: css`
-    margin-left: ${theme.spacing(1)};
-  `,
+  tableRow: (isExpired: boolean) =>
+    css({
+      color: isExpired ? theme.colors.text.secondary : theme.colors.text.primary,
+    }),
+  tooltipContainer: css({
+    marginLeft: theme.spacing(1),
+  }),
 });

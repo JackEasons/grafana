@@ -19,12 +19,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -33,7 +37,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Alertmanager",
@@ -46,7 +51,7 @@
         "name": "Prometheus alertmanager",
         "url": "https://grafana.com"
       },
-      "description": "",
+      "description": "Add external Alertmanagers (supports Prometheus and Mimir implementations) so you can use the Grafana Alerting UI to manage silences, contact points, and notification policies.",
       "links": [
         {
           "name": "Learn more",
@@ -60,12 +65,23 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": [
+        "alerts",
+        "alerting",
+        "prometheus",
+        "alertmanager",
+        "mimir",
+        "cortex"
+      ]
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -74,7 +90,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Annotations list",
@@ -96,12 +113,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -110,7 +131,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Azure Monitor",
@@ -135,31 +157,41 @@
         }
       ],
       "logos": {
-        "small": "public/app/plugins/datasource/grafana-azure-monitor-datasource/img/logo.jpg",
-        "large": "public/app/plugins/datasource/grafana-azure-monitor-datasource/img/logo.jpg"
+        "small": "public/app/plugins/datasource/azuremonitor/img/logo.jpg",
+        "large": "public/app/plugins/datasource/azuremonitor/img/logo.jpg"
       },
       "build": {},
       "screenshots": [
         {
           "name": "Azure Contoso Loans",
-          "path": "public/app/plugins/datasource/grafana-azure-monitor-datasource/img/contoso_loans_grafana_dashboard.png"
+          "path": "public/app/plugins/datasource/azuremonitor/img/contoso_loans_grafana_dashboard.png"
         },
         {
           "name": "Azure Monitor Network",
-          "path": "public/app/plugins/datasource/grafana-azure-monitor-datasource/img/azure_monitor_network.png"
+          "path": "public/app/plugins/datasource/azuremonitor/img/azure_monitor_network.png"
         },
         {
           "name": "Azure Monitor CPU",
-          "path": "public/app/plugins/datasource/grafana-azure-monitor-datasource/img/azure_monitor_cpu.png"
+          "path": "public/app/plugins/datasource/azuremonitor/img/azure_monitor_cpu.png"
         }
       ],
-      "version": "1.0.0",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": [
+        "azure",
+        "monitor",
+        "Application Insights",
+        "Log Analytics",
+        "App Insights"
+      ]
     },
     "dependencies": {
-      "grafanaDependency": "",
-      "grafanaVersion": "5.2.x",
-      "plugins": []
+      "grafanaDependency": "\u003e=10.3.0",
+      "grafanaVersion": "*",
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -168,7 +200,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Bar chart",
@@ -190,21 +223,26 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/barchart/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Bar gauge",
@@ -226,12 +264,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -240,7 +282,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Candlestick",
@@ -253,7 +296,7 @@
         "name": "Grafana Labs",
         "url": "https://grafana.com"
       },
-      "description": "",
+      "description": "Graphical representation of price movements of a security, derivative, or currency.",
       "links": null,
       "logos": {
         "small": "public/app/plugins/panel/candlestick/img/candlestick.svg",
@@ -262,21 +305,31 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": [
+        "financial",
+        "price",
+        "currency",
+        "k-line"
+      ]
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/candlestick/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Canvas",
@@ -298,21 +351,26 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/canvas/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "CloudWatch",
@@ -334,12 +392,19 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": [
+        "aws",
+        "amazon"
+      ]
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -348,7 +413,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Dashboard list",
@@ -370,12 +436,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -384,7 +454,49 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
+  },
+  {
+    "name": "Datagrid",
+    "type": "panel",
+    "id": "datagrid",
+    "enabled": true,
+    "pinned": false,
+    "info": {
+      "author": {
+        "name": "Grafana Labs",
+        "url": "https://grafana.com"
+      },
+      "description": "",
+      "links": null,
+      "logos": {
+        "small": "public/app/plugins/panel/datagrid/img/icn-table-panel.svg",
+        "large": "public/app/plugins/panel/datagrid/img/icn-table-panel.svg"
+      },
+      "build": {},
+      "screenshots": null,
+      "version": "",
+      "updated": "",
+      "keywords": null
+    },
+    "dependencies": {
+      "grafanaDependency": "",
+      "grafanaVersion": "*",
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
+    },
+    "latestVersion": "",
+    "hasUpdate": false,
+    "defaultNavUrl": "/plugins/datagrid/",
+    "category": "",
+    "state": "beta",
+    "signature": "internal",
+    "signatureType": "",
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Elasticsearch",
@@ -411,12 +523,23 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": [
+        "elasticsearch",
+        "datasource",
+        "database",
+        "logs",
+        "nosql",
+        "traces"
+      ]
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -425,7 +548,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Flame Graph",
@@ -447,21 +571,26 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/flamegraph/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Gauge",
@@ -483,12 +612,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -497,7 +630,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Geomap",
@@ -519,12 +653,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -533,7 +671,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Getting Started",
@@ -555,12 +694,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -569,7 +712,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Google Cloud Monitoring",
@@ -590,13 +734,17 @@
       },
       "build": {},
       "screenshots": null,
-      "version": "1.0.0",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -605,7 +753,62 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
+  },
+  {
+    "name": "Grafana Pyroscope",
+    "type": "datasource",
+    "id": "grafana-pyroscope-datasource",
+    "enabled": true,
+    "pinned": false,
+    "info": {
+      "author": {
+        "name": "Grafana Labs",
+        "url": "https://www.grafana.com"
+      },
+      "description": "Data source for Grafana Pyroscope, horizontally-scalable, highly-available, multi-tenant continuous profiling aggregation system.",
+      "links": [
+        {
+          "name": "GitHub Project",
+          "url": "https://github.com/grafana/pyroscope"
+        }
+      ],
+      "logos": {
+        "small": "public/app/plugins/datasource/grafana-pyroscope-datasource/img/grafana_pyroscope_icon.svg",
+        "large": "public/app/plugins/datasource/grafana-pyroscope-datasource/img/grafana_pyroscope_icon.svg"
+      },
+      "build": {},
+      "screenshots": null,
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": [
+        "grafana",
+        "datasource",
+        "phlare",
+        "flamegraph",
+        "profiling",
+        "continuous profiling",
+        "pyroscope"
+      ]
+    },
+    "dependencies": {
+      "grafanaDependency": "\u003e=10.3.0-0",
+      "grafanaVersion": "*",
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
+    },
+    "latestVersion": "",
+    "hasUpdate": false,
+    "defaultNavUrl": "/plugins/grafana-pyroscope-datasource/",
+    "category": "profiling",
+    "state": "",
+    "signature": "internal",
+    "signatureType": "",
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Graph (old)",
@@ -627,12 +830,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -641,7 +848,8 @@
     "state": "deprecated",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Graphite",
@@ -672,12 +880,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -686,7 +898,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Heatmap",
@@ -708,12 +921,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -722,7 +939,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Histogram",
@@ -735,7 +953,7 @@
         "name": "Grafana Labs",
         "url": "https://grafana.com"
       },
-      "description": "",
+      "description": "Distribution of values presented as a bar chart.",
       "links": null,
       "logos": {
         "small": "public/app/plugins/panel/histogram/img/histogram.svg",
@@ -744,21 +962,31 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": [
+        "distribution",
+        "bar chart",
+        "frequency",
+        "proportional"
+      ]
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/histogram/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "InfluxDB",
@@ -780,12 +1008,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -794,7 +1026,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Jaeger",
@@ -824,13 +1057,17 @@
       },
       "build": {},
       "screenshots": null,
-      "version": "",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
-      "grafanaDependency": "",
+      "grafanaDependency": "\u003e=10.3.0-0",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -839,7 +1076,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Logs",
@@ -861,12 +1099,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -875,7 +1117,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Loki",
@@ -906,12 +1149,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -920,7 +1167,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Microsoft SQL Server",
@@ -941,13 +1189,17 @@
       },
       "build": {},
       "screenshots": null,
-      "version": "",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
-      "grafanaDependency": "",
+      "grafanaDependency": "\u003e=10.4.0",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -956,7 +1208,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "MySQL",
@@ -977,13 +1230,17 @@
       },
       "build": {},
       "screenshots": null,
-      "version": "",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
-      "grafanaDependency": "",
+      "grafanaDependency": "\u003e=10.4.0",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -992,7 +1249,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "News",
@@ -1014,12 +1272,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1028,7 +1290,8 @@
     "state": "beta",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Node Graph",
@@ -1050,21 +1313,26 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/nodeGraph/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "OpenTSDB",
@@ -1086,12 +1354,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1100,7 +1372,59 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
+  },
+  {
+    "name": "Parca",
+    "type": "datasource",
+    "id": "parca",
+    "enabled": true,
+    "pinned": false,
+    "info": {
+      "author": {
+        "name": "Grafana Labs",
+        "url": "https://www.grafana.com"
+      },
+      "description": "Continuous profiling for analysis of CPU and memory usage, down to the line number and throughout time. Saving infrastructure cost, improving performance, and increasing reliability.",
+      "links": [
+        {
+          "name": "GitHub Project",
+          "url": "https://github.com/parca-dev/parca"
+        }
+      ],
+      "logos": {
+        "small": "public/app/plugins/datasource/parca/img/logo-small.svg",
+        "large": "public/app/plugins/datasource/parca/img/logo-small.svg"
+      },
+      "build": {},
+      "screenshots": null,
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": [
+        "grafana",
+        "datasource",
+        "parca",
+        "profiling"
+      ]
+    },
+    "dependencies": {
+      "grafanaDependency": "\u003e=10.3.0-0",
+      "grafanaVersion": "*",
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
+    },
+    "latestVersion": "",
+    "hasUpdate": false,
+    "defaultNavUrl": "/plugins/parca/",
+    "category": "profiling",
+    "state": "",
+    "signature": "internal",
+    "signatureType": "",
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Pie chart",
@@ -1122,12 +1446,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1136,12 +1464,13 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "PostgreSQL",
     "type": "datasource",
-    "id": "postgres",
+    "id": "grafana-postgresql-datasource",
     "enabled": true,
     "pinned": false,
     "info": {
@@ -1152,27 +1481,32 @@
       "description": "Data source for PostgreSQL and compatible databases",
       "links": null,
       "logos": {
-        "small": "public/app/plugins/datasource/postgres/img/postgresql_logo.svg",
-        "large": "public/app/plugins/datasource/postgres/img/postgresql_logo.svg"
+        "small": "public/app/plugins/datasource/grafana-postgresql-datasource/img/postgresql_logo.svg",
+        "large": "public/app/plugins/datasource/grafana-postgresql-datasource/img/postgresql_logo.svg"
       },
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
-    "defaultNavUrl": "/plugins/postgres/",
+    "defaultNavUrl": "/plugins/grafana-postgresql-datasource/",
     "category": "sql",
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Prometheus",
@@ -1199,12 +1533,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1213,7 +1551,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Stat",
@@ -1235,12 +1574,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1249,7 +1592,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "State timeline",
@@ -1271,21 +1615,26 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/state-timeline/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Status history",
@@ -1307,21 +1656,26 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/status-history/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Table",
@@ -1343,12 +1697,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1357,7 +1715,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Table (old)",
@@ -1379,12 +1738,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1393,7 +1756,8 @@
     "state": "deprecated",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Tempo",
@@ -1419,13 +1783,17 @@
       },
       "build": {},
       "screenshots": null,
-      "version": "",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
-      "grafanaDependency": "",
+      "grafanaDependency": "\u003e=10.3.0-0",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1434,12 +1802,13 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
-    "name": "TestData DB",
+    "name": "TestData",
     "type": "datasource",
-    "id": "testdata",
+    "id": "grafana-testdata-datasource",
     "enabled": true,
     "pinned": false,
     "info": {
@@ -1450,27 +1819,32 @@
       "description": "Generates test data in different forms",
       "links": null,
       "logos": {
-        "small": "public/app/plugins/datasource/testdata/img/testdata.svg",
-        "large": "public/app/plugins/datasource/testdata/img/testdata.svg"
+        "small": "public/app/plugins/datasource/grafana-testdata-datasource/img/testdata.svg",
+        "large": "public/app/plugins/datasource/grafana-testdata-datasource/img/testdata.svg"
       },
       "build": {},
       "screenshots": null,
-      "version": "",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
-      "grafanaDependency": "",
+      "grafanaDependency": "\u003e=10.3.0-0",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
-    "defaultNavUrl": "/plugins/testdata/",
+    "defaultNavUrl": "/plugins/grafana-testdata-datasource/",
     "category": "",
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Text",
@@ -1492,12 +1866,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1506,7 +1884,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Time series",
@@ -1528,12 +1907,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1542,7 +1925,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Traces",
@@ -1564,21 +1948,67 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/traces/",
     "category": "",
+    "state": "",
+    "signature": "internal",
+    "signatureType": "",
+    "signatureOrg": "",
+    "angularDetected": false
+  },
+  {
+    "name": "Trend",
+    "type": "panel",
+    "id": "trend",
+    "enabled": true,
+    "pinned": false,
+    "info": {
+      "author": {
+        "name": "Grafana Labs",
+        "url": "https://grafana.com"
+      },
+      "description": "Like timeseries, but when x != time",
+      "links": null,
+      "logos": {
+        "small": "public/app/plugins/panel/trend/img/trend.svg",
+        "large": "public/app/plugins/panel/trend/img/trend.svg"
+      },
+      "build": {},
+      "screenshots": null,
+      "version": "",
+      "updated": "",
+      "keywords": null
+    },
+    "dependencies": {
+      "grafanaDependency": "",
+      "grafanaVersion": "*",
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
+    },
+    "latestVersion": "",
+    "hasUpdate": false,
+    "defaultNavUrl": "/plugins/trend/",
+    "category": "",
     "state": "beta",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Welcome",
@@ -1600,12 +2030,16 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1614,7 +2048,8 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "XY Chart",
@@ -1627,7 +2062,7 @@
         "name": "Grafana Labs",
         "url": "https://grafana.com"
       },
-      "description": "",
+      "description": "Supports arbitrary X vs Y in a graph to visualize the relationship between two variables.",
       "links": null,
       "logos": {
         "small": "public/app/plugins/panel/xychart/img/icn-xychart.svg",
@@ -1636,21 +2071,29 @@
       "build": {},
       "screenshots": null,
       "version": "",
-      "updated": ""
+      "updated": "",
+      "keywords": [
+        "scatter",
+        "plot"
+      ]
     },
     "dependencies": {
       "grafanaDependency": "",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
     "defaultNavUrl": "/plugins/xychart/",
     "category": "",
-    "state": "beta",
+    "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   },
   {
     "name": "Zipkin",
@@ -1676,13 +2119,17 @@
       },
       "build": {},
       "screenshots": null,
-      "version": "",
-      "updated": ""
+      "version": "11.3.0-pre",
+      "updated": "",
+      "keywords": null
     },
     "dependencies": {
-      "grafanaDependency": "",
+      "grafanaDependency": "\u003e=10.3.0-0",
       "grafanaVersion": "*",
-      "plugins": []
+      "plugins": [],
+      "extensions": {
+        "exposedComponents": []
+      }
     },
     "latestVersion": "",
     "hasUpdate": false,
@@ -1691,6 +2138,7 @@
     "state": "",
     "signature": "internal",
     "signatureType": "",
-    "signatureOrg": ""
+    "signatureOrg": "",
+    "angularDetected": false
   }
 ]

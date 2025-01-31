@@ -1,8 +1,8 @@
-import React, { FC } from 'react';
-import { useForm, FormProvider } from 'react-hook-form';
+import { FormProvider, useForm } from 'react-hook-form';
 
-import { Alert, Button, HorizontalGroup, LinkButton } from '@grafana/ui';
+import { Alert, Button, LinkButton, Stack } from '@grafana/ui';
 import { useCleanup } from 'app/core/hooks/useCleanup';
+import { Trans } from 'app/core/internationalization';
 import { AlertManagerCortexConfig } from 'app/plugins/datasource/alertmanager/types';
 import { useDispatch } from 'app/types';
 
@@ -27,7 +27,7 @@ const defaultValues: FormValues = {
   smtp_require_tls: true,
 } as const;
 
-export const GlobalConfigForm: FC<Props> = ({ config, alertManagerSourceName }) => {
+export const GlobalConfigForm = ({ config, alertManagerSourceName }: Props) => {
   const dispatch = useDispatch();
 
   useCleanup((state) => (state.unifiedAlerting.saveAMConfig = initialAsyncRequestState));
@@ -87,11 +87,11 @@ export const GlobalConfigForm: FC<Props> = ({ config, alertManagerSourceName }) 
           />
         ))}
         <div>
-          <HorizontalGroup>
+          <Stack>
             {!readOnly && (
               <>
                 {loading && (
-                  <Button disabled={true} icon="fa fa-spinner" variant="primary">
+                  <Button disabled={true} icon="spinner" variant="primary">
                     Saving...
                   </Button>
                 )}
@@ -104,9 +104,9 @@ export const GlobalConfigForm: FC<Props> = ({ config, alertManagerSourceName }) 
               variant="secondary"
               href={makeAMLink('alerting/notifications', alertManagerSourceName)}
             >
-              Cancel
+              <Trans i18nKey="alerting.common.cancel">Cancel</Trans>
             </LinkButton>
-          </HorizontalGroup>
+          </Stack>
         </div>
       </form>
     </FormProvider>

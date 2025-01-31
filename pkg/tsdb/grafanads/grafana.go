@@ -7,16 +7,18 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/datasources"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/searchV2"
 	"github.com/grafana/grafana/pkg/services/store"
-	"github.com/grafana/grafana/pkg/tsdb/testdatasource"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
+	testdatasource "github.com/grafana/grafana/pkg/tsdb/grafana-testdata-datasource"
 )
 
 // DatasourceName is the string constant used as the datasource name in requests
@@ -50,15 +52,16 @@ var (
 	)
 )
 
-func ProvideService(search searchV2.SearchService, store store.StorageService) *Service {
-	return newService(search, store)
+func ProvideService(search searchV2.SearchService, store store.StorageService, features featuremgmt.FeatureToggles) *Service {
+	return newService(search, store, features)
 }
 
-func newService(search searchV2.SearchService, store store.StorageService) *Service {
+func newService(search searchV2.SearchService, store store.StorageService, features featuremgmt.FeatureToggles) *Service {
 	s := &Service{
-		search: search,
-		store:  store,
-		log:    log.New("grafanads"),
+		search:   search,
+		store:    store,
+		log:      log.New("grafanads"),
+		features: features,
 	}
 
 	return s
@@ -66,18 +69,19 @@ func newService(search searchV2.SearchService, store store.StorageService) *Serv
 
 // Service exists regardless of user settings
 type Service struct {
-	search searchV2.SearchService
-	store  store.StorageService
-	log    log.Logger
+	search   searchV2.SearchService
+	store    store.StorageService
+	log      log.Logger
+	features featuremgmt.FeatureToggles
 }
 
 func DataSourceModel(orgId int64) *datasources.DataSource {
 	return &datasources.DataSource{
-		Id:             DatasourceID,
-		Uid:            DatasourceUID,
+		ID:             DatasourceID,
+		UID:            DatasourceUID,
 		Name:           DatasourceName,
 		Type:           "grafana",
-		OrgId:          orgId,
+		OrgID:          orgId,
 		JsonData:       simplejson.New(),
 		SecureJsonData: make(map[string][]byte),
 	}
@@ -94,7 +98,7 @@ func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) 
 			response.Responses[q.RefID] = s.doListQuery(ctx, q)
 		case queryTypeRead:
 			response.Responses[q.RefID] = s.doReadQuery(ctx, q)
-		case queryTypeSearch:
+		case queryTypeSearch, queryTypeSearchNext:
 			response.Responses[q.RefID] = s.doSearchQuery(ctx, req, q)
 		default:
 			response.Responses[q.RefID] = backend.DataResponse{
@@ -123,7 +127,8 @@ func (s *Service) doListQuery(ctx context.Context, query backend.DataQuery) back
 	}
 
 	path := store.RootPublicStatic + "/" + q.Path
-	listFrame, err := s.store.List(ctx, nil, path)
+	maxFiles := int(query.MaxDataPoints)
+	listFrame, err := s.store.List(ctx, nil, path, maxFiles)
 	response.Error = err
 	if listFrame != nil {
 		response.Frames = data.Frames{listFrame.Frame}
@@ -164,13 +169,25 @@ func (s *Service) doReadQuery(ctx context.Context, query backend.DataQuery) back
 func (s *Service) doRandomWalk(query backend.DataQuery) backend.DataResponse {
 	response := backend.DataResponse{}
 
-	model := simplejson.New()
+	model, err := testdatasource.GetJSONModel(json.RawMessage{})
+	if err != nil {
+		response.Error = err
+		return response
+	}
 	response.Frames = data.Frames{testdatasource.RandomWalk(query, model, 0)}
 
 	return response
 }
 
 func (s *Service) doSearchQuery(ctx context.Context, req *backend.QueryDataRequest, query backend.DataQuery) backend.DataResponse {
+	m := requestModel{}
+	err := json.Unmarshal(query.JSON, &m)
+	if err != nil {
+		return backend.DataResponse{
+			Error: err,
+		}
+	}
+
 	searchReadinessCheckResp := s.search.IsReady(ctx, req.PluginContext.OrgID)
 	if !searchReadinessCheckResp.IsReady {
 		dashboardSearchNotServedRequestsCounter.With(prometheus.Labels{
@@ -186,13 +203,6 @@ func (s *Service) doSearchQuery(ctx context.Context, req *backend.QueryDataReque
 		}
 	}
 
-	m := requestModel{}
-	err := json.Unmarshal(query.JSON, &m)
-	if err != nil {
-		return backend.DataResponse{
-			Error: err,
-		}
-	}
 	return *s.search.DoDashboardQuery(ctx, req.PluginContext.User, req.PluginContext.OrgID, m.Search)
 }
 

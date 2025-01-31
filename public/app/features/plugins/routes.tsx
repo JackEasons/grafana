@@ -1,5 +1,3 @@
-import React from 'react';
-
 import { NavModelItem } from '@grafana/data';
 import { RouteDescriptor } from 'app/core/navigation/types';
 import { getRootSectionForNode } from 'app/core/selectors/navModel';
@@ -18,10 +16,11 @@ export function getAppPluginRoutes(): RouteDescriptor[] {
       const pluginNavSection = getRootSectionForNode(navItem);
       const appPluginUrl = `/a/${navItem.pluginId}`;
       const path = isStandalonePluginPage(navItem.id) ? navItem.url || appPluginUrl : appPluginUrl; // Only standalone pages can use core URLs, otherwise we fall back to "/a/:pluginId"
+      const isSensitive = isStandalonePluginPage(navItem.id) && !navItem.url?.startsWith('/a/'); // Have case-sensitive URLs only for standalone pages that have custom URLs
 
       return {
-        path,
-        exact: false, // route everything under this path to the plugin, so it can define more routes under this path
+        path: `${path}/*`,
+        sensitive: isSensitive,
         component: () => <AppRootPage pluginId={navItem.pluginId} pluginNavSection={pluginNavSection} />,
       };
     });
@@ -31,9 +30,8 @@ export function getAppPluginRoutes(): RouteDescriptor[] {
 
     // Fallback route for plugins that don't have any pages under includes
     {
-      path: '/a/:pluginId',
-      exact: false, // route everything under this path to the plugin, so it can define more routes under this path
-      component: ({ match }) => <AppRootPage pluginId={match.params.pluginId} pluginNavSection={navIndex.home} />,
+      path: '/a/:pluginId/*',
+      component: () => <AppRootPage pluginNavSection={navIndex.home} />,
     },
   ];
 }

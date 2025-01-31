@@ -10,39 +10,47 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/infra/db"
-	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/infra/tracing"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/org/orgimpl"
 	"github.com/grafana/grafana/pkg/services/quota/quotaimpl"
+	"github.com/grafana/grafana/pkg/services/searchusers/sortopts"
 	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/services/sqlstore/migrator"
+	"github.com/grafana/grafana/pkg/services/supportbundles/supportbundlestest"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/setting"
+	"github.com/grafana/grafana/pkg/tests/testsuite"
 )
+
+func TestMain(m *testing.M) {
+	testsuite.Run(m)
+}
 
 func TestIntegrationUserDataAccess(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
 
-	ss := db.InitTestDB(t)
-	quotaService := quotaimpl.ProvideService(ss, ss.Cfg)
-	orgService, err := orgimpl.ProvideService(ss, ss.Cfg, quotaService)
+	ss, cfg := db.InitTestDBWithCfg(t)
+	quotaService := quotaimpl.ProvideService(ss, cfg)
+	orgService, err := orgimpl.ProvideService(ss, cfg, quotaService)
 	require.NoError(t, err)
 	userStore := ProvideStore(ss, setting.NewCfg())
+	usrSvc, err := ProvideService(
+		ss, orgService, cfg, nil, nil, tracing.InitializeTracerForTest(),
+		quotaService, supportbundlestest.NewFakeBundleService(),
+	)
+	require.NoError(t, err)
 	usr := &user.SignedInUser{
 		OrgID:       1,
 		Permissions: map[int64]map[string][]string{1: {"users:read": {"global.users:*"}}},
 	}
 
 	t.Run("user not found", func(t *testing.T) {
-		_, err := userStore.Get(context.Background(),
-			&user.User{
-				Email: "test@email.com",
-				Name:  "test1",
-				Login: "test1",
-			},
+		_, err := userStore.GetByEmail(context.Background(),
+			&user.GetUserByEmailQuery{Email: "test@email.com"},
 		)
 		require.Error(t, err, user.ErrUserNotFound)
 	})
@@ -61,31 +69,61 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 	})
 
 	t.Run("get user", func(t *testing.T) {
-		_, err := userStore.Get(context.Background(),
-			&user.User{
-				Email: "test@email.com",
-				Name:  "test1",
-				Login: "test1",
-			},
+		_, err := userStore.GetByEmail(context.Background(),
+			&user.GetUserByEmailQuery{Email: "test@email.com"},
 		)
 		require.NoError(t, err)
 	})
 
+	t.Run("insert user (with known UID)", func(t *testing.T) {
+		ctx := context.Background()
+		id, err := userStore.Insert(ctx,
+			&user.User{
+				UID:     "abcd",
+				Email:   "next-test@email.com",
+				Name:    "next-test1",
+				Login:   "next-test1",
+				Created: time.Now(),
+				Updated: time.Now(),
+			},
+		)
+		require.NoError(t, err)
+
+		found, err := userStore.GetByID(ctx, id)
+		require.NoError(t, err)
+		require.Equal(t, "abcd", found.UID)
+
+		siu, err := userStore.GetSignedInUser(ctx, &user.GetSignedInUserQuery{
+			UserID: id,
+			OrgID:  found.OrgID,
+		})
+		require.NoError(t, err)
+		require.Equal(t, "abcd", siu.UserUID)
+
+		query := user.GetUserByUIDQuery{UID: "abcd"}
+		result, err := userStore.GetByUID(context.Background(), query.UID)
+		require.Nil(t, err)
+		require.Equal(t, result.UID, "abcd")
+		require.Equal(t, result.Email, "next-test@email.com")
+	})
+
 	t.Run("Testing DB - creates and loads user", func(t *testing.T) {
 		ss := db.InitTestDB(t)
+		_, usrSvc := createOrgAndUserSvc(t, ss, cfg)
+
 		cmd := user.CreateUserCommand{
 			Email: "usertest@test.com",
 			Name:  "user name",
 			Login: "user_test_login",
 		}
-		usr, err := ss.CreateUser(context.Background(), cmd)
+		usr, err := usrSvc.Create(context.Background(), &cmd)
 		require.NoError(t, err)
 
 		result, err := userStore.GetByID(context.Background(), usr.ID)
 		require.Nil(t, err)
 
 		require.Equal(t, result.Email, "usertest@test.com")
-		require.Equal(t, result.Password, "")
+		require.Equal(t, string(result.Password), "")
 		require.Len(t, result.Rands, 10)
 		require.Len(t, result.Salt, 10)
 		require.False(t, result.IsDisabled)
@@ -94,24 +132,21 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		require.Nil(t, err)
 
 		require.Equal(t, result.Email, "usertest@test.com")
-		require.Equal(t, result.Password, "")
+		require.Equal(t, string(result.Password), "")
 		require.Len(t, result.Rands, 10)
 		require.Len(t, result.Salt, 10)
 		require.False(t, result.IsDisabled)
 
 		t.Run("Get User by email case insensitive", func(t *testing.T) {
-			userStore.cfg.CaseInsensitiveLogin = true
 			query := user.GetUserByEmailQuery{Email: "USERtest@TEST.COM"}
 			result, err := userStore.GetByEmail(context.Background(), &query)
 			require.Nil(t, err)
 
 			require.Equal(t, result.Email, "usertest@test.com")
-			require.Equal(t, result.Password, "")
+			require.Equal(t, string(result.Password), "")
 			require.Len(t, result.Rands, 10)
 			require.Len(t, result.Salt, 10)
 			require.False(t, result.IsDisabled)
-
-			userStore.cfg.CaseInsensitiveLogin = false
 		})
 
 		t.Run("Testing DB - creates and loads user", func(t *testing.T) {
@@ -119,7 +154,7 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 			require.Nil(t, err)
 
 			require.Equal(t, result.Email, "usertest@test.com")
-			require.Equal(t, result.Password, "")
+			require.Equal(t, string(result.Password), "")
 			require.Len(t, result.Rands, 10)
 			require.Len(t, result.Salt, 10)
 			require.False(t, result.IsDisabled)
@@ -128,11 +163,10 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 			require.Nil(t, err)
 
 			require.Equal(t, result.Email, "usertest@test.com")
-			require.Equal(t, result.Password, "")
+			require.Equal(t, string(result.Password), "")
 			require.Len(t, result.Rands, 10)
 			require.Len(t, result.Salt, 10)
 			require.False(t, result.IsDisabled)
-			ss.Cfg.CaseInsensitiveLogin = false
 		})
 	})
 
@@ -140,73 +174,103 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		if ss.GetDBType() == migrator.MySQL {
 			t.Skip("Skipping on MySQL due to case insensitive indexes")
 		}
-		userStore.cfg.CaseInsensitiveLogin = true
-		cmd := user.CreateUserCommand{
-			Email: "confusertest@test.com",
-			Name:  "user name",
-			Login: "user_email_conflict",
-		}
-		// userEmailConflict
-		_, err := ss.CreateUser(context.Background(), cmd)
+		testOrgID := int64(1)
+		err := ss.WithDbSession(context.Background(), func(sess *sqlstore.DBSession) error {
+			// create a user
+			// add additional user with conflicting login where DOMAIN is upper case
+			cmd := user.User{
+				Email:   "confusertest@test.com",
+				Name:    "user name",
+				Login:   "user_email_conflict",
+				OrgID:   testOrgID,
+				Created: time.Now(),
+				Updated: time.Now(),
+			}
+			rawSQL := fmt.Sprintf(
+				"INSERT INTO %s (email, login, org_id, version, is_admin, created, updated) VALUES (?,?,?,0,%s,?,?)",
+				ss.Quote("user"),
+				ss.GetDialect().BooleanStr(false),
+			)
+			_, err := sess.Exec(rawSQL, cmd.Email, cmd.Login, cmd.OrgID, cmd.Created, cmd.Updated)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		require.NoError(t, err)
+		err = ss.WithDbSession(context.Background(), func(sess *sqlstore.DBSession) error {
+			// create a user
+			// add additional user with conflicting login where DOMAIN is upper case
+			cmd := user.User{
+				Email:   "confusertest@TEST.COM",
+				Name:    "user name",
+				Login:   "user_email_conflict_two",
+				OrgID:   testOrgID,
+				Created: time.Now(),
+				Updated: time.Now(),
+			}
+			rawSQL := fmt.Sprintf(
+				"INSERT INTO %s (email, login, org_id, version, is_admin, created, updated) VALUES (?,?,?,0,%s,?,?)",
+				ss.Quote("user"),
+				ss.GetDialect().BooleanStr(false),
+			)
+			_, err := sess.Exec(rawSQL, cmd.Email, cmd.Login, cmd.OrgID, cmd.Created, cmd.Updated)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 		require.NoError(t, err)
 
-		cmd = user.CreateUserCommand{
-			Email: "confusertest@TEST.COM",
-			Name:  "user name",
-			Login: "user_email_conflict_two",
-		}
-		_, err = ss.CreateUser(context.Background(), cmd)
+		err = ss.WithDbSession(context.Background(), func(sess *sqlstore.DBSession) error {
+			// create a user
+			// add additional user with conflicting login where DOMAIN is upper case
+			// userLoginConflict
+			cmd := user.User{
+				Email:   "user_test_login_conflict@test.com",
+				Name:    "user name",
+				Login:   "user_test_login_conflict",
+				OrgID:   testOrgID,
+				Created: time.Now(),
+				Updated: time.Now(),
+			}
+			rawSQL := fmt.Sprintf(
+				"INSERT INTO %s (email, login, org_id, version, is_admin, created, updated) VALUES (?,?,?,0,%s,?,?)",
+				ss.Quote("user"),
+				ss.GetDialect().BooleanStr(false),
+			)
+			_, err := sess.Exec(rawSQL, cmd.Email, cmd.Login, cmd.OrgID, cmd.Created, cmd.Updated)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 		require.NoError(t, err)
 
-		cmd = user.CreateUserCommand{
-			Email: "user_test_login_conflict@test.com",
-			Name:  "user name",
-			Login: "user_test_login_conflict",
-		}
-		// userLoginConflict
-		_, err = ss.CreateUser(context.Background(), cmd)
+		err = ss.WithDbSession(context.Background(), func(sess *sqlstore.DBSession) error {
+			// create a user
+			// add additional user with conflicting login where DOMAIN is upper case
+			// userLoginConflict
+			cmd := user.User{
+				Email:   "user_test_login_conflict_two@test.com",
+				Name:    "user name",
+				Login:   "user_test_login_CONFLICT",
+				OrgID:   testOrgID,
+				Created: time.Now(),
+				Updated: time.Now(),
+			}
+			rawSQL := fmt.Sprintf(
+				"INSERT INTO %s (email, login, org_id, version, is_admin, created, updated) VALUES (?,?,?,0,%s,?,?)",
+				ss.Quote("user"),
+				ss.GetDialect().BooleanStr(false),
+			)
+			_, err := sess.Exec(rawSQL, cmd.Email, cmd.Login, cmd.OrgID, cmd.Created, cmd.Updated)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
 		require.NoError(t, err)
-
-		cmd = user.CreateUserCommand{
-			Email: "user_test_login_conflict_two@test.com",
-			Name:  "user name",
-			Login: "user_test_login_CONFLICT",
-		}
-		_, err = ss.CreateUser(context.Background(), cmd)
-		require.NoError(t, err)
-
-		ss.Cfg.CaseInsensitiveLogin = true
-
-		t.Run("GetByEmail - email conflict", func(t *testing.T) {
-			query := user.GetUserByEmailQuery{Email: "confusertest@test.com"}
-			_, err = userStore.GetByEmail(context.Background(), &query)
-			require.Error(t, err)
-		})
-
-		t.Run("GetByEmail - login conflict", func(t *testing.T) {
-			query := user.GetUserByEmailQuery{Email: "user_test_login_conflict@test.com"}
-			_, err = userStore.GetByEmail(context.Background(), &query)
-			require.Error(t, err)
-		})
-
-		t.Run("GetByLogin - email conflict", func(t *testing.T) {
-			query := user.GetUserByLoginQuery{LoginOrEmail: "user_email_conflict_two"}
-			_, err = userStore.GetByLogin(context.Background(), &query)
-			require.Error(t, err)
-		})
-
-		t.Run("GetByLogin - login conflict", func(t *testing.T) {
-			query := user.GetUserByLoginQuery{LoginOrEmail: "user_test_login_conflict"}
-			_, err = userStore.GetByLogin(context.Background(), &query)
-			require.Error(t, err)
-		})
-
-		t.Run("GetByLogin - login conflict by email", func(t *testing.T) {
-			query := user.GetUserByLoginQuery{LoginOrEmail: "user_test_login_conflict@test.com"}
-			_, err = userStore.GetByLogin(context.Background(), &query)
-			require.Error(t, err)
-		})
-
 		t.Run("GetByLogin - user2 uses user1.email as login", func(t *testing.T) {
 			// create user_1
 			user1 := &user.User{
@@ -247,22 +311,52 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 			require.NotEqual(t, user2.Login, result.Login)
 			require.NotEqual(t, user2.Name, result.Name)
 		})
-
-		ss.Cfg.CaseInsensitiveLogin = false
 	})
 
 	t.Run("Change user password", func(t *testing.T) {
-		err := userStore.ChangePassword(context.Background(), &user.ChangeUserPasswordCommand{})
+		id, err := userStore.Insert(context.Background(), &user.User{
+			Email:    "password@test.com",
+			Name:     "password",
+			Login:    "password",
+			Password: "password",
+			Salt:     "salt",
+			Created:  time.Now(),
+			Updated:  time.Now(),
+		})
 		require.NoError(t, err)
+
+		err = userStore.Update(context.Background(), &user.UpdateUserCommand{
+			UserID:   id,
+			Password: passwordPtr("updated"),
+		})
+		require.NoError(t, err)
+
+		updated, err := userStore.GetByID(context.Background(), id)
+		require.NoError(t, err)
+
+		assert.Equal(t, updated.Salt, "salt")
+		assert.Equal(t, updated.Name, "password")
+		assert.Equal(t, updated.Login, "password")
+		assert.Equal(t, updated.Email, "password@test.com")
+		assert.Equal(t, updated.Password, user.Password("updated"))
 	})
 
 	t.Run("update last seen at", func(t *testing.T) {
-		err := userStore.UpdateLastSeenAt(context.Background(), &user.UpdateUserLastSeenAtCommand{})
+		err := userStore.UpdateLastSeenAt(context.Background(), &user.UpdateUserLastSeenAtCommand{
+			UserID: 10, // Requires UserID
+		})
 		require.NoError(t, err)
+
+		err = userStore.UpdateLastSeenAt(context.Background(), &user.UpdateUserLastSeenAtCommand{
+			UserID: -1,
+		})
+		require.Error(t, err)
 	})
 
 	t.Run("get signed in user", func(t *testing.T) {
-		users := createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		ss := db.InitTestDB(t)
+		orgService, usrSvc := createOrgAndUserSvc(t, ss, cfg)
+		users := createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -276,82 +370,65 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		})
 		require.Nil(t, err)
 
-		err = updateDashboardACL(t, ss, 1, &models.DashboardACL{
-			DashboardID: 1, OrgID: users[0].OrgID, UserID: users[1].ID,
-			Permission: models.PERMISSION_EDIT,
-		})
-		require.Nil(t, err)
-
-		ss.CacheService.Flush()
-
 		query := &user.GetSignedInUserQuery{OrgID: users[1].OrgID, UserID: users[1].ID}
 		result, err := userStore.GetSignedInUser(context.Background(), query)
 		require.NoError(t, err)
 		require.Equal(t, result.Email, "user1@test.com")
-	})
 
-	t.Run("update user", func(t *testing.T) {
-		err := userStore.UpdateUser(context.Background(), &user.User{ID: 1, Name: "testtestest", Login: "loginloginlogin"})
-		require.NoError(t, err)
-		result, err := userStore.GetByID(context.Background(), 1)
-		require.NoError(t, err)
-		assert.Equal(t, result.Name, "testtestest")
-		assert.Equal(t, result.Login, "loginloginlogin")
+		// Throw errors for invalid user IDs
+		for _, userID := range []int64{-1, 0} {
+			_, err = userStore.GetSignedInUser(context.Background(),
+				&user.GetSignedInUserQuery{
+					OrgID:  users[1].OrgID,
+					UserID: userID}) // zero
+			require.Error(t, err)
+		}
 	})
 
 	t.Run("Testing DB - grafana admin users", func(t *testing.T) {
-		ss = db.InitTestDB(t)
-
-		createUserCmd := user.CreateUserCommand{
-			Email:   fmt.Sprint("admin", "@test.com"),
+		ss := db.InitTestDB(t)
+		_, usrSvc := createOrgAndUserSvc(t, ss, cfg)
+		usr, err := usrSvc.Create(context.Background(), &user.CreateUserCommand{
+			Email:   "admin@test.com",
 			Name:    "admin",
 			Login:   "admin",
 			IsAdmin: true,
-		}
-		usr, err := ss.CreateUser(context.Background(), createUserCmd)
+		})
 		require.Nil(t, err)
 
-		// Cannot make themselves a non-admin
-		updatePermsError := userStore.UpdatePermissions(context.Background(), usr.ID, false)
+		// Cannot make user non grafana admin if it is the last one
+		err = userStore.Update(context.Background(), &user.UpdateUserCommand{
+			UserID:         usr.ID,
+			IsGrafanaAdmin: boolPtr(false),
+		})
+		require.ErrorIs(t, err, user.ErrLastGrafanaAdmin)
 
-		require.Equal(t, user.ErrLastGrafanaAdmin, updatePermsError)
+		usr, err = userStore.GetByID(context.Background(), usr.ID)
+		require.NoError(t, err)
+		require.True(t, usr.IsAdmin)
 
-		query := user.GetUserByIDQuery{ID: usr.ID}
-		queryResult, getUserError := userStore.GetByID(context.Background(), query.ID)
-		require.Nil(t, getUserError)
+		// Create another admin user
+		_, err = usrSvc.Create(context.Background(), &user.CreateUserCommand{
+			Email:   "admin2@test.com",
+			Name:    "admin2",
+			Login:   "admin2",
+			IsAdmin: true,
+		})
+		require.NoError(t, err)
 
-		require.True(t, queryResult.IsAdmin)
+		// Now first admin user should be able to be downgraded
+		err = userStore.Update(context.Background(), &user.UpdateUserCommand{
+			UserID:         usr.ID,
+			IsGrafanaAdmin: boolPtr(false),
+		})
+		require.NoError(t, err)
 
-		// One user
-		const email = "user@test.com"
-		const username = "user"
-		createUserCmd = user.CreateUserCommand{
-			Email: email,
-			Name:  "user",
-			Login: username,
-		}
-		_, err = ss.CreateUser(context.Background(), createUserCmd)
-		require.Nil(t, err)
-
-		// When trying to create a new user with the same email, an error is returned
-		createUserCmd = user.CreateUserCommand{
-			Email:        email,
-			Name:         "user2",
-			Login:        "user2",
-			SkipOrgSetup: true,
-		}
-		_, err = ss.CreateUser(context.Background(), createUserCmd)
-		require.Equal(t, err, user.ErrUserAlreadyExists)
-
-		// When trying to create a new user with the same login, an error is returned
-		createUserCmd = user.CreateUserCommand{
-			Email:        "user2@test.com",
-			Name:         "user2",
-			Login:        username,
-			SkipOrgSetup: true,
-		}
-		_, err = ss.CreateUser(context.Background(), createUserCmd)
-		require.Equal(t, err, user.ErrUserAlreadyExists)
+		updated, err := userStore.GetByID(context.Background(), usr.ID)
+		require.NoError(t, err)
+		require.False(t, updated.IsAdmin)
+		require.Equal(t, usr.Email, updated.Email)
+		require.Equal(t, usr.Login, updated.Login)
+		require.Equal(t, usr.Name, updated.Name)
 	})
 
 	t.Run("GetProfile", func(t *testing.T) {
@@ -359,14 +436,36 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	t.Run("SetHelpFlag", func(t *testing.T) {
-		err := userStore.SetHelpFlag(context.Background(), &user.SetUserHelpFlagCommand{UserID: 1, HelpFlags1: user.HelpFlags1(1)})
+	t.Run("Update HelpFlags", func(t *testing.T) {
+		id, err := userStore.Insert(context.Background(), &user.User{
+			Email:      "help@test.com",
+			Name:       "help",
+			Login:      "help",
+			Updated:    time.Now(),
+			Created:    time.Now(),
+			LastSeenAt: time.Now(),
+		})
 		require.NoError(t, err)
+		original, err := userStore.GetByID(context.Background(), id)
+		require.NoError(t, err)
+
+		helpflags := user.HelpFlags1(1)
+		err = userStore.Update(context.Background(), &user.UpdateUserCommand{UserID: id, HelpFlags1: &helpflags})
+		require.NoError(t, err)
+
+		got, err := userStore.GetByID(context.Background(), id)
+		require.NoError(t, err)
+
+		original.HelpFlags1 = helpflags
+		assertEqualUser(t, original, got)
 	})
 
 	t.Run("Testing DB - return list users based on their is_disabled flag", func(t *testing.T) {
 		ss = db.InitTestDB(t)
-		createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		_, usrSvc := createOrgAndUserSvc(t, ss, cfg)
+		userStore := ProvideStore(ss, cfg)
+
+		createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -379,7 +478,6 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		query := user.SearchUsersQuery{IsDisabled: &isDisabled, SignedInUser: usr}
 		result, err := userStore.Search(context.Background(), &query)
 		require.Nil(t, err)
-
 		require.Len(t, result.Users, 2)
 
 		first, third := false, false
@@ -397,8 +495,10 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		require.True(t, third)
 
 		// Re-init DB
-		ss = db.InitTestDB(t)
-		users := createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		ss := db.InitTestDB(t)
+		orgService, usrSvc = createOrgAndUserSvc(t, ss, cfg)
+
+		users := createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -410,12 +510,6 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		err = orgService.AddOrgUser(context.Background(), &org.AddOrgUserCommand{
 			LoginOrEmail: users[1].Login, Role: org.RoleViewer,
 			OrgID: users[0].OrgID, UserID: users[1].ID,
-		})
-		require.Nil(t, err)
-
-		err = updateDashboardACL(t, ss, 1, &models.DashboardACL{
-			DashboardID: 1, OrgID: users[0].OrgID, UserID: users[1].ID,
-			Permission: models.PERMISSION_EDIT,
 		})
 		require.Nil(t, err)
 
@@ -423,16 +517,11 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		err = userStore.Delete(context.Background(), users[1].ID)
 		require.Nil(t, err)
 
-		permQuery := &models.GetDashboardACLInfoListQuery{DashboardID: 1, OrgID: users[0].OrgID}
-		err = userStore.getDashboardACLInfoList(permQuery)
-		require.Nil(t, err)
-
-		require.Len(t, permQuery.Result, 0)
-
 		// A user is an org member and has been assigned permissions
 		// Re-init DB
 		ss = db.InitTestDB(t)
-		users = createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		orgService, usrSvc = createOrgAndUserSvc(t, ss, cfg)
+		users = createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -446,19 +535,11 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		})
 		require.Nil(t, err)
 
-		err = updateDashboardACL(t, ss, 1, &models.DashboardACL{
-			DashboardID: 1, OrgID: users[0].OrgID, UserID: users[1].ID,
-			Permission: models.PERMISSION_EDIT,
-		})
+		query3 := &user.GetSignedInUserQuery{OrgID: users[1].OrgID, UserID: users[1].ID}
+		query3Result, err := userStore.GetSignedInUser(context.Background(), query3)
 		require.Nil(t, err)
-
-		ss.CacheService.Flush()
-
-		query3 := &models.GetSignedInUserQuery{OrgId: users[1].OrgID, UserId: users[1].ID}
-		err = ss.GetSignedInUserWithCacheCtx(context.Background(), query3)
-		require.Nil(t, err)
-		require.NotNil(t, query3.Result)
-		require.Equal(t, query3.OrgId, users[1].OrgID)
+		require.NotNil(t, query3Result)
+		require.Equal(t, query3.OrgID, users[1].OrgID)
 
 		disableCmd := user.BatchDisableUsersCommand{
 			UserIDs:    []int64{users[0].ID, users[1].ID, users[2].ID, users[3].ID, users[4].ID},
@@ -477,17 +558,19 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		// the user is deleted
 		err = userStore.Delete(context.Background(), users[1].ID)
 		require.Nil(t, err)
-
-		permQuery = &models.GetDashboardACLInfoListQuery{DashboardID: 1, OrgID: users[0].OrgID}
-		err = userStore.getDashboardACLInfoList(permQuery)
-		require.Nil(t, err)
-
-		require.Len(t, permQuery.Result, 0)
 	})
 
 	t.Run("Testing DB - return list of users that the SignedInUser has permission to read", func(t *testing.T) {
 		ss := db.InitTestDB(t)
-		createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		orgService, err := orgimpl.ProvideService(ss, cfg, quotaService)
+		require.NoError(t, err)
+		usrSvc, err := ProvideService(
+			ss, orgService, cfg, nil, nil, tracing.InitializeTracerForTest(),
+			quotaService, supportbundlestest.NewFakeBundleService(),
+		)
+		require.NoError(t, err)
+
+		createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email: fmt.Sprint("user", i, "@test.com"),
 				Name:  fmt.Sprint("user", i),
@@ -508,7 +591,7 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 	ss = db.InitTestDB(t)
 
 	t.Run("Testing DB - enable all users", func(t *testing.T) {
-		users := createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		users := createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -541,12 +624,12 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		ac2cmd := user.CreateUserCommand{Login: "ac2", Email: "ac2@test.com", Name: "ac2 name", IsAdmin: true}
 		serviceaccountcmd := user.CreateUserCommand{Login: "serviceaccount", Email: "service@test.com", Name: "serviceaccount name", IsAdmin: true, IsServiceAccount: true}
 
-		_, err := ss.CreateUser(context.Background(), ac1cmd)
+		_, err := usrSvc.Create(context.Background(), &ac1cmd)
 		require.NoError(t, err)
-		_, err = ss.CreateUser(context.Background(), ac2cmd)
+		_, err = usrSvc.Create(context.Background(), &ac2cmd)
 		require.NoError(t, err)
 		// user only used for making sure we filter out the service accounts
-		_, err = ss.CreateUser(context.Background(), serviceaccountcmd)
+		_, err = usrSvc.Create(context.Background(), &serviceaccountcmd)
 		require.NoError(t, err)
 		query := user.SearchUsersQuery{Query: "", SignedInUser: &user.SignedInUser{
 			OrgID: 1,
@@ -564,7 +647,7 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 	ss = db.InitTestDB(t)
 
 	t.Run("Testing DB - disable only specific users", func(t *testing.T) {
-		users := createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		users := createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -594,7 +677,6 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 
 			// Check if user id is in the userIdsToDisable list
 			for _, disabledUserId := range userIdsToDisable {
-				fmt.Println(user.ID, disabledUserId)
 				if user.ID == disabledUserId {
 					require.True(t, user.IsDisabled)
 					shouldBeDisabled = true
@@ -612,7 +694,7 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 
 	t.Run("Testing DB - search users", func(t *testing.T) {
 		// Since previous tests were destructive
-		createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -629,14 +711,22 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 			Updated: time.Now(),
 		})
 		require.NoError(t, err)
-		err = userStore.Disable(context.Background(), &user.DisableUserCommand{UserID: id})
+
+		err = userStore.Update(context.Background(), &user.UpdateUserCommand{
+			UserID:     id,
+			IsDisabled: boolPtr(true),
+		})
 		require.NoError(t, err)
+
+		usr, err := userStore.GetByID(context.Background(), id)
+		require.NoError(t, err)
+		require.True(t, usr.IsDisabled)
 	})
 
 	t.Run("Testing DB - multiple users", func(t *testing.T) {
 		ss = db.InitTestDB(t)
 
-		createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+		createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 			return &user.CreateUserCommand{
 				Email:      fmt.Sprint("user", i, "@test.com"),
 				Name:       fmt.Sprint("user", i),
@@ -705,6 +795,45 @@ func TestIntegrationUserDataAccess(t *testing.T) {
 		require.Nil(t, err)
 		require.Len(t, queryResult.Users, 1)
 		require.EqualValues(t, queryResult.TotalCount, 1)
+
+		// Custom ordering
+		sortOpts, err := sortopts.ParseSortQueryParam("login-asc,email-asc")
+		require.NoError(t, err)
+		query = user.SearchUsersQuery{Query: "", Page: 1, Limit: 3, SignedInUser: usr, SortOpts: sortOpts}
+		queryResult, err = userStore.Search(context.Background(), &query)
+
+		require.Nil(t, err)
+		require.Len(t, queryResult.Users, 3)
+		require.EqualValues(t, queryResult.TotalCount, 5)
+		for i := 0; i < 3; i++ {
+			require.Equal(t, fmt.Sprint("loginuser", i), queryResult.Users[i].Login)
+		}
+
+		sortOpts2, err := sortopts.ParseSortQueryParam("login-desc,email-asc")
+		require.NoError(t, err)
+		query = user.SearchUsersQuery{Query: "", Page: 1, Limit: 3, SignedInUser: usr, SortOpts: sortOpts2}
+		queryResult, err = userStore.Search(context.Background(), &query)
+
+		require.Nil(t, err)
+		require.Len(t, queryResult.Users, 3)
+		require.EqualValues(t, queryResult.TotalCount, 5)
+		for i := 0; i < 3; i++ {
+			require.Equal(t, fmt.Sprint("loginuser", 4-i), queryResult.Users[i].Login)
+		}
+	})
+
+	t.Run("Can get logged in user projection", func(t *testing.T) {
+		query := user.GetSignedInUserQuery{UserID: 2}
+		queryResult, err := userStore.GetSignedInUser(context.Background(), &query)
+
+		require.NoError(t, err)
+		assert.Equal(t, queryResult.Email, "user1@test.com")
+		assert.EqualValues(t, queryResult.OrgID, 2)
+		assert.Equal(t, queryResult.Name, "user1")
+		assert.Equal(t, queryResult.Login, "loginuser1")
+		assert.EqualValues(t, queryResult.OrgRole, "Admin")
+		assert.Equal(t, queryResult.OrgName, "user1@test.com")
+		assert.Equal(t, queryResult.IsGrafanaAdmin, false)
 	})
 }
 
@@ -713,27 +842,17 @@ func TestIntegrationUserUpdate(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	ss := db.InitTestDB(t)
-	userStore := ProvideStore(ss, setting.NewCfg())
+	ss, cfg := db.InitTestDBWithCfg(t)
+	userStore := ProvideStore(ss, cfg)
+	_, usrSvc := createOrgAndUserSvc(t, ss, cfg)
 
-	users := createFiveTestUsers(t, ss, func(i int) *user.CreateUserCommand {
+	users := createFiveTestUsers(t, usrSvc, func(i int) *user.CreateUserCommand {
 		return &user.CreateUserCommand{
 			Email:      fmt.Sprint("USER", i, "@test.com"),
 			Name:       fmt.Sprint("USER", i),
 			Login:      fmt.Sprint("loginUSER", i),
 			IsDisabled: false,
 		}
-	})
-
-	userStore.cfg.CaseInsensitiveLogin = true
-
-	t.Run("Testing DB - update generates duplicate user", func(t *testing.T) {
-		err := userStore.Update(context.Background(), &user.UpdateUserCommand{
-			Login:  "loginuser2",
-			UserID: users[0].ID,
-		})
-
-		require.Error(t, err)
 	})
 
 	t.Run("Testing DB - update lowercases existing user", func(t *testing.T) {
@@ -768,145 +887,104 @@ func TestIntegrationUserUpdate(t *testing.T) {
 		require.Equal(t, "Change Name", result.Name)
 
 		// Unchanged
-		require.Equal(t, "loginUSER3", result.Login)
-		require.Equal(t, "USER3@test.com", result.Email)
+		require.Equal(t, "loginuser3", result.Login)
+		require.Equal(t, "user3@test.com", result.Email)
 	})
-
-	ss.Cfg.CaseInsensitiveLogin = false
 }
 
-func createFiveTestUsers(t *testing.T, sqlStore *sqlstore.SQLStore, fn func(i int) *user.CreateUserCommand) []user.User {
+func createFiveTestUsers(t *testing.T, svc user.Service, fn func(i int) *user.CreateUserCommand) []user.User {
 	t.Helper()
 
-	users := []user.User{}
+	users := make([]user.User, 5)
 	for i := 0; i < 5; i++ {
 		cmd := fn(i)
-
-		user, err := sqlStore.CreateUser(context.Background(), *cmd)
-		users = append(users, *user)
-
+		user, err := svc.Create(context.Background(), cmd)
 		require.Nil(t, err)
+		users[i] = *user
 	}
 
 	return users
 }
 
-// TODO: Use FakeDashboardStore when org has its own service
-func updateDashboardACL(t *testing.T, sqlStore db.DB, dashboardID int64, items ...*models.DashboardACL) error {
-	t.Helper()
+func TestMetricsUsage(t *testing.T) {
+	ss, cfg := db.InitTestDBWithCfg(t)
+	userStore := ProvideStore(ss, setting.NewCfg())
+	quotaService := quotaimpl.ProvideService(ss, cfg)
+	orgService, err := orgimpl.ProvideService(ss, cfg, quotaService)
+	require.NoError(t, err)
 
-	err := sqlStore.WithDbSession(context.Background(), func(sess *db.Session) error {
-		_, err := sess.Exec("DELETE FROM dashboard_acl WHERE dashboard_id=?", dashboardID)
-		if err != nil {
-			return fmt.Errorf("deleting from dashboard_acl failed: %w", err)
+	_, usrSvc := createOrgAndUserSvc(t, ss, cfg)
+
+	t.Run("Get empty role metrics for an org", func(t *testing.T) {
+		orgId := int64(1)
+
+		// create first user
+		createFirtUserCmd := &user.CreateUserCommand{
+			Login: "admin",
+			Email: "admin@admin.com",
+			Name:  "admin",
+			OrgID: orgId,
 		}
+		_, err := usrSvc.Create(context.Background(), createFirtUserCmd)
+		require.NoError(t, err)
 
-		for _, item := range items {
-			item.Created = time.Now()
-			item.Updated = time.Now()
-			if item.UserID == 0 && item.TeamID == 0 && (item.Role == nil || !item.Role.IsValid()) {
-				return models.ErrDashboardACLInfoMissing
-			}
-
-			if item.DashboardID == 0 {
-				return models.ErrDashboardPermissionDashboardEmpty
-			}
-
-			sess.Nullable("user_id", "team_id")
-			if _, err := sess.Insert(item); err != nil {
-				return err
-			}
+		// create second user
+		createSecondUserCmd := &user.CreateUserCommand{
+			Login: "userWithoutRole",
+			Email: "userWithoutRole@userWithoutRole.com",
+			Name:  "userWithoutRole",
 		}
+		secondUser, err := usrSvc.Create(context.Background(), createSecondUserCmd)
+		require.NoError(t, err)
 
-		// Update dashboard HasACL flag
-		dashboard := models.Dashboard{HasACL: true}
-		_, err = sess.Cols("has_acl").Where("id=?", dashboardID).Update(&dashboard)
-		return err
+		// assign the user to the org
+		cmd := org.AddOrgUserCommand{
+			OrgID:  secondUser.OrgID,
+			UserID: orgId,
+			Role:   org.RoleNone,
+		}
+		err = orgService.AddOrgUser(context.Background(), &cmd)
+		require.NoError(t, err)
+
+		// get metric usage
+		stats, err := userStore.CountUserAccountsWithEmptyRole(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), stats)
 	})
-	return err
 }
 
-// This function was copied from pkg/services/dashboards/database to circumvent
-// import cycles. When this org-related code is refactored into a service the
-// tests can the real GetDashboardACLInfoList functions
-func (ss *sqlStore) getDashboardACLInfoList(query *models.GetDashboardACLInfoListQuery) error {
-	outerErr := ss.db.WithDbSession(context.Background(), func(dbSession *db.Session) error {
-		query.Result = make([]*models.DashboardACLInfoDTO, 0)
-		falseStr := ss.dialect.BooleanStr(false)
+func assertEqualUser(t *testing.T, expected, got *user.User) {
+	// zero out time fields
+	expected.Updated = time.Time{}
+	expected.Created = time.Time{}
+	expected.LastSeenAt = time.Time{}
+	got.Updated = time.Time{}
+	got.Created = time.Time{}
+	got.LastSeenAt = time.Time{}
 
-		if query.DashboardID == 0 {
-			sql := `SELECT
-		da.id,
-		da.org_id,
-		da.dashboard_id,
-		da.user_id,
-		da.team_id,
-		da.permission,
-		da.role,
-		da.created,
-		da.updated,
-		'' as user_login,
-		'' as user_email,
-		'' as team,
-		'' as title,
-		'' as slug,
-		'' as uid,` +
-				falseStr + ` AS is_folder,` +
-				falseStr + ` AS inherited
-		FROM dashboard_acl as da
-		WHERE da.dashboard_id = -1`
-			return dbSession.SQL(sql).Find(&query.Result)
-		}
+	assert.Equal(t, expected, got)
+}
 
-		rawSQL := `
-			-- get permissions for the dashboard and its parent folder
-			SELECT
-				da.id,
-				da.org_id,
-				da.dashboard_id,
-				da.user_id,
-				da.team_id,
-				da.permission,
-				da.role,
-				da.created,
-				da.updated,
-				u.login AS user_login,
-				u.email AS user_email,
-				ug.name AS team,
-				ug.email AS team_email,
-				d.title,
-				d.slug,
-				d.uid,
-				d.is_folder,
-				CASE WHEN (da.dashboard_id = -1 AND d.folder_id > 0) OR da.dashboard_id = d.folder_id THEN ` + ss.dialect.BooleanStr(true) + ` ELSE ` + falseStr + ` END AS inherited
-			FROM dashboard as d
-				LEFT JOIN dashboard folder on folder.id = d.folder_id
-				LEFT JOIN dashboard_acl AS da ON
-				da.dashboard_id = d.id OR
-				da.dashboard_id = d.folder_id OR
-				(
-					-- include default permissions -->
-					da.org_id = -1 AND (
-					  (folder.id IS NOT NULL AND folder.has_acl = ` + falseStr + `) OR
-					  (folder.id IS NULL AND d.has_acl = ` + falseStr + `)
-					)
-				)
-				LEFT JOIN ` + ss.dialect.Quote("user") + ` AS u ON u.id = da.user_id
-				LEFT JOIN team ug on ug.id = da.team_id
-			WHERE d.org_id = ? AND d.id = ? AND da.id IS NOT NULL
-			ORDER BY da.id ASC
-			`
+func createOrgAndUserSvc(t *testing.T, store db.DB, cfg *setting.Cfg) (org.Service, user.Service) {
+	t.Helper()
 
-		return dbSession.SQL(rawSQL, query.OrgID, query.DashboardID).Find(&query.Result)
-	})
+	quotaService := quotaimpl.ProvideService(store, cfg)
+	orgService, err := orgimpl.ProvideService(store, cfg, quotaService)
+	require.NoError(t, err)
+	usrSvc, err := ProvideService(
+		store, orgService, cfg, nil, nil, tracing.InitializeTracerForTest(),
+		quotaService, supportbundlestest.NewFakeBundleService(),
+	)
+	require.NoError(t, err)
 
-	if outerErr != nil {
-		return outerErr
-	}
+	return orgService, usrSvc
+}
 
-	for _, p := range query.Result {
-		p.PermissionName = p.Permission.String()
-	}
+func passwordPtr(s string) *user.Password {
+	password := user.Password(s)
+	return &password
+}
 
-	return nil
+func boolPtr(b bool) *bool {
+	return &b
 }

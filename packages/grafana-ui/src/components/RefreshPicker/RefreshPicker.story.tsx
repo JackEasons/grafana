@@ -1,18 +1,13 @@
 import { action } from '@storybook/addon-actions';
-import { useArgs } from '@storybook/client-api';
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
+import { useArgs } from '@storybook/preview-api';
+import { Meta, StoryFn } from '@storybook/react';
 
-import { RefreshPicker } from '@grafana/ui';
-
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
-
+import { RefreshPicker } from './RefreshPicker';
 import mdx from './RefreshPicker.mdx';
 
-const meta: ComponentMeta<typeof RefreshPicker> = {
+const meta: Meta<typeof RefreshPicker> = {
   title: 'Pickers and Editors/RefreshPicker',
   component: RefreshPicker,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -34,7 +29,7 @@ const meta: ComponentMeta<typeof RefreshPicker> = {
   },
 };
 
-export const Examples: ComponentStory<typeof RefreshPicker> = (args) => {
+export const Examples: StoryFn<typeof RefreshPicker> = (args) => {
   const [, updateArgs] = useArgs();
   const onIntervalChanged = (interval: string) => {
     action('onIntervalChanged fired')(interval);

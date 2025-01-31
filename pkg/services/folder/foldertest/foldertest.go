@@ -3,15 +3,16 @@ package foldertest
 import (
 	"context"
 
-	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/folder"
-	"github.com/grafana/grafana/pkg/services/user"
+	"github.com/grafana/grafana/pkg/services/search/model"
 )
 
 type FakeService struct {
-	ExpectedFolders []*models.Folder
-	ExpectedFolder  *folder.Folder
-	ExpectedError   error
+	ExpectedFolders          []*folder.Folder
+	ExpectedFolder           *folder.Folder
+	ExpectedHitList          model.HitList
+	ExpectedError            error
+	ExpectedDescendantCounts map[string]int64
 }
 
 func NewFakeService() *FakeService {
@@ -20,58 +21,74 @@ func NewFakeService() *FakeService {
 
 var _ folder.Service = (*FakeService)(nil)
 
-func (s *FakeService) GetFolders(ctx context.Context, user *user.SignedInUser, orgID int64, limit int64, page int64) ([]*models.Folder, error) {
+func (s *FakeService) GetChildren(ctx context.Context, q *folder.GetChildrenQuery) ([]*folder.Folder, error) {
+	return s.ExpectedFolders, s.ExpectedError
+}
+func (s *FakeService) GetChildrenLegacy(ctx context.Context, q *folder.GetChildrenQuery) ([]*folder.Folder, error) {
+	return s.ExpectedFolders, s.ExpectedError
+}
+
+func (s *FakeService) GetParents(ctx context.Context, q folder.GetParentsQuery) ([]*folder.Folder, error) {
+	return s.ExpectedFolders, s.ExpectedError
+}
+func (s *FakeService) GetParentsLegacy(ctx context.Context, q folder.GetParentsQuery) ([]*folder.Folder, error) {
 	return s.ExpectedFolders, s.ExpectedError
 }
 
 func (s *FakeService) Create(ctx context.Context, cmd *folder.CreateFolderCommand) (*folder.Folder, error) {
 	return s.ExpectedFolder, s.ExpectedError
 }
-func (s *FakeService) Get(ctx context.Context, cmd *folder.GetFolderQuery) (*folder.Folder, error) {
+func (s *FakeService) CreateLegacy(ctx context.Context, cmd *folder.CreateFolderCommand) (*folder.Folder, error) {
 	return s.ExpectedFolder, s.ExpectedError
 }
-func (s *FakeService) Update(ctx context.Context, user *user.SignedInUser, orgID int64, existingUid string, cmd *models.UpdateFolderCommand) (*folder.Folder, error) {
-	cmd.Result = s.ExpectedFolder.ToLegacyModel()
+
+func (s *FakeService) Get(ctx context.Context, q *folder.GetFolderQuery) (*folder.Folder, error) {
 	return s.ExpectedFolder, s.ExpectedError
 }
-func (s *FakeService) DeleteFolder(ctx context.Context, cmd *folder.DeleteFolderCommand) error {
+func (s *FakeService) GetLegacy(ctx context.Context, q *folder.GetFolderQuery) (*folder.Folder, error) {
+	return s.ExpectedFolder, s.ExpectedError
+}
+
+func (s *FakeService) Update(ctx context.Context, cmd *folder.UpdateFolderCommand) (*folder.Folder, error) {
+	return s.ExpectedFolder, s.ExpectedError
+}
+func (s *FakeService) UpdateLegacy(ctx context.Context, cmd *folder.UpdateFolderCommand) (*folder.Folder, error) {
+	return s.ExpectedFolder, s.ExpectedError
+}
+
+func (s *FakeService) Delete(ctx context.Context, cmd *folder.DeleteFolderCommand) error {
 	return s.ExpectedError
 }
-func (s *FakeService) MakeUserAdmin(ctx context.Context, orgID int64, userID, folderID int64, setViewAndEditPermissions bool) error {
+func (s *FakeService) DeleteLegacy(ctx context.Context, cmd *folder.DeleteFolderCommand) error {
 	return s.ExpectedError
 }
 
 func (s *FakeService) Move(ctx context.Context, cmd *folder.MoveFolderCommand) (*folder.Folder, error) {
 	return s.ExpectedFolder, s.ExpectedError
 }
-
-func (s *FakeService) GetParents(ctx context.Context, orgID int64, folderUID string) ([]*folder.Folder, error) {
-	return modelsToFolders(s.ExpectedFolders), s.ExpectedError
+func (s *FakeService) MoveLegacy(ctx context.Context, cmd *folder.MoveFolderCommand) (*folder.Folder, error) {
+	return s.ExpectedFolder, s.ExpectedError
 }
 
-func (s *FakeService) GetTree(ctx context.Context, orgID int64, folderUID string, depth int64) (map[string][]*folder.Folder, error) {
-	ret := make(map[string][]*folder.Folder)
-	ret[folderUID] = modelsToFolders(s.ExpectedFolders)
-	return ret, s.ExpectedError
+func (s *FakeService) RegisterService(service folder.RegistryService) error {
+	return s.ExpectedError
 }
 
-// temporary helper until all Folder service methods are updated to use
-// folder.Folder instead of model.Folder
-func modelsToFolders(m []*models.Folder) []*folder.Folder {
-	if m == nil {
-		return nil
-	}
-	ret := make([]*folder.Folder, len(m))
-	for i, f := range m {
-		ret[i] = &folder.Folder{
-			ID:          f.Id,
-			UID:         f.Uid,
-			Title:       f.Title,
-			Description: "", // model.Folder does not have a description
-			Created:     f.Created,
-			Updated:     f.Updated,
-			//UpdatedBy:   f.UpdatedBy,
-		}
-	}
-	return ret
+func (s *FakeService) GetDescendantCounts(ctx context.Context, q *folder.GetDescendantCountsQuery) (folder.DescendantCounts, error) {
+	return s.ExpectedDescendantCounts, s.ExpectedError
+}
+func (s *FakeService) GetDescendantCountsLegacy(ctx context.Context, q *folder.GetDescendantCountsQuery) (folder.DescendantCounts, error) {
+	return s.ExpectedDescendantCounts, s.ExpectedError
+}
+
+func (s *FakeService) GetFolders(ctx context.Context, q folder.GetFoldersQuery) ([]*folder.Folder, error) {
+	return s.ExpectedFolders, s.ExpectedError
+}
+
+func (s *FakeService) SearchFolders(ctx context.Context, q folder.SearchFoldersQuery) (model.HitList, error) {
+	return s.ExpectedHitList, s.ExpectedError
+}
+
+func (s *FakeService) GetFoldersLegacy(ctx context.Context, q folder.GetFoldersQuery) ([]*folder.Folder, error) {
+	return s.ExpectedFolders, s.ExpectedError
 }

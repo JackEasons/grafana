@@ -2,6 +2,7 @@ package alerting
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,20 +10,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/alertmanager/config"
+	"github.com/prometheus/alertmanager/pkg/labels"
 	"github.com/prometheus/common/model"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/components/simplejson"
+	"github.com/grafana/grafana/pkg/expr"
 	"github.com/grafana/grafana/pkg/services/datasources"
 	apimodels "github.com/grafana/grafana/pkg/services/ngalert/api/tooling/definitions"
 	ngmodels "github.com/grafana/grafana/pkg/services/ngalert/models"
 	"github.com/grafana/grafana/pkg/services/ngalert/sender"
 	"github.com/grafana/grafana/pkg/services/org"
+	"github.com/grafana/grafana/pkg/services/org/orgimpl"
+	"github.com/grafana/grafana/pkg/services/quota/quotatest"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/tests/testinfra"
 )
 
-func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
+func TestIntegrationAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
+	testinfra.SQLiteIntegrationTest(t)
+
 	const disableOrgID int64 = 3
 	dir, path := testinfra.CreateGrafDir(t, testinfra.GrafanaOpts{
 		DisableLegacyAlerting:          true,
@@ -33,22 +41,29 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		AppModeProduction:              true,
 	})
 
-	grafanaListedAddr, s := testinfra.StartGrafana(t, dir, path)
+	grafanaListedAddr, env := testinfra.StartGrafanaEnv(t, dir, path)
+
+	orgService, err := orgimpl.ProvideService(env.SQLStore, env.Cfg, quotatest.New(false, nil))
+	require.NoError(t, err)
 
 	// Create a user to make authenticated requests
-	userID := createUser(t, s, user.CreateUserCommand{
+	userID := createUser(t, env.SQLStore, env.Cfg, user.CreateUserCommand{
 		DefaultOrgRole: string(org.RoleAdmin),
 		Login:          "grafana",
 		Password:       "password",
 	})
 	apiClient := newAlertingApiClient(grafanaListedAddr, "grafana", "password")
+
 	// create another organisation
-	orgID := createOrg(t, s, "another org", userID)
+	newOrg, err := orgService.CreateWithMember(context.Background(), &org.CreateOrgCommand{Name: "another org", UserID: userID})
+	require.NoError(t, err)
+	orgID := newOrg.ID
+
 	// ensure that the orgID is 3 (the disabled org)
 	require.Equal(t, disableOrgID, orgID)
 
 	// create user under different organisation
-	createUser(t, s, user.CreateUserCommand{
+	createUser(t, env.SQLStore, env.Cfg, user.CreateUserCommand{
 		DefaultOrgRole: string(org.RoleAdmin),
 		Password:       "admin-42",
 		Login:          "admin-42",
@@ -66,7 +81,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := getRequest(t, alertsURL, http.StatusNotFound) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "no admin configuration available", res["message"])
@@ -86,7 +101,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, alertsURL, buf.String(), http.StatusBadRequest) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "Invalid alertmanager choice specified", res["message"])
@@ -107,7 +122,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, alertsURL, buf.String(), http.StatusBadRequest) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "At least one Alertmanager must be provided or configured as a datasource that handles alerts to choose this option", res["message"])
@@ -116,12 +131,12 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 	// Add an alertmanager datasource
 	{
 		cmd := datasources.AddDataSourceCommand{
-			OrgId:  1,
+			OrgID:  1,
 			Name:   "AM1",
 			Type:   datasources.DS_ALERTMANAGER,
 			Access: "proxy",
-			Url:    fakeAM1.URL(),
-			JsonData: simplejson.NewFromAny(map[string]interface{}{
+			URL:    fakeAM1.URL(),
+			JsonData: simplejson.NewFromAny(map[string]any{
 				"handleGrafanaManagedAlerts": true,
 				"implementation":             "prometheus",
 			}),
@@ -134,7 +149,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, dataSourcesUrl, buf.String(), http.StatusOK) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "Datasource added", res["message"])
@@ -143,12 +158,12 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 	// Add another alertmanager datasource
 	{
 		cmd := datasources.AddDataSourceCommand{
-			OrgId:  1,
+			OrgID:  1,
 			Name:   "AM2",
 			Type:   datasources.DS_ALERTMANAGER,
 			Access: "proxy",
-			Url:    fakeAM2.URL(),
-			JsonData: simplejson.NewFromAny(map[string]interface{}{
+			URL:    fakeAM2.URL(),
+			JsonData: simplejson.NewFromAny(map[string]any{
 				"handleGrafanaManagedAlerts": true,
 				"implementation":             "prometheus",
 			}),
@@ -161,7 +176,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, dataSourcesUrl, buf.String(), http.StatusOK) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "Datasource added", res["message"])
@@ -182,7 +197,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, alertsURL, buf.String(), http.StatusCreated) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "admin configuration updated", res["message"])
@@ -234,14 +249,14 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 					GrafanaManagedAlert: &apimodels.PostableGrafanaRule{
 						Title:     "AlwaysFiring",
 						Condition: "A",
-						Data: []ngmodels.AlertQuery{
+						Data: []apimodels.AlertQuery{
 							{
 								RefID: "A",
-								RelativeTimeRange: ngmodels.RelativeTimeRange{
-									From: ngmodels.Duration(time.Duration(5) * time.Hour),
-									To:   ngmodels.Duration(time.Duration(3) * time.Hour),
+								RelativeTimeRange: apimodels.RelativeTimeRange{
+									From: apimodels.Duration(time.Duration(5) * time.Hour),
+									To:   apimodels.Duration(time.Duration(3) * time.Hour),
 								},
-								DatasourceUID: "-100",
+								DatasourceUID: expr.DatasourceUID,
 								Model: json.RawMessage(`{
 								"type": "math",
 								"expression": "2 + 3 > 1"
@@ -262,7 +277,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		_ = postRequest(t, ruleURL, buf.String(), http.StatusAccepted)
 	}
 
-	//Eventually, our Alertmanagers should receiver the alert.
+	// Eventually, our Alertmanagers should receiver the alert.
 	{
 		require.Eventually(t, func() bool {
 			return fakeAM1.AlertsCount() == 1 && fakeAM2.AlertsCount() == 1
@@ -272,12 +287,12 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 	// Add an alertmanager datasource fot the other organisation
 	{
 		cmd := datasources.AddDataSourceCommand{
-			OrgId:  2,
+			OrgID:  2,
 			Name:   "AM3",
 			Type:   datasources.DS_ALERTMANAGER,
 			Access: "proxy",
-			Url:    fakeAM3.URL(),
-			JsonData: simplejson.NewFromAny(map[string]interface{}{
+			URL:    fakeAM3.URL(),
+			JsonData: simplejson.NewFromAny(map[string]any{
 				"handleGrafanaManagedAlerts": true,
 				"implementation":             "prometheus",
 			}),
@@ -290,7 +305,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, dataSourcesUrl, buf.String(), http.StatusOK) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "Datasource added", res["message"])
@@ -309,7 +324,7 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 		resp := postRequest(t, alertsURL, buf.String(), http.StatusCreated) // nolint
 		b, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
-		var res map[string]interface{}
+		var res map[string]any
 		err = json.Unmarshal(b, &res)
 		require.NoError(t, err)
 		require.Equal(t, "admin configuration updated", res["message"])
@@ -338,4 +353,50 @@ func TestAdminConfiguration_SendingToExternalAlertmanagers(t *testing.T) {
 			return len(alertmanagers.Data.Active) == 0
 		}, 16*time.Second, 8*time.Second) // the sync interval is 2s so after 8s all alertmanagers (if any) most probably are started
 	}
+}
+
+func TestIntegrationAdminConfiguration_CannotCreateInhibitionRules(t *testing.T) {
+	testinfra.SQLiteIntegrationTest(t)
+	dir, path := testinfra.CreateGrafDir(t, testinfra.GrafanaOpts{
+		DisableLegacyAlerting: true,
+		EnableUnifiedAlerting: true,
+		AppModeProduction:     true,
+	})
+	grafanaListedAddr, env := testinfra.StartGrafanaEnv(t, dir, path)
+	createUser(t, env.SQLStore, env.Cfg, user.CreateUserCommand{
+		DefaultOrgRole: string(org.RoleAdmin),
+		Password:       "admin",
+		Login:          "admin",
+	})
+	client := newAlertingApiClient(grafanaListedAddr, "admin", "admin")
+
+	cfg := apimodels.PostableUserConfig{
+		AlertmanagerConfig: apimodels.PostableApiAlertingConfig{
+			Config: apimodels.Config{
+				Route: &apimodels.Route{
+					Receiver: "test",
+				},
+				InhibitRules: []config.InhibitRule{{
+					SourceMatchers: config.Matchers{{
+						Type:  labels.MatchEqual,
+						Name:  "foo",
+						Value: "bar",
+					}},
+					TargetMatchers: config.Matchers{{
+						Type:  labels.MatchEqual,
+						Name:  "bar",
+						Value: "baz",
+					}},
+				}},
+			},
+			Receivers: []*apimodels.PostableApiReceiver{{
+				Receiver: config.Receiver{
+					Name: "test",
+				},
+			}},
+		},
+	}
+	ok, err := client.PostConfiguration(t, cfg)
+	require.False(t, ok)
+	require.EqualError(t, err, "inhibition rules are not supported")
 }

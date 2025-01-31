@@ -1,5 +1,6 @@
 import $ from 'jquery';
-import React, { PureComponent } from 'react';
+import { PureComponent } from 'react';
+import * as React from 'react';
 
 import {
   DisplayValue,
@@ -8,12 +9,12 @@ import {
   ThresholdsMode,
   GAUGE_DEFAULT_MAXIMUM,
   GAUGE_DEFAULT_MINIMUM,
-  GrafanaTheme,
   GrafanaTheme2,
 } from '@grafana/data';
-import { VizTextDisplayOptions } from '@grafana/schema';
+import { VizTextDisplayOptions, VizOrientation } from '@grafana/schema';
 
 import { calculateFontSize } from '../../utils/measureText';
+import { clearButtonStyles } from '../Button';
 
 import { calculateGaugeAutoProps, DEFAULT_THRESHOLDS, getFormattedThresholds } from './utils';
 
@@ -27,7 +28,8 @@ export interface Props {
   text?: VizTextDisplayOptions;
   onClick?: React.MouseEventHandler<HTMLElement>;
   className?: string;
-  theme: GrafanaTheme | GrafanaTheme2;
+  theme: GrafanaTheme2;
+  orientation?: VizOrientation;
 }
 
 export class Gauge extends PureComponent<Props> {
@@ -52,17 +54,19 @@ export class Gauge extends PureComponent<Props> {
   }
 
   draw() {
-    const { field, showThresholdLabels, showThresholdMarkers, width, height, theme, value } = this.props;
+    const { field, showThresholdLabels, showThresholdMarkers, width, height, theme, value, orientation } = this.props;
 
     const autoProps = calculateGaugeAutoProps(width, height, value.title);
-    const dimension = Math.min(width, autoProps.gaugeHeight);
-    const backgroundColor = 'v1' in theme ? theme.colors.background.secondary : theme.colors.bg2;
+    // If the gauge is in vertical layout, we need to set the width of the gauge to the height of the gauge
+    const calculatedGaugeWidth = orientation === VizOrientation.Vertical ? autoProps.gaugeHeight : width;
+    const dimension = Math.min(calculatedGaugeWidth, autoProps.gaugeHeight);
+    const backgroundColor = theme.colors.background.secondary;
     const gaugeWidthReduceRatio = showThresholdLabels ? 1.5 : 1;
     const gaugeWidth = Math.min(dimension / 5.5, 40) / gaugeWidthReduceRatio;
     const thresholdMarkersWidth = gaugeWidth / 5;
     const text = formattedValueToString(value);
     // This not 100% accurate as I am unsure of flot's calculations here
-    const valueWidthBase = Math.min(width, dimension * 1.3) * 0.9;
+    const valueWidthBase = Math.min(calculatedGaugeWidth, dimension * 1.3) * 0.9;
     // remove gauge & marker width (on left and right side)
     // and 10px is some padding that flot adds to the outer canvas
     const valueWidth =
@@ -145,16 +149,28 @@ export class Gauge extends PureComponent<Props> {
   }
 
   renderVisualization = () => {
-    const { width, value, height, onClick, text } = this.props;
-    const autoProps = calculateGaugeAutoProps(width, height, value.title);
+    const { width, value, height, onClick, text, theme, orientation } = this.props;
+    const autoProps = calculateGaugeAutoProps(width, height, value.title, orientation);
+
+    // If the gauge is in vertical layout, we need to set the width of the gauge to the height of the gauge
+    const gaugeWidth = orientation === VizOrientation.Vertical ? `${autoProps.gaugeHeight}px` : '100%';
+
+    const gaugeElement = (
+      <div
+        style={{ height: `${autoProps.gaugeHeight}px`, width: gaugeWidth }}
+        ref={(element) => (this.canvasElement = element)}
+      />
+    );
 
     return (
       <>
-        <div
-          style={{ height: `${autoProps.gaugeHeight}px`, width: '100%' }}
-          ref={(element) => (this.canvasElement = element)}
-          onClick={onClick}
-        />
+        {onClick ? (
+          <button className={clearButtonStyles(theme)} type="button" onClick={onClick}>
+            {gaugeElement}
+          </button>
+        ) : (
+          gaugeElement
+        )}
         {autoProps.showLabel && (
           <div
             style={{
@@ -164,7 +180,7 @@ export class Gauge extends PureComponent<Props> {
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
               position: 'relative',
-              width: '100%',
+              width: gaugeWidth,
               top: '-4px',
               cursor: 'default',
             }}

@@ -1,74 +1,91 @@
 package definitions
 
-import (
-	"github.com/grafana/grafana/pkg/services/ngalert/models"
-)
-
-// swagger:route GET /api/v1/provisioning/templates provisioning stable RouteGetTemplates
+// swagger:route GET /v1/provisioning/templates provisioning stable RouteGetTemplates
 //
-// Get all message templates.
+// Get all notification template groups.
 //
 //     Responses:
-//       200: MessageTemplates
-//       404: description: Not found.
+//       200: NotificationTemplates
 
-// swagger:route GET /api/v1/provisioning/templates/{name} provisioning stable RouteGetTemplate
+// swagger:route GET /v1/provisioning/templates/{name} provisioning stable RouteGetTemplate
 //
-// Get a message template.
+// Get a notification template group.
 //
 //     Responses:
-//       200: MessageTemplate
-//       404: description: Not found.
+//       200: NotificationTemplate
+//       404: PublicError
 
-// swagger:route PUT /api/v1/provisioning/templates/{name} provisioning stable RoutePutTemplate
+// swagger:route PUT /v1/provisioning/templates/{name} provisioning stable RoutePutTemplate
 //
-// Updates an existing template.
+// Updates an existing notification template group.
 //
 //     Consumes:
 //     - application/json
 //
 //     Responses:
-//       202: MessageTemplate
-//       400: ValidationError
+//       202: NotificationTemplate
+//       400: PublicError
+//       409: PublicError
 
-// swagger:route DELETE /api/v1/provisioning/templates/{name} provisioning stable RouteDeleteTemplate
+// swagger:route DELETE /v1/provisioning/templates/{name} provisioning stable RouteDeleteTemplate
 //
-// Delete a template.
+// Delete a notification template group.
 //
 //     Responses:
 //       204: description: The template was deleted successfully.
+//       409: PublicError
 
 // swagger:parameters RouteGetTemplate RoutePutTemplate RouteDeleteTemplate
 type RouteGetTemplateParam struct {
-	// Template Name
+	// Template group name
 	// in:path
 	Name string `json:"name"`
 }
 
-// swagger:model
-type MessageTemplate struct {
-	Name       string            `json:"name"`
-	Template   string            `json:"template"`
-	Provenance models.Provenance `json:"provenance,omitempty"`
+// swagger:parameters stable RouteDeleteTemplate
+type RouteDeleteTemplateParam struct {
+	// Template group name
+	// in:path
+	Name string `json:"name"`
+
+	// Version of template to use for optimistic concurrency. Leave empty to disable validation
+	// in:query
+	Version string `json:"version"`
 }
 
 // swagger:model
-type MessageTemplates []MessageTemplate
+type NotificationTemplate struct {
+	UID             string     `json:"-" yaml:"-"`
+	Name            string     `json:"name"`
+	Template        string     `json:"template"`
+	Provenance      Provenance `json:"provenance,omitempty"`
+	ResourceVersion string     `json:"version,omitempty"`
+}
 
-type MessageTemplateContent struct {
-	Template string `json:"template"`
+// swagger:model
+type NotificationTemplates []NotificationTemplate
+
+type NotificationTemplateContent struct {
+	Template        string `json:"template"`
+	ResourceVersion string `json:"version,omitempty"`
 }
 
 // swagger:parameters RoutePutTemplate
-type MessageTemplatePayload struct {
+type NotificationTemplatePayload struct {
 	// in:body
-	Body MessageTemplateContent
+	Body NotificationTemplateContent
 }
 
-func (t *MessageTemplate) ResourceType() string {
+// swagger:parameters RoutePutTemplate
+type NotificationTemplateHeaders struct {
+	// in:header
+	XDisableProvenance string `json:"X-Disable-Provenance"`
+}
+
+func (t *NotificationTemplate) ResourceType() string {
 	return "template"
 }
 
-func (t *MessageTemplate) ResourceID() string {
+func (t *NotificationTemplate) ResourceID() string {
 	return t.Name
 }

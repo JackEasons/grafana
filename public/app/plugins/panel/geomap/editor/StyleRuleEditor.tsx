@@ -1,16 +1,18 @@
 import { css } from '@emotion/css';
 import { FeatureLike } from 'ol/Feature';
-import React, { FC, useCallback, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useObservable } from 'react-use';
 import { Observable } from 'rxjs';
 
 import { GrafanaTheme2, SelectableValue, StandardEditorProps, StandardEditorsRegistryItem } from '@grafana/data';
+import { ComparisonOperation } from '@grafana/schema';
 import { Button, InlineField, InlineFieldRow, Select, useStyles2 } from '@grafana/ui';
+import { comparisonOperationOptions } from '@grafana/ui/src/components/MatchersUI/FieldValueMatcher';
 import { NumberInput } from 'app/core/components/OptionsUI/NumberInput';
 
 import { DEFAULT_STYLE_RULE } from '../layers/data/geojsonLayer';
 import { defaultStyleConfig, StyleConfig } from '../style/types';
-import { ComparisonOperation, FeatureStyleConfig } from '../types';
+import { FeatureStyleConfig } from '../types';
 import { getUniqueFeatureValues, LayerContentInfo } from '../utils/getFeatures';
 import { getSelectionInfo } from '../utils/selection';
 
@@ -21,20 +23,14 @@ export interface StyleRuleEditorSettings {
   layerInfo: Observable<LayerContentInfo>;
 }
 
-const comparators = [
-  { label: '==', value: ComparisonOperation.EQ },
-  { label: '!=', value: ComparisonOperation.NEQ },
-  { label: '>', value: ComparisonOperation.GT },
-  { label: '>=', value: ComparisonOperation.GTE },
-  { label: '<', value: ComparisonOperation.LT },
-  { label: '<=', value: ComparisonOperation.LTE },
-];
+type Props = StandardEditorProps<FeatureStyleConfig, StyleRuleEditorSettings, unknown>;
 
-export const StyleRuleEditor: FC<StandardEditorProps<FeatureStyleConfig, any, unknown, StyleRuleEditorSettings>> = (
-  props
-) => {
-  const { value, onChange, item, context } = props;
-  const settings: StyleRuleEditorSettings = item.settings;
+export const StyleRuleEditor = ({ value, onChange, item, context }: Props) => {
+  const settings = item.settings;
+  if (!settings) {
+    // Shouldn't be possible to hit this block, but just in case
+    throw Error('Settings not found');
+  }
   const { features, layerInfo } = settings;
 
   const propertyOptions = useObservable(layerInfo);
@@ -149,8 +145,8 @@ export const StyleRuleEditor: FC<StandardEditorProps<FeatureStyleConfig, any, un
         </InlineField>
         <InlineField className={styles.inline}>
           <Select
-            value={comparators.find((v) => v.value === check.operation)}
-            options={comparators}
+            value={comparisonOperationOptions.find((v) => v.value === check.operation)}
+            options={comparisonOperationOptions}
             onChange={onChangeComparison}
             aria-label={'Comparison operator'}
             width={8}
@@ -208,23 +204,23 @@ export const StyleRuleEditor: FC<StandardEditorProps<FeatureStyleConfig, any, un
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  rule: css`
-    margin-bottom: ${theme.spacing(1)};
-  `,
-  row: css`
-    display: flex;
-    margin-bottom: 4px;
-  `,
-  inline: css`
-    margin-bottom: 0;
-    margin-left: 4px;
-  `,
-  button: css`
-    margin-left: 4px;
-  `,
-  flexRow: css`
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-  `,
+  rule: css({
+    marginBottom: theme.spacing(1),
+  }),
+  row: css({
+    display: 'flex',
+    marginBottom: '4px',
+  }),
+  inline: css({
+    marginBottom: 0,
+    marginLeft: '4px',
+  }),
+  button: css({
+    marginLeft: '4px',
+  }),
+  flexRow: css({
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  }),
 });

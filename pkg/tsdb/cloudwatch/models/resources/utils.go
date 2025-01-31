@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/grafana/grafana/pkg/tsdb/cloudwatch/constants"
+	"github.com/grafana/grafana-aws-sdk/pkg/cloudWatchConsts"
 )
 
 func parseDimensionFilter(dimensionFilter string) ([]*Dimension, error) {
-	dimensionFilters := map[string]interface{}{}
+	dimensionFilters := map[string]any{}
 	dimensionFilterJson := []byte(dimensionFilter)
 	if len(dimensionFilterJson) > 0 {
 		err := json.Unmarshal(dimensionFilterJson, &dimensionFilters)
@@ -33,7 +33,7 @@ func parseDimensionFilter(dimensionFilter string) ([]*Dimension, error) {
 		// due to legacy, value can be a string, a string slice or nil
 		if vv, ok := v.(string); ok {
 			addDimension(k, vv)
-		} else if vv, ok := v.([]interface{}); ok {
+		} else if vv, ok := v.([]any); ok {
 			for _, v := range vv {
 				addDimension(k, v.(string))
 			}
@@ -46,7 +46,7 @@ func parseDimensionFilter(dimensionFilter string) ([]*Dimension, error) {
 }
 
 func isCustomNamespace(namespace string) bool {
-	if _, ok := constants.NamespaceMetricsMap[namespace]; ok {
+	if _, ok := cloudWatchConsts.NamespaceMetricsMap[namespace]; ok {
 		return false
 	}
 	return true

@@ -7,13 +7,35 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
-	"github.com/grafana/grafana/pkg/build/config"
-	"github.com/grafana/grafana/pkg/build/gcloud"
-	"github.com/grafana/grafana/pkg/build/packaging"
 	"github.com/urfave/cli/v2"
+
+	"github.com/grafana/grafana/pkg/build/config"
+	"github.com/grafana/grafana/pkg/build/droneutil"
+	"github.com/grafana/grafana/pkg/build/gcloud"
 )
+
+// PackageRegexp returns a regexp for matching packages corresponding to a certain Grafana edition.
+func PackageRegexp(edition config.Edition) *regexp.Regexp {
+	var sfx string
+	switch edition {
+	case config.EditionOSS:
+	case config.EditionEnterprise:
+		sfx = "-enterprise"
+	case config.EditionEnterprise2:
+		sfx = "-enterprise2"
+	default:
+		panic(fmt.Sprintf("unrecognized edition %q", edition))
+	}
+	rePkg, err := regexp.Compile(fmt.Sprintf(`^grafana%s(?:-rpi)?[-_][^-_]+.*$`, sfx))
+	if err != nil {
+		panic(fmt.Sprintf("Failed to compile regexp: %s", err))
+	}
+
+	return rePkg
+}
 
 const releaseFolder = "release"
 const mainFolder = "main"
@@ -22,37 +44,38 @@ const releaseBranchFolder = "prerelease"
 type uploadConfig struct {
 	config.Config
 
-	edition     config.Edition
-	versionMode config.VersionMode
-	gcpKey      string
-	distDir     string
+	edition       config.Edition
+	versionMode   config.VersionMode
+	gcpKey        string
+	distDir       string
+	versionFolder string
 }
 
 // UploadPackages implements the sub-command "upload-packages".
 func UploadPackages(c *cli.Context) error {
 	if c.NArg() > 0 {
 		if err := cli.ShowSubcommandHelp(c); err != nil {
-			return cli.NewExitError(err.Error(), 1)
+			return cli.Exit(err.Error(), 1)
 		}
-		return cli.NewExitError("", 1)
+		return cli.Exit("", 1)
 	}
 
 	gcpKeyB64 := strings.TrimSpace(os.Getenv("GCP_KEY"))
 	if gcpKeyB64 == "" {
-		return cli.NewExitError("the environment variable GCP_KEY must be set", 1)
+		return cli.Exit("the environment variable GCP_KEY must be set", 1)
 	}
 	gcpKeyB, err := base64.StdEncoding.DecodeString(gcpKeyB64)
 	if err != nil {
-		return cli.NewExitError("failed to base64 decode $GCP_KEY", 1)
+		return cli.Exit("failed to base64 decode $GCP_KEY", 1)
 	}
 	gcpKey := string(gcpKeyB)
 
 	distDir, err := filepath.Abs("dist")
 	if err != nil {
-		return cli.NewExitError(err.Error(), 1)
+		return cli.Exit(err.Error(), 1)
 	}
 
-	metadata, err := GenerateMetadata(c)
+	metadata, err := config.GenerateMetadata(c)
 	if err != nil {
 		return err
 	}
@@ -61,17 +84,25 @@ func UploadPackages(c *cli.Context) error {
 
 	releaseMode, err := metadata.GetReleaseMode()
 	if err != nil {
-		return cli.NewExitError(err.Error(), 1)
+		return cli.Exit(err.Error(), 1)
 	}
 
 	releaseModeConfig, err := config.GetBuildConfig(releaseMode.Mode)
 	if err != nil {
-		return cli.NewExitError(err.Error(), 1)
+		return cli.Exit(err.Error(), 1)
 	}
 
-	edition, ok := os.LookupEnv("EDITION")
-	if !ok {
-		return fmt.Errorf("EDITION envvar is missing, exitting")
+	var edition config.Edition
+	if e, ok := os.LookupEnv("EDITION"); ok {
+		edition = config.Edition(e)
+	}
+
+	if c.Bool("enterprise2") {
+		edition = config.EditionEnterprise2
+	}
+
+	if edition == "" {
+		return fmt.Errorf("both EDITION envvar and '--enterprise2' flag are missing. At least one of those is required")
 	}
 
 	// TODO: Verify config values
@@ -80,26 +111,69 @@ func UploadPackages(c *cli.Context) error {
 			Version: version,
 			Bucket:  releaseModeConfig.Buckets.Artifacts,
 		},
-		edition:     config.Edition(edition),
+		edition:     edition,
 		versionMode: releaseMode.Mode,
 		gcpKey:      gcpKey,
 		distDir:     distDir,
 	}
 
+	event, err := droneutil.GetDroneEventFromEnv()
+	if err != nil {
+		return err
+	}
+
 	if cfg.edition == config.EditionEnterprise2 {
-		if releaseModeConfig.Buckets.ArtifactsEnterprise2 != "" {
-			cfg.Config.Bucket = releaseModeConfig.Buckets.ArtifactsEnterprise2
-		} else {
-			return fmt.Errorf("enterprise2 bucket var doesn't exist")
+		cfg.Bucket, err = bucketForEnterprise2(releaseModeConfig, event)
+		if err != nil {
+			return err
 		}
 	}
 
+	cfg.versionFolder, err = getVersionFolder(cfg, event)
+	if err != nil {
+		return err
+	}
+
 	if err := uploadPackages(cfg); err != nil {
-		return cli.NewExitError(err.Error(), 1)
+		return cli.Exit(err.Error(), 1)
 	}
 
 	log.Println("Successfully uploaded packages!")
 	return nil
+}
+
+// Corner case for custom enterprise2 mode
+func bucketForEnterprise2(releaseModeConfig *config.BuildConfig, event string) (string, error) {
+	if event == config.Custom {
+		buildConfig, err := config.GetBuildConfig(config.ReleaseBranchMode)
+		if err != nil {
+			return "", err
+		}
+		return buildConfig.Buckets.ArtifactsEnterprise2, nil
+	}
+
+	if releaseModeConfig.Buckets.ArtifactsEnterprise2 != "" {
+		return releaseModeConfig.Buckets.ArtifactsEnterprise2, nil
+	}
+
+	return "", fmt.Errorf("enterprise2 bucket var doesn't exist")
+}
+
+func getVersionFolder(cfg uploadConfig, event string) (string, error) {
+	switch cfg.versionMode {
+	case config.TagMode, config.CloudMode:
+		return releaseFolder, nil
+	case config.MainMode, config.DownstreamMode:
+		return mainFolder, nil
+	case config.ReleaseBranchMode:
+		return releaseBranchFolder, nil
+	default:
+		// Corner case for custom enterprise2 mode
+		if event == config.Custom && cfg.versionMode == config.Enterprise2Mode {
+			return releaseFolder, nil
+		}
+		return "", fmt.Errorf("unrecognized version mode: %s", cfg.versionMode)
+	}
 }
 
 func uploadPackages(cfg uploadConfig) error {
@@ -127,7 +201,7 @@ func uploadPackages(cfg uploadConfig) error {
 		return fmt.Errorf("failed to list packages: %w", err)
 	}
 	fpaths := []string{}
-	rePkg := packaging.PackageRegexp(cfg.edition)
+	rePkg := PackageRegexp(cfg.edition)
 	for _, fpath := range matches {
 		fname := filepath.Base(fpath)
 		if strings.Contains(fname, "latest") || !rePkg.MatchString(fname) {
@@ -138,25 +212,13 @@ func uploadPackages(cfg uploadConfig) error {
 		fpaths = append(fpaths, fpath)
 	}
 
-	var versionFolder string
-	switch cfg.versionMode {
-	case config.TagMode:
-		versionFolder = releaseFolder
-	case config.MainMode, config.CustomMode:
-		versionFolder = mainFolder
-	case config.ReleaseBranchMode:
-		versionFolder = releaseBranchFolder
-	default:
-		panic(fmt.Sprintf("Unrecognized version mode: %s", cfg.versionMode))
-	}
-
 	var tag, gcsPath string
 	droneTag := strings.TrimSpace(os.Getenv("DRONE_TAG"))
 	if droneTag != "" {
 		tag = droneTag
-		gcsPath = fmt.Sprintf("gs://%s/%s/%s/%s", cfg.Bucket, tag, edition, versionFolder)
+		gcsPath = fmt.Sprintf("gs://%s/%s/%s/%s", cfg.Bucket, tag, edition, cfg.versionFolder)
 	} else {
-		gcsPath = fmt.Sprintf("gs://%s/%s/%s/", cfg.Bucket, edition, versionFolder)
+		gcsPath = fmt.Sprintf("gs://%s/%s/%s/", cfg.Bucket, edition, cfg.versionFolder)
 	}
 	log.Printf("Uploading %d file(s) to GCS (%s)...\n", len(fpaths), gcsPath)
 

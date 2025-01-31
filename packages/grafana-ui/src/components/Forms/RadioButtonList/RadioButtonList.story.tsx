@@ -1,5 +1,6 @@
-import { ComponentMeta, ComponentStory, Story } from '@storybook/react';
-import React, { useState } from 'react';
+import { Meta, StoryFn } from '@storybook/react';
+import { useState } from 'react';
+import * as React from 'react';
 
 import { SelectableValue } from '@grafana/data';
 
@@ -8,14 +9,14 @@ import { RadioButtonList, RadioButtonListProps } from './RadioButtonList';
 import mdx from './RadioButtonList.mdx';
 
 const defaultOptions: Array<SelectableValue<string>> = [
-  { label: 'Option 1', value: 'opt-1', description: 'A description of Option 1' },
-  { label: 'Option 2', value: 'opt-2', description: 'A description of Option 2' },
-  { label: 'Option 3', value: 'opt-3', description: 'A description of Option 3' },
-  { label: 'Option 4', value: 'opt-4', description: 'A description of Option 4' },
-  { label: 'Option 5', value: 'opt-5', description: 'A description of Option 5' },
+  { label: 'Option 1', value: 'opt-1' },
+  { label: 'Option 2', value: 'opt-2' },
+  { label: 'Option 3', value: 'opt-3' },
+  { label: 'Option 4', value: 'opt-4' },
+  { label: 'Option 5', value: 'opt-5' },
 ];
 
-const meta: ComponentMeta<typeof RadioButtonList> = {
+const meta: Meta<typeof RadioButtonList> = {
   title: 'Forms/RadioButtonList',
   component: RadioButtonList,
   parameters: {
@@ -69,19 +70,31 @@ const longTextOptions: Array<SelectableValue<string>> = [
   },
 ];
 
-export const Default: ComponentStory<typeof RadioButtonList> = ({ disabled, disabledOptions }) => (
+export const Default: StoryFn<typeof RadioButtonList> = ({ disabled, disabledOptions }) => (
   <div>
     <RadioButtonList name="default" options={defaultOptions} disabled={disabled} disabledOptions={disabledOptions} />
   </div>
 );
 
-export const LongLabels: ComponentStory<typeof RadioButtonList> = ({ disabled, disabledOptions }) => (
+export const LongLabels: StoryFn<typeof RadioButtonList> = ({ disabled, disabledOptions }) => (
   <div>
     <RadioButtonList name="default" options={longTextOptions} disabled={disabled} disabledOptions={disabledOptions} />
   </div>
 );
 
-export const ControlledComponent: Story<RadioButtonListProps<string>> = ({ disabled, disabledOptions }) => {
+export const WithDescriptions: StoryFn<typeof RadioButtonList> = ({ disabled, disabledOptions }) => (
+  <div>
+    <RadioButtonList
+      name="withDescriptions"
+      options={[
+        { label: 'Prometheus', value: 'prometheus', description: 'Monitoring system & TSDB' },
+        { label: 'Loki', value: 'loki', description: 'Log aggregation system' },
+      ]}
+    />
+  </div>
+);
+
+export const ControlledComponent: StoryFn<RadioButtonListProps<string>> = ({ disabled, disabledOptions }) => {
   const [selected, setSelected] = useState<string>(defaultOptions[0].value!);
 
   return (
@@ -114,8 +127,8 @@ DisabledList.args = {
   disabled: true,
 };
 
-export const Dots: Story = () => {
-  const Wrapper: React.FC<React.PropsWithChildren<{ title: string }>> = ({ title, children }) => (
+export const Dots: StoryFn = () => {
+  const Wrapper = ({ title, children }: React.PropsWithChildren<{ title: string }>) => (
     <div style={{ marginBottom: 20 }}>
       <h5>{title}</h5>
       {children}

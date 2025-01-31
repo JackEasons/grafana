@@ -6,19 +6,27 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/blugelabs/bluge"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/data"
-	"github.com/grafana/grafana/pkg/infra/tracing"
-	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/services/featuremgmt"
-	"github.com/grafana/grafana/pkg/setting"
-
-	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/services/store"
-
-	"github.com/blugelabs/bluge"
 	"github.com/grafana/grafana-plugin-sdk-go/experimental"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana/pkg/infra/db"
+	"github.com/grafana/grafana/pkg/infra/log"
+	"github.com/grafana/grafana/pkg/infra/tracing"
+	"github.com/grafana/grafana/pkg/services/accesscontrol/actest"
+	"github.com/grafana/grafana/pkg/services/dashboards/database"
+	"github.com/grafana/grafana/pkg/services/featuremgmt"
+	"github.com/grafana/grafana/pkg/services/folder/foldertest"
+	"github.com/grafana/grafana/pkg/services/org"
+	"github.com/grafana/grafana/pkg/services/org/orgtest"
+	"github.com/grafana/grafana/pkg/services/sqlstore"
+	"github.com/grafana/grafana/pkg/services/store"
+	"github.com/grafana/grafana/pkg/services/store/entity"
+	"github.com/grafana/grafana/pkg/services/tag/tagimpl"
+	"github.com/grafana/grafana/pkg/services/user"
+	"github.com/grafana/grafana/pkg/setting"
 )
 
 type testDashboardLoader struct {
@@ -31,11 +39,11 @@ func (t *testDashboardLoader) LoadDashboards(_ context.Context, _ int64, _ strin
 
 var testLogger = log.New("index-test-logger")
 
-var testAllowAllFilter = func(uid string) bool {
+var testAllowAllFilter = func(kind entityKind, uid, parent string) bool {
 	return true
 }
 
-var testDisallowAllFilter = func(uid string) bool {
+var testDisallowAllFilter = func(kind entityKind, uid, parent string) bool {
 	return false
 }
 
@@ -63,7 +71,7 @@ func initTestIndexFromDashesExtended(t *testing.T, dashboards []dashboard, exten
 	dashboardLoader := &testDashboardLoader{
 		dashboards: dashboards,
 	}
-	index := newSearchIndex(dashboardLoader, &store.MockEntityEventsService{}, extender, func(ctx context.Context, folderId int64) (string, error) { return "x", nil }, tracing.InitializeTracerForTest(), featuremgmt.WithFeatures(), setting.SearchSettings{})
+	index := newSearchIndex(dashboardLoader, &store.MockEntityEventsService{}, extender, tracing.InitializeTracerForTest(), featuremgmt.WithFeatures(), setting.SearchSettings{})
 	require.NotNil(t, index)
 	numDashboards, err := index.buildOrgIndex(context.Background(), testOrgID)
 	require.NoError(t, err)
@@ -113,14 +121,14 @@ var testDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "test",
 		},
 	},
 	{
 		id:  2,
 		uid: "2",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "boom",
 		},
 	},
@@ -162,7 +170,7 @@ func TestDashboardIndexUpdates(t *testing.T) {
 		err := index.updateDashboard(context.Background(), testOrgID, orgIdx, dashboard{
 			id:  3,
 			uid: "3",
-			summary: &models.ObjectSummary{
+			summary: &entity.EntitySummary{
 				Name: "created",
 			},
 		})
@@ -181,7 +189,7 @@ func TestDashboardIndexUpdates(t *testing.T) {
 		err := index.updateDashboard(context.Background(), testOrgID, orgIdx, dashboard{
 			id:  2,
 			uid: "2",
-			summary: &models.ObjectSummary{
+			summary: &entity.EntitySummary{
 				Name: "nginx",
 			},
 		})
@@ -197,14 +205,14 @@ var testSortDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "a-test",
 		},
 	},
 	{
 		id:  2,
 		uid: "2",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "z-test",
 		},
 	},
@@ -288,14 +296,14 @@ var testPrefixDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "Archer Data System",
 		},
 	},
 	{
 		id:  2,
 		uid: "2",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "Document Sync repo",
 		},
 	},
@@ -366,7 +374,7 @@ var longPrefixDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "Eyjafjallajökull Eruption data",
 		},
 	},
@@ -385,14 +393,14 @@ var scatteredTokensDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "Three can keep a secret, if two of them are dead (Benjamin Franklin)",
 		},
 	},
 	{
 		id:  3,
 		uid: "2",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "A secret is powerful when it is empty (Umberto Eco)",
 		},
 	},
@@ -418,40 +426,42 @@ var dashboardsWithFolders = []dashboard{
 		id:       1,
 		uid:      "1",
 		isFolder: true,
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "My folder",
 		},
 	},
 	{
-		id:       2,
-		uid:      "2",
-		folderID: 1,
-		summary: &models.ObjectSummary{
+		id:        2,
+		uid:       "2",
+		folderID:  1,
+		folderUID: "1",
+		summary: &entity.EntitySummary{
 			Name: "Dashboard in folder 1",
-			Nested: []*models.ObjectSummary{
-				newNestedPanel(1, "Panel 1"),
-				newNestedPanel(2, "Panel 2"),
+			Nested: []*entity.EntitySummary{
+				newNestedPanel(1, 2, "Panel 1"),
+				newNestedPanel(2, 2, "Panel 2"),
 			},
 		},
 	},
 	{
-		id:       3,
-		uid:      "3",
-		folderID: 1,
-		summary: &models.ObjectSummary{
+		id:        3,
+		uid:       "3",
+		folderID:  1,
+		folderUID: "1",
+		summary: &entity.EntitySummary{
 			Name: "Dashboard in folder 2",
-			Nested: []*models.ObjectSummary{
-				newNestedPanel(3, "Panel 3"),
+			Nested: []*entity.EntitySummary{
+				newNestedPanel(3, 3, "Panel 3"),
 			},
 		},
 	},
 	{
 		id:  4,
 		uid: "4",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "One more dash",
-			Nested: []*models.ObjectSummary{
-				newNestedPanel(4, "Panel 4"),
+			Nested: []*entity.EntitySummary{
+				newNestedPanel(4, 4, "Panel 4"),
 			},
 		},
 	},
@@ -505,20 +515,20 @@ var dashboardsWithPanels = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "My Dash",
-			Nested: []*models.ObjectSummary{
-				newNestedPanel(1, "Panel 1"),
-				newNestedPanel(2, "Panel 2"),
+			Nested: []*entity.EntitySummary{
+				newNestedPanel(1, 1, "Panel 1"),
+				newNestedPanel(2, 1, "Panel 2"),
 			},
 		},
 	},
 }
 
-func newNestedPanel(id int64, name string) *models.ObjectSummary {
-	summary := &models.ObjectSummary{
+func newNestedPanel(id, dashId int64, name string) *entity.EntitySummary {
+	summary := &entity.EntitySummary{
 		Kind: "panel",
-		UID:  fmt.Sprintf("???#%d", id),
+		UID:  fmt.Sprintf("%d#%d", dashId, id),
 	}
 	summary.Name = name
 	return summary
@@ -553,14 +563,14 @@ var punctuationSplitNgramDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "heat-torkel",
 		},
 	},
 	{
 		id:  2,
 		uid: "2",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "topology heatmap",
 		},
 	},
@@ -586,7 +596,7 @@ var camelCaseNgramDashboards = []dashboard{
 	{
 		id:  1,
 		uid: "1",
-		summary: &models.ObjectSummary{
+		summary: &entity.EntitySummary{
 			Name: "heatTorkel",
 		},
 	},
@@ -608,7 +618,7 @@ func dashboardsWithTitles(names ...string) []dashboard {
 		out = append(out, dashboard{
 			id:  no,
 			uid: fmt.Sprintf("%d", no),
-			summary: &models.ObjectSummary{
+			summary: &entity.EntitySummary{
 				Name: name,
 			},
 		})
@@ -730,5 +740,79 @@ func TestDashboardIndex_MultiTermPrefixMatch(t *testing.T) {
 				DashboardQuery{Query: tt.query},
 			)
 		})
+	}
+}
+
+func setupIntegrationEnv(t *testing.T, folderCount, dashboardsPerFolder int, sqlStore *sqlstore.SQLStore) (*StandardSearchService, *user.SignedInUser, error) {
+	err := populateDB(folderCount, dashboardsPerFolder, sqlStore)
+	require.NoError(t, err, "error when populating the database for integration test")
+
+	// load all dashboards and folders
+	dbLoadingBatchSize := (dashboardsPerFolder + 1) * folderCount
+	cfg := &setting.Cfg{Search: setting.SearchSettings{DashboardLoadingBatchSize: dbLoadingBatchSize}}
+	features := featuremgmt.WithFeatures()
+	orgSvc := &orgtest.FakeOrgService{
+		ExpectedOrgs: []*org.OrgDTO{{ID: 1}},
+	}
+	searchService, ok := ProvideService(cfg, sqlStore, store.NewDummyEntityEventsService(), actest.FakeService{},
+		tracing.InitializeTracerForTest(), features, orgSvc, nil, foldertest.NewFakeService()).(*StandardSearchService)
+	require.True(t, ok)
+
+	err = runSearchService(searchService)
+	require.NoError(t, err, "error when running search service for integration test")
+
+	user := getSignedInUser(folderCount, dashboardsPerFolder)
+
+	return searchService, user, nil
+}
+
+func TestIntegrationSoftDeletion(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	// Set up search v2.
+	folderCount := 1
+	dashboardsPerFolder := 1
+	sqlStore, cfg := db.InitTestDBWithCfg(t)
+	searchService, testUser, err := setupIntegrationEnv(t, folderCount, dashboardsPerFolder, sqlStore)
+	require.NoError(t, err)
+
+	// Query search v2 to ensure "dashboard2" is present.
+	result := searchService.doDashboardQuery(context.Background(), testUser, 1, DashboardQuery{Kind: []string{string(entityKindDashboard)}})
+	require.NoError(t, result.Error)
+	require.NotZero(t, len(result.Frames))
+	for _, field := range result.Frames[0].Fields {
+		if field.Name == "uid" {
+			require.Equal(t, dashboardsPerFolder, field.Len())
+			break
+		}
+	}
+
+	// Set up dashboard store.
+	featureToggles := featuremgmt.WithFeatures(
+		featuremgmt.FlagPanelTitleSearch,
+		featuremgmt.FlagDashboardRestore,
+	)
+	dashboardStore, err := database.ProvideDashboardStore(sqlStore, cfg, featureToggles, tagimpl.ProvideService(sqlStore))
+	require.NoError(t, err)
+
+	// Soft delete "dashboard2".
+	err = dashboardStore.SoftDeleteDashboard(context.Background(), 1, "dashboard2")
+	require.NoError(t, err)
+
+	// Reindex to ensure "dashboard2" is excluded from the index.
+	searchService.dashboardIndex.reIndexFromScratch(context.Background())
+
+	// Query search v2 to ensure "dashboard2" is no longer present.
+	expectedResultCount := dashboardsPerFolder - 1
+	result2 := searchService.doDashboardQuery(context.Background(), testUser, 1, DashboardQuery{Kind: []string{string(entityKindDashboard)}})
+	require.NoError(t, result2.Error)
+	require.NotZero(t, len(result2.Frames))
+	for _, field := range result2.Frames[0].Fields {
+		if field.Name == "uid" {
+			require.Equal(t, expectedResultCount, field.Len())
+			break
+		}
 	}
 }

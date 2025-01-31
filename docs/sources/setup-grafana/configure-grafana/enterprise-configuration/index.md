@@ -1,15 +1,18 @@
 ---
 aliases:
-  - /docs/grafana/latest/enterprise/enterprise-configuration/
-  - /docs/grafana/latest/setup-grafana/configure-grafana/enterprise-configuration/
+  - ../../enterprise/enterprise-configuration/
 description: Learn about Grafana Enterprise configuration options that you can specify.
+labels:
+  products:
+    - enterprise
+    - oss
 title: Configure Grafana Enterprise
 weight: 100
 ---
 
 # Configure Grafana Enterprise
 
-This page describes Grafana Enterprise-specific configuration options that you can specify in a `.ini` configuration file or using environment variables. Refer to [Configuration]({{< relref "../" >}}) for more information about available configuration options.
+This page describes Grafana Enterprise-specific configuration options that you can specify in a `.ini` configuration file or using environment variables. Refer to [Configuration]({{< relref "../../configure-grafana" >}}) for more information about available configuration options.
 
 ## [enterprise]
 
@@ -20,15 +23,11 @@ Defaults to `<paths.data>/license.jwt`.
 
 ### license_text
 
-> **Note:** Available in Grafana Enterprise version 7.4 and later.
-
 When set to the text representation (i.e. content of the license file)
 of the license, Grafana will evaluate and apply the given license to
 the instance.
 
 ### auto_refresh_license
-
-> **Note:** Available in Grafana Enterprise version 7.4 and later.
 
 When enabled, Grafana will send the license and usage statistics to
 the license issuer. If the license has been updated on the issuer's
@@ -36,11 +35,13 @@ side to be valid for a different number of users or a new duration,
 your Grafana instance will be updated with the new terms
 automatically. Defaults to `true`.
 
+{{% admonition type="note" %}}
+The license only automatically updates once per day. To immediately update the terms for a license, use the Grafana UI to renew your license token.
+{{% /admonition %}}
+
 ### license_validation_type
 
-> **Note:** Available in Grafana Enterprise version 8.3 and later.
-
-When set to `aws`, Grafana will validate its license status with Amazon Web Services (AWS) instead of with Grafana Labs. Only use this setting if you purchased an Enterprise license from AWS Marketplace. Defaults to empty, which means that by default Grafana Enterprise will validate using a license issued by Grafana Labs. For details about licenses issued by AWS, refer to [Activate a Grafana Enterprise license purchased through AWS Marketplace]({{< relref "../../../administration/enterprise-licensing/activate-aws-marketplace-license/" >}}).
+When set to `aws`, Grafana will validate its license status with Amazon Web Services (AWS) instead of with Grafana Labs. Only use this setting if you purchased an Enterprise license from AWS Marketplace. Defaults to empty, which means that by default Grafana Enterprise will validate using a license issued by Grafana Labs. For details about licenses issued by AWS, refer to [Activate a Grafana Enterprise license purchased through AWS Marketplace]({{< relref "../../../administration/enterprise-licensing/activate-aws-marketplace-license" >}}).
 
 ## [white_labeling]
 
@@ -73,13 +74,17 @@ Set to complete URL to override fav icon (icon shown in browser tab).
 
 Set to complete URL to override Apple/iOS icon.
 
+### hide_edition
+
+Set to `true` to remove the Grafana edition from appearing in the footer.
+
 ### footer_links
 
 List the link IDs to use here. Grafana will look for matching link configurations, the link IDs should be space-separated and contain no whitespace.
 
 ## [usage_insights.export]
 
-By [exporting usage logs]({{< relref "../../configure-security/export-logs/" >}}), you can directly query them and create dashboards of the information that matters to you most, such as dashboard errors, most active organizations, or your top-10 most-used queries.
+By [exporting usage logs]({{< relref "../../configure-security/export-logs" >}}), you can directly query them and create dashboards of the information that matters to you most, such as dashboard errors, most active organizations, or your top-10 most-used queries.
 
 ### enabled
 
@@ -102,6 +107,10 @@ Set the address for writing logs to Loki (format must be host:port).
 ### tls
 
 Decide whether or not to enable the TLS (Transport Layer Security) protocol when establishing the connection to Loki. Defaults to true.
+
+### tenant_id
+
+Set the tenant ID for Loki communication, which is disabled by default. The tenant ID is required to interact with Loki running in [multi-tenant mode](/docs/loki/latest/operations/multi-tenancy/).
 
 ## [analytics.summaries]
 
@@ -129,21 +138,25 @@ Age for recent active users.
 
 ## [reporting]
 
+### enabled
+
+Enable or disable the reporting feature. When disabled, no reports are generated, and the UI is hidden. By default, reporting is enabled (`true`).
+
 ### rendering_timeout
 
-Timeout for each panel rendering request.
+Timeout for the following reporting rendering requests: generating PDFs, generating embedded dashboard images for report emails, and generating attached CSV files. Default is 10 seconds (`10s`).
 
 ### concurrent_render_limit
 
-Maximum number of concurrent calls to the rendering service.
+Maximum number of concurrent calls to the rendering service. Default is `4`.
 
 ### image_scale_factor
 
-Scale factor for rendering images. Value `2` is enough for monitor resolutions, `4` would be better for printed material. Setting a higher value affects performance and memory.
+Scale factor for rendering images. Value `2` is enough for monitor resolutions, `4` would be better for printed material. Setting a higher value affects performance and memory. Default is `2`.
 
 ### max_attachment_size_mb
 
-Set the maximum file size in megabytes for the CSV attachments.
+Set the maximum file size in megabytes for the report email attachments. Default is `10`.
 
 ### fonts_path
 
@@ -151,7 +164,7 @@ Path to the directory containing font files.
 
 ### font_regular
 
-Name of the TrueType font file with regular style.
+Name of the TrueType font file with regular style. Default is `DejaVuSansCondensed.ttf`.
 
 ### font_bold
 
@@ -159,11 +172,19 @@ Name of the TrueType font file with bold style.
 
 ### font_italic
 
-Name of the TrueType font file with italic style.
+Name of the TrueType font file with italic style. Default is `DejaVuSansCondensed-Oblique.ttf`.
+
+### max_retries_per_panel
+
+Maximum number of times the following reporting rendering requests are retried before returning an error: generating PDFs, generating embedded dashboard images for report emails, and generating attached CSV files. To disable the retry feature, enter `0`. This is available in public preview and requires the `reportingRetries` feature toggle. Default is `3`.
+
+### allowed_domains
+
+Allowed domains to receive reports. Use an asterisk (`*`) to allow all domains. Use a comma-separated list to allow multiple domains. Example: `allowed_domains = grafana.com`, example.org. Default is `*`.
 
 ## [auditing]
 
-[Auditing]({{< relref "../../configure-security/audit-grafana/" >}}) allows you to track important changes to your Grafana instance. By default, audit logs are logged to file but the auditing feature also supports sending logs directly to Loki.
+[Auditing]({{< relref "../../configure-security/audit-grafana" >}}) allows you to track important changes to your Grafana instance. By default, audit logs are logged to file but the auditing feature also supports sending logs directly to Loki.
 
 ### enabled
 
@@ -212,6 +233,10 @@ Set the URL for writing logs to Loki.
 ### tls
 
 If true, it establishes a secure connection to Loki. Defaults to true.
+
+### tenant_id
+
+Set the tenant ID for Loki communication, which is disabled by default. The tenant ID is required to interact with Loki running in [multi-tenant mode](/docs/loki/latest/operations/multi-tenancy/).
 
 ## [auth.saml]
 
@@ -289,7 +314,15 @@ List of comma- or space-separated organizations. Each user must be a member of a
 
 ### org_mapping
 
-List of comma- or space-separated Organization:OrgId:Role mappings. Organization can be `*` meaning "All users". Role is optional and can have the following values: `Viewer`, `Editor` or `Admin`.
+List of comma- or space-separated Organization:OrgId:Role mappings. Organization can be `*` meaning "All users". Role is optional and can have the following values: `Admin`, `Editor` ,`Viewer` or `None`.
+
+### role_values_none
+
+List of comma- or space-separated roles that will be mapped to the None role.
+
+### role_values_viewer
+
+List of comma- or space-separated roles that will be mapped to the Viewer role.
 
 ### role_values_editor
 
@@ -335,8 +368,6 @@ New duration for renewed tokens. Vault may be configured to ignore this value an
 
 ## [security.egress]
 
-> **Note:** Available in Grafana Enterprise version 7.4 and later.
-
 Security egress makes it possible to control outgoing traffic from the Grafana server.
 
 ### host_deny_list
@@ -363,8 +394,6 @@ Encryption algorithm used to encrypt secrets stored in the database and cookies.
 
 ## [caching]
 
-> **Note:** Available in Grafana Enterprise version 7.5 and later.
-
 When query caching is enabled, Grafana can temporarily store the results of data source queries and serve cached responses to similar requests.
 
 ### backend
@@ -379,7 +408,9 @@ Setting 'enabled' to `true` allows users to configure query caching for data sou
 
 This value is `true` by default.
 
-> **Note:** This setting enables the caching feature, but it does not turn on query caching for any data source. To turn on query caching for a data source, update the setting on the data source configuration page. For more information, refer to the [query caching docs]({{< relref "../../../administration/data-source-management/#enable-and-configure-query-caching" >}}).
+{{% admonition type="note" %}}
+This setting enables the caching feature, but it does not turn on query caching for any data source. To turn on query caching for a data source, update the setting on the data source configuration page. For more information, refer to the [query caching docs]({{< relref "../../../administration/data-source-management#enable-and-configure-query-caching" >}}).
+{{% /admonition %}}
 
 ### ttl
 
@@ -391,7 +422,9 @@ The max duration that a query result is stored in the caching system before it i
 
 The default is `0s` (disabled).
 
-> **Note:** Disabling this constraint is not recommended in production environments.
+{{% admonition type="note" %}}
+Disabling this constraint is not recommended in production environments.
+{{% /admonition %}}
 
 ### max_value_mb
 
@@ -411,7 +444,9 @@ This setting defines the duration to wait for the caching backend to return a ca
 
 The default is `0s` (disabled).
 
-> **Note:** Disabling this timeout is not recommended in production environments.
+{{% admonition type="note" %}}
+Disabling this timeout is not recommended in production environments.
+{{% /admonition %}}
 
 ### write_timeout
 
@@ -419,7 +454,9 @@ This setting defines the number of seconds to wait for the caching backend to st
 
 The default is `0s` (disabled).
 
-> **Note:** Disabling this timeout is not recommended in production environments.
+{{% admonition type="note" %}}
+Disabling this timeout is not recommended in production environments.
+{{% /admonition %}}
 
 ## [caching.encryption]
 
@@ -451,24 +488,30 @@ To disable the maximum, set this value to `0`.
 
 The default is `25`.
 
-> **Note:** Disabling the maximum is not recommended in production environments.
+{{% admonition type="note" %}}
+Disabling the maximum is not recommended in production environments.
+{{% /admonition %}}
 
 ## [caching.redis]
 
 ### url
 
-The full Redis URL of your Redis server. For example: `redis://username:password@localhost:6739/0`. To enable TLS, use the `rediss` scheme.
+The full Redis URL of your Redis server. For example: `redis://username:password@localhost:6379`. To enable TLS, use the `rediss` scheme.
 
 The default is `"redis://localhost:6379"`.
 
 ### cluster
 
-A comma-separated list of Redis cluster members, either in `host:port` format or using the full Redis URLs (`redis://username:password@localhost:6739`). For example, `localhost:7000, localhost: 7001, localhost:7002`.
+A comma-separated list of Redis cluster members, either in `host:port` format or using the full Redis URLs (`redis://username:password@localhost:6379`). For example, `localhost:7000, localhost: 7001, localhost:7002`.
 If you use the full Redis URLs, then you can specify the scheme, username, and password only once. For example, `redis://username:password@localhost:0000,localhost:1111,localhost:2222`. You cannot specify a different username and password for each URL.
 
-> **Note:** If you have specify `cluster`, the value for `url` is ignored.
+{{% admonition type="note" %}}
+If you have specify `cluster`, the value for `url` is ignored.
+{{% /admonition %}}
 
-> **Note:** You can enable TLS for cluster mode using the `rediss` scheme in Grafana Enterprise v8.5 and later versions.
+{{% admonition type="note" %}}
+You can enable TLS for cluster mode using the `rediss` scheme in Grafana Enterprise v8.5 and later versions.
+{{% /admonition %}}
 
 ### prefix
 
@@ -483,6 +526,34 @@ The default is `"grafana"`.
 A space-separated list of memcached servers. Example: `memcached-server-1:11211 memcached-server-2:11212 memcached-server-3:11211`. Or if there's only one server: `memcached-server:11211`.
 
 The default is `"localhost:11211"`.
+
+{{% admonition type="note" %}}
+The following memcached configuration requires the `tlsMemcached` feature toggle.
+{{% /admonition %}}
+
+### tls_enabled
+
+Enables TLS authentication for memcached. Defaults to `false`.
+
+### tls_cert_path
+
+Path to the client certificate, which will be used for authenticating with the server. Also requires the key path to be configured.
+
+### tls_key_path
+
+Path to the key for the client certificate. Also requires the client certificate to be configured.
+
+### tls_ca_path
+
+Path to the CA certificates to validate the server certificate against. If not set, the host's root CA certificates are used.
+
+### tls_server_name
+
+Override the expected name on the server certificate.
+
+### connection_timeout
+
+Timeout for the memcached client to connect to memcached. Defaults to `0`, which uses the memcached client default timeout per connection scheme.
 
 ## [recorded_queries]
 

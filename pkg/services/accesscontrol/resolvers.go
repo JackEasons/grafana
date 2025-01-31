@@ -15,6 +15,18 @@ type ScopeAttributeResolver interface {
 	Resolve(ctx context.Context, orgID int64, scope string) ([]string, error)
 }
 
+type ActionResolver interface {
+	// ExpandActionSets takes a set of permissions that might include some action set permissions, and returns a set of permissions with action sets expanded into underlying permissions
+	ExpandActionSets(permissions []Permission) []Permission
+	// ExpandActionSetsWithFilter works like ExpandActionSets, but it also takes a function for action filtering. When action sets are expanded into the underlying permissions,
+	// only those permissions whose action is matched by actionMatcher are included.
+	ExpandActionSetsWithFilter(permissions []Permission, actionMatcher func(action string) bool) []Permission
+	// ResolveAction returns all action sets that include the given action
+	ResolveAction(action string) []string
+	// ResolveActionPrefix returns all action sets that include at least one action with the specified prefix
+	ResolveActionPrefix(prefix string) []string
+}
+
 // ScopeAttributeResolverFunc is an adapter to allow functions to implement ScopeAttributeResolver interface
 type ScopeAttributeResolverFunc func(ctx context.Context, orgID int64, scope string) ([]string, error)
 
@@ -44,17 +56,20 @@ type Resolvers struct {
 }
 
 func (s *Resolvers) AddScopeAttributeResolver(prefix string, resolver ScopeAttributeResolver) {
-	s.log.Debug("adding scope attribute resolver", "prefix", prefix)
+	s.log.Debug("Adding scope attribute resolver", "prefix", prefix)
 	s.attributeResolvers[prefix] = resolver
 }
 
 func (s *Resolvers) GetScopeAttributeMutator(orgID int64) ScopeAttributeMutator {
 	return func(ctx context.Context, scope string) ([]string, error) {
+		ctx, span := tracer.Start(ctx, "accesscontrol.GetScopeAttributeMutator")
+		defer span.End()
+
 		key := getScopeCacheKey(orgID, scope)
 		// Check cache before computing the scope
 		if cachedScope, ok := s.cache.Get(key); ok {
 			scopes := cachedScope.([]string)
-			s.log.Debug("used cache to resolve scope", "scope", scope, "resolved_scopes", scopes)
+			s.log.Debug("Used cache to resolve scope", "scope", scope, "resolved_scopes", scopes)
 			return scopes, nil
 		}
 
@@ -66,7 +81,7 @@ func (s *Resolvers) GetScopeAttributeMutator(orgID int64) ScopeAttributeMutator 
 			}
 			// Cache result
 			s.cache.Set(key, scopes, ttl)
-			s.log.Debug("resolved scope", "scope", scope, "resolved_scopes", scopes)
+			s.log.Debug("Resolved scope", "scope", scope, "resolved_scopes", scopes)
 			return scopes, nil
 		}
 		return nil, ErrResolverNotFound

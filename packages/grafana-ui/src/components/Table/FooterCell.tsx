@@ -1,5 +1,4 @@
 import { css } from '@emotion/css';
-import React from 'react';
 
 import { KeyValue } from '@grafana/data';
 
@@ -10,21 +9,22 @@ export interface FooterProps {
 }
 
 export const FooterCell = (props: FooterProps) => {
-  const cell = css`
-    width: 100%;
-    list-style: none;
-  `;
+  const cell = css({
+    width: '100%',
+    listStyle: 'none',
+  });
 
-  const list = css`
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-  `;
+  const list = css({
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  });
 
   if (props.value && !Array.isArray(props.value)) {
     return <span>{props.value}</span>;
   }
+
   if (props.value && Array.isArray(props.value) && props.value.length > 0) {
     return (
       <ul className={cell}>
@@ -32,7 +32,7 @@ export const FooterCell = (props: FooterProps) => {
           const key = Object.keys(v)[0];
           return (
             <li className={list} key={i}>
-              <span>{key}:</span>
+              <span>{key}</span>
               <span>{v[key]}</span>
             </li>
           );
@@ -40,6 +40,7 @@ export const FooterCell = (props: FooterProps) => {
       </ul>
     );
   }
+
   return EmptyCell;
 };
 

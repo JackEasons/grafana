@@ -1,27 +1,8 @@
 import { SimulationNodeDatum, SimulationLinkDatum } from 'd3-force';
 
-import { Field } from '@grafana/data';
+import { DataFrame, Field, IconName } from '@grafana/data';
 
-export interface NodeGraphOptions {
-  nodes?: NodeOptions;
-  edges?: EdgeOptions;
-}
-
-interface NodeOptions {
-  mainStatUnit?: string;
-  secondaryStatUnit?: string;
-  arcs?: ArcOption[];
-}
-
-export interface ArcOption {
-  field?: string;
-  color?: string;
-}
-
-interface EdgeOptions {
-  mainStatUnit?: string;
-  secondaryStatUnit?: string;
-}
+export type { Options as NodeGraphOptions, ArcOption, ZoomMode } from './panelcfg.gen';
 
 export type NodeDatum = SimulationNodeDatum & {
   id: string;
@@ -33,6 +14,9 @@ export type NodeDatum = SimulationNodeDatum & {
   secondaryStat?: Field;
   arcSections: Field[];
   color?: Field;
+  icon?: IconName;
+  nodeRadius?: Field;
+  highlighted: boolean;
 };
 
 export type NodeDatumFromEdge = NodeDatum & { mainStatNumeric?: number; secondaryStatNumeric?: number };
@@ -49,10 +33,19 @@ export type EdgeDatum = LinkDatum & {
   mainStat: string;
   secondaryStat: string;
   dataFrameRowIndex: number;
+  sourceNodeRadius: number;
+  targetNodeRadius: number;
+  /**
+   * @deprecated -- for edges use color instead
+   */
+  highlighted: boolean;
+  thickness: number;
+  color?: string;
+  strokeDasharray?: string;
 };
 
 // After layout is run D3 will change the string IDs for actual references to the nodes.
-export type EdgeDatumLayout = EdgeDatum & {
+export type EdgeDatumLayout = Omit<EdgeDatum, 'source' | 'target'> & {
   source: NodeDatum;
   target: NodeDatum;
 };
@@ -60,4 +53,9 @@ export type EdgeDatumLayout = EdgeDatum & {
 export type NodesMarker = {
   node: NodeDatum;
   count: number;
+};
+
+export type GraphFrame = {
+  nodes: DataFrame[];
+  edges: DataFrame[];
 };

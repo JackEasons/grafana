@@ -4,36 +4,49 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/grafana/grafana/pkg/api/routing"
+	"github.com/grafana/grafana/pkg/apimachinery/identity"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/infra/db"
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/infra/metrics"
+	"github.com/grafana/grafana/pkg/services/dashboards"
+	"github.com/grafana/grafana/pkg/services/folder"
 	"github.com/grafana/grafana/pkg/services/libraryelements"
-	"github.com/grafana/grafana/pkg/services/user"
+	"github.com/grafana/grafana/pkg/services/libraryelements/model"
+	"github.com/grafana/grafana/pkg/services/store/entity"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
 func ProvideService(cfg *setting.Cfg, sqlStore db.DB, routeRegister routing.RouteRegister,
-	libraryElementService libraryelements.Service) *LibraryPanelService {
-	return &LibraryPanelService{
+	libraryElementService libraryelements.Service, folderService folder.Service) (*LibraryPanelService, error) {
+	lps := LibraryPanelService{
 		Cfg:                   cfg,
 		SQLStore:              sqlStore,
 		RouteRegister:         routeRegister,
 		LibraryElementService: libraryElementService,
+		FolderService:         folderService,
 		log:                   log.New("library-panels"),
 	}
+
+	if err := folderService.RegisterService(lps); err != nil {
+		return nil, err
+	}
+
+	return &lps, nil
 }
 
 // Service is a service for operating on library panels.
 type Service interface {
-	ConnectLibraryPanelsForDashboard(c context.Context, signedInUser *user.SignedInUser, dash *models.Dashboard) error
-	ImportLibraryPanelsForDashboard(c context.Context, signedInUser *user.SignedInUser, libraryPanels *simplejson.Json, panels []interface{}, folderID int64) error
+	ConnectLibraryPanelsForDashboard(c context.Context, signedInUser identity.Requester, dash *dashboards.Dashboard) error
+	ImportLibraryPanelsForDashboard(c context.Context, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) error
 }
 
 type LibraryInfo struct {
-	Panels        []*interface{}
+	Panels        []*any
 	LibraryPanels *simplejson.Json
 }
 
@@ -43,11 +56,14 @@ type LibraryPanelService struct {
 	SQLStore              db.DB
 	RouteRegister         routing.RouteRegister
 	LibraryElementService libraryelements.Service
+	FolderService         folder.Service
 	log                   log.Logger
 }
 
+var _ Service = (*LibraryPanelService)(nil)
+
 // ConnectLibraryPanelsForDashboard loops through all panels in dashboard JSON and connects any library panels to the dashboard.
-func (lps *LibraryPanelService) ConnectLibraryPanelsForDashboard(c context.Context, signedInUser *user.SignedInUser, dash *models.Dashboard) error {
+func (lps *LibraryPanelService) ConnectLibraryPanelsForDashboard(c context.Context, signedInUser identity.Requester, dash *dashboards.Dashboard) error {
 	panels := dash.Data.Get("panels").MustArray()
 	libraryPanels := make(map[string]string)
 	err := connectLibraryPanelsRecursively(c, panels, libraryPanels)
@@ -60,14 +76,14 @@ func (lps *LibraryPanelService) ConnectLibraryPanelsForDashboard(c context.Conte
 		elementUIDs = append(elementUIDs, libraryPanel)
 	}
 
-	return lps.LibraryElementService.ConnectElementsToDashboard(c, signedInUser, elementUIDs, dash.Id)
+	return lps.LibraryElementService.ConnectElementsToDashboard(c, signedInUser, elementUIDs, dash.ID)
 }
 
 func isLibraryPanelOrRow(panel *simplejson.Json, panelType string) bool {
 	return panel.Interface() != nil || panelType == "row"
 }
 
-func connectLibraryPanelsRecursively(c context.Context, panels []interface{}, libraryPanels map[string]string) error {
+func connectLibraryPanelsRecursively(c context.Context, panels []any, libraryPanels map[string]string) error {
 	for _, panel := range panels {
 		panelAsJSON := simplejson.NewFromAny(panel)
 		libraryPanel := panelAsJSON.Get("libraryPanel")
@@ -101,11 +117,11 @@ func connectLibraryPanelsRecursively(c context.Context, panels []interface{}, li
 }
 
 // ImportLibraryPanelsForDashboard loops through all panels in dashboard JSON and creates any missing library panels in the database.
-func (lps *LibraryPanelService) ImportLibraryPanelsForDashboard(c context.Context, signedInUser *user.SignedInUser, libraryPanels *simplejson.Json, panels []interface{}, folderID int64) error {
-	return importLibraryPanelsRecursively(c, lps.LibraryElementService, signedInUser, libraryPanels, panels, folderID)
+func (lps *LibraryPanelService) ImportLibraryPanelsForDashboard(c context.Context, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) error {
+	return importLibraryPanelsRecursively(c, lps.LibraryElementService, signedInUser, libraryPanels, panels, folderID, folderUID)
 }
 
-func importLibraryPanelsRecursively(c context.Context, service libraryelements.Service, signedInUser *user.SignedInUser, libraryPanels *simplejson.Json, panels []interface{}, folderID int64) error {
+func importLibraryPanelsRecursively(c context.Context, service libraryelements.Service, signedInUser identity.Requester, libraryPanels *simplejson.Json, panels []any, folderID int64, folderUID string) error {
 	for _, panel := range panels {
 		panelAsJSON := simplejson.NewFromAny(panel)
 		libraryPanel := panelAsJSON.Get("libraryPanel")
@@ -116,7 +132,7 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 
 		// we have a row
 		if panelType == "row" {
-			err := importLibraryPanelsRecursively(c, service, signedInUser, libraryPanels, panelAsJSON.Get("panels").MustArray(), folderID)
+			err := importLibraryPanelsRecursively(c, service, signedInUser, libraryPanels, panelAsJSON.Get("panels").MustArray(), folderID, folderUID)
 			if err != nil {
 				return err
 			}
@@ -129,19 +145,19 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 			return errLibraryPanelHeaderUIDMissing
 		}
 
-		_, err := service.GetElement(c, signedInUser, UID)
+		_, err := service.GetElement(c, signedInUser, model.GetLibraryElementCommand{UID: UID, FolderName: dashboards.RootFolderName})
 		if err == nil {
 			continue
 		}
 
-		if errors.Is(err, libraryelements.ErrLibraryElementNotFound) {
+		if errors.Is(err, model.ErrLibraryElementNotFound) {
 			name := libraryPanel.Get("name").MustString()
 			if len(name) == 0 {
 				return errLibraryPanelHeaderNameMissing
 			}
 
 			elementModel := libraryPanels.Get(UID).Get("model")
-			elementModel.Set("libraryPanel", map[string]interface{}{
+			elementModel.Set("libraryPanel", map[string]any{
 				"uid": UID,
 			})
 
@@ -150,12 +166,14 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 				return err
 			}
 
-			var cmd = libraryelements.CreateLibraryElementCommand{
-				FolderID: folderID,
-				Name:     name,
-				Model:    Model,
-				Kind:     int64(models.PanelElement),
-				UID:      UID,
+			metrics.MFolderIDsServiceCount.WithLabelValues(metrics.LibraryPanels).Inc()
+			var cmd = model.CreateLibraryElementCommand{
+				FolderID:  folderID, // nolint:staticcheck
+				FolderUID: &folderUID,
+				Name:      name,
+				Model:     Model,
+				Kind:      int64(model.PanelElement),
+				UID:       UID,
 			}
 			_, err = service.CreateElement(c, signedInUser, cmd)
 			if err != nil {
@@ -170,3 +188,42 @@ func importLibraryPanelsRecursively(c context.Context, service libraryelements.S
 
 	return nil
 }
+
+// CountInFolder is a handler for retrieving the number of library panels contained
+// within a given folder and for a specific organisation.
+func (lps LibraryPanelService) CountInFolders(ctx context.Context, orgID int64, folderUIDs []string, u identity.Requester) (int64, error) {
+	if len(folderUIDs) == 0 {
+		return 0, nil
+	}
+
+	var count int64
+	return count, lps.SQLStore.WithDbSession(ctx, func(sess *db.Session) error {
+		metrics.MFolderIDsServiceCount.WithLabelValues(metrics.LibraryPanels).Inc()
+		s := fmt.Sprintf(`SELECT COUNT(*) FROM library_element WHERE org_id = ? AND folder_uid IN (%s) AND kind = ?`, strings.Repeat("?,", len(folderUIDs)-1)+"?")
+
+		args := make([]interface{}, 0, len(folderUIDs)+2)
+		args = append(args, orgID)
+		for _, uid := range folderUIDs {
+			args = append(args, uid)
+		}
+		args = append(args, int64(model.PanelElement))
+		_, err := sess.SQL(s, args...).Get(&count)
+		if err != nil {
+			return err
+		}
+		return err
+	})
+}
+
+// DeleteInFolder deletes the library panels contained in a given folder.
+func (lps LibraryPanelService) DeleteInFolders(ctx context.Context, orgID int64, folderUIDs []string, user identity.Requester) error {
+	for _, folderUID := range folderUIDs {
+		if err := lps.LibraryElementService.DeleteLibraryElementsInFolder(ctx, user, folderUID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Kind returns the name of the library panel type of entity.
+func (lps LibraryPanelService) Kind() string { return entity.StandardKindLibraryPanel }

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -13,18 +14,18 @@ import (
 var ErrAccessDeniedException = errors.New("access denied. please check your IAM policy")
 
 type AccountsService struct {
-	models.OAMClientProvider
+	models.OAMAPIProvider
 }
 
-func NewAccountsService(oamClient models.OAMClientProvider) models.AccountsProvider {
+func NewAccountsService(oamClient models.OAMAPIProvider) models.AccountsProvider {
 	return &AccountsService{oamClient}
 }
 
-func (a *AccountsService) GetAccountsForCurrentUserOrRole() ([]resources.ResourceResponse[resources.Account], error) {
+func (a *AccountsService) GetAccountsForCurrentUserOrRole(ctx context.Context) ([]resources.ResourceResponse[resources.Account], error) {
 	var nextToken *string
 	sinks := []*oam.ListSinksItem{}
 	for {
-		response, err := a.ListSinks(&oam.ListSinksInput{NextToken: nextToken})
+		response, err := a.ListSinksWithContext(ctx, &oam.ListSinksInput{NextToken: nextToken})
 		if err != nil {
 			var aerr awserr.Error
 			if errors.As(err, &aerr) {
@@ -61,7 +62,7 @@ func (a *AccountsService) GetAccountsForCurrentUserOrRole() ([]resources.Resourc
 
 	nextToken = nil
 	for {
-		links, err := a.ListAttachedLinks(&oam.ListAttachedLinksInput{
+		links, err := a.ListAttachedLinksWithContext(ctx, &oam.ListAttachedLinksInput{
 			SinkIdentifier: sinkIdentifier,
 			NextToken:      nextToken,
 		})

@@ -1,16 +1,21 @@
 ---
 aliases:
-  - /docs/grafana/latest/auth/auth-proxy/
-  - /docs/grafana/latest/setup-grafana/configure-security/configure-authentication/auth-proxy/
-  - /docs/grafana/latest/tutorials/authproxy/
+  - ../../../auth/auth-proxy/
+  - ../../../tutorials/authproxy/
 description: Grafana Auth Proxy Guide
 keywords:
   - grafana
   - configuration
   - documentation
   - proxy
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+menuTitle: Auth proxy
 title: Configure auth proxy authentication
-weight: 1300
+weight: 1500
 ---
 
 # Configure auth proxy authentication
@@ -31,7 +36,8 @@ header_property = username
 auto_sign_up = true
 # Define cache time to live in minutes
 # If combined with Grafana LDAP integration it is also the sync interval
-sync_ttl = 60
+# Set to 0 to always fetch and sync the latest user data
+sync_ttl = 15
 # Limit where auth proxy requests come from by configuring a list of IP addresses.
 # This can be used to prevent users spoofing the X-WEBAUTH-USER header.
 # Example `whitelist = 192.168.1.1, 192.168.1.0/24, 2001::23, 2001::0/120`
@@ -226,6 +232,10 @@ ProxyPassReverse / http://grafana:3000/
 
 With our Grafana and Apache containers running, you can now connect to http://localhost/ and log in using the username/password we created in the htpasswd file.
 
+{{% admonition type="note" %}}
+If the user is deleted from Grafana, the user will be not be able to login and resync until after the `sync_ttl` has expired.
+{{% /admonition %}}
+
 ### Team Sync (Enterprise only)
 
 > Only available in Grafana Enterprise v6.3+
@@ -241,13 +251,13 @@ headers = "Groups:X-WEBAUTH-GROUPS"
 
 You use the `X-WEBAUTH-GROUPS` header to send the team information for each user. Specifically, the set of Grafana's group IDs that the user belongs to.
 
-First, we need to set up the mapping between your authentication provider and Grafana. Follow [these instructions]({{< relref "../../configure-team-sync/#enable-synchronization-for-a-team" >}}) to add groups to a team within Grafana.
+First, we need to set up the mapping between your authentication provider and Grafana. Follow [these instructions]({{< relref "../../configure-team-sync#synchronize-a-grafana-team-with-an-external-group" >}}) to add groups to a team within Grafana.
 
 Once that's done. You can verify your mappings by querying the API.
 
 ```bash
 # First, inspect your teams and obtain the corresponding ID of the team we want to inspect the groups for.
-curl -H "X-WEBAUTH-USER: admin" http://localhost:3000/api/teams/search
+curl -H "X-WEBAUTH-USER: admin" -H "X-WEBAUTH-GROUPS: lokiteamOnExternalSystem" http://localhost:3000/api/teams/search
 {
   "totalCount": 2,
   "teams": [
@@ -275,7 +285,7 @@ curl -H "X-WEBAUTH-USER: admin" http://localhost:3000/api/teams/search
 }
 
 # Then, query the groups for that particular team. In our case, the Loki team which has an ID of "2".
-curl -H "X-WEBAUTH-USER: admin" http://localhost:3000/api/teams/2/groups
+curl -H "X-WEBAUTH-USER: admin" -H "X-WEBAUTH-GROUPS: lokiteamOnExternalSystem" http://localhost:3000/api/teams/2/groups
 [
   {
     "orgId": 1,
@@ -299,7 +309,11 @@ curl -H "X-WEBAUTH-USER: leonard" -H "X-WEBAUTH-GROUPS: lokiteamOnExternalSystem
 
 With this, the user `leonard` will be automatically placed into the Loki team as part of Grafana authentication.
 
-[Learn more about Team Sync]({{< relref "../../configure-team-sync/" >}})
+{{% admonition type="note" %}}
+An empty `X-WEBAUTH-GROUPS` or the absence of a groups header will remove the user from all teams.
+{{% /admonition %}}
+
+[Learn more about Team Sync]({{< relref "../../configure-team-sync" >}})
 
 ## Login token and session cookie
 
@@ -308,4 +322,4 @@ a login token and cookie. You only have to configure your auth proxy to provide 
 Requests via other routes will be authenticated using the cookie.
 
 Use settings `login_maximum_inactive_lifetime_duration` and `login_maximum_lifetime_duration` under `[auth]` to control session
-lifetime. [Read more about login tokens]({{< relref "./#login-and-short-lived-tokens" >}}).
+lifetime.

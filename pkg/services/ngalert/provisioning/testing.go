@@ -2,12 +2,17 @@ package provisioning
 
 import (
 	"context"
-	"crypto/md5"
-	"fmt"
-	"strings"
+	"sync"
+	"testing"
 
-	"github.com/grafana/grafana/pkg/services/ngalert/models"
+	"github.com/stretchr/testify/assert"
 	mock "github.com/stretchr/testify/mock"
+
+	"github.com/grafana/grafana/pkg/apimachinery/identity"
+	apimodels "github.com/grafana/grafana/pkg/services/ngalert/api/tooling/definitions"
+	"github.com/grafana/grafana/pkg/services/ngalert/models"
+	"github.com/grafana/grafana/pkg/services/ngalert/notifier"
+	"github.com/grafana/grafana/pkg/services/ngalert/store"
 )
 
 const defaultAlertmanagerConfigJSON = `
@@ -28,8 +33,8 @@ const defaultAlertmanagerConfigJSON = `
 		"receivers": [{
 			"name": "grafana-default-email",
 			"grafana_managed_receiver_configs": [{
-				"uid": "",
-				"name": "email receiver",
+				"uid": "UID1",
+				"name": "grafana-default-email",
 				"type": "email",
 				"disableResolveMessage": false,
 				"settings": {
@@ -38,103 +43,19 @@ const defaultAlertmanagerConfigJSON = `
 				"secureFields": {}
 			}]
 		}, {
-			"name": "a new receiver",
+			"name": "slack receiver",
 			"grafana_managed_receiver_configs": [{
-				"uid": "",
-				"name": "email receiver",
-				"type": "email",
+				"uid": "UID2",
+				"name": "slack receiver",
+				"type": "slack",
 				"disableResolveMessage": false,
-				"settings": {
-					"addresses": "\u003canother@email.com\u003e"
-				},
-				"secureFields": {}
+				"settings": {},
+				"secureSettings": {"url":"secure url"}
 			}]
 		}]
 	}
 }
 `
-
-type fakeAMConfigStore struct {
-	config          models.AlertConfiguration
-	lastSaveCommand *models.SaveAlertmanagerConfigurationCmd
-}
-
-func newFakeAMConfigStore() *fakeAMConfigStore {
-	return &fakeAMConfigStore{
-		config: models.AlertConfiguration{
-			AlertmanagerConfiguration: defaultAlertmanagerConfigJSON,
-			ConfigurationVersion:      "v1",
-			Default:                   true,
-			OrgID:                     1,
-		},
-		lastSaveCommand: nil,
-	}
-}
-
-func (f *fakeAMConfigStore) GetLatestAlertmanagerConfiguration(ctx context.Context, query *models.GetLatestAlertmanagerConfigurationQuery) error {
-	query.Result = &f.config
-	query.Result.OrgID = query.OrgID
-	query.Result.ConfigurationHash = fmt.Sprintf("%x", md5.Sum([]byte(f.config.AlertmanagerConfiguration)))
-	return nil
-}
-
-func (f *fakeAMConfigStore) UpdateAlertmanagerConfiguration(ctx context.Context, cmd *models.SaveAlertmanagerConfigurationCmd) error {
-	f.config = models.AlertConfiguration{
-		AlertmanagerConfiguration: cmd.AlertmanagerConfiguration,
-		ConfigurationVersion:      cmd.ConfigurationVersion,
-		Default:                   cmd.Default,
-		OrgID:                     cmd.OrgID,
-	}
-	f.lastSaveCommand = cmd
-	return nil
-}
-
-type fakeProvisioningStore struct {
-	records map[int64]map[string]models.Provenance
-}
-
-func NewFakeProvisioningStore() *fakeProvisioningStore {
-	return &fakeProvisioningStore{
-		records: map[int64]map[string]models.Provenance{},
-	}
-}
-
-func (f *fakeProvisioningStore) GetProvenance(ctx context.Context, o models.Provisionable, org int64) (models.Provenance, error) {
-	if val, ok := f.records[org]; ok {
-		if prov, ok := val[o.ResourceID()+o.ResourceType()]; ok {
-			return prov, nil
-		}
-	}
-	return models.ProvenanceNone, nil
-}
-
-func (f *fakeProvisioningStore) GetProvenances(ctx context.Context, orgID int64, resourceType string) (map[string]models.Provenance, error) {
-	results := make(map[string]models.Provenance)
-	if val, ok := f.records[orgID]; ok {
-		for k, v := range val {
-			if strings.HasSuffix(k, resourceType) {
-				results[strings.TrimSuffix(k, resourceType)] = v
-			}
-		}
-	}
-	return results, nil
-}
-
-func (f *fakeProvisioningStore) SetProvenance(ctx context.Context, o models.Provisionable, org int64, p models.Provenance) error {
-	if _, ok := f.records[org]; !ok {
-		f.records[org] = map[string]models.Provenance{}
-	}
-	_ = f.DeleteProvenance(ctx, o, org) // delete old entries first
-	f.records[org][o.ResourceID()+o.ResourceType()] = p
-	return nil
-}
-
-func (f *fakeProvisioningStore) DeleteProvenance(ctx context.Context, o models.Provisionable, org int64) error {
-	if val, ok := f.records[org]; ok {
-		delete(val, o.ResourceID()+o.ResourceType())
-	}
-	return nil
-}
 
 type NopTransactionManager struct{}
 
@@ -142,35 +63,17 @@ func newNopTransactionManager() *NopTransactionManager {
 	return &NopTransactionManager{}
 }
 
+func assertInTransaction(t *testing.T, ctx context.Context) {
+	assert.Truef(t, ctx.Value(NopTransactionManager{}) != nil, "Expected to be executed in transaction but there is none")
+}
+
 func (n *NopTransactionManager) InTransaction(ctx context.Context, work func(ctx context.Context) error) error {
-	return work(ctx)
-}
-
-func (m *MockAMConfigStore_Expecter) GetsConfig(ac models.AlertConfiguration) *MockAMConfigStore_Expecter {
-	m.GetLatestAlertmanagerConfiguration(mock.Anything, mock.Anything).
-		Run(func(ctx context.Context, q *models.GetLatestAlertmanagerConfigurationQuery) {
-			q.Result = &ac
-		}).
-		Return(nil)
-	return m
-}
-
-func (m *MockAMConfigStore_Expecter) SaveSucceeds() *MockAMConfigStore_Expecter {
-	m.UpdateAlertmanagerConfiguration(mock.Anything, mock.Anything).Return(nil)
-	return m
-}
-
-func (m *MockAMConfigStore_Expecter) SaveSucceedsIntercept(intercepted *models.SaveAlertmanagerConfigurationCmd) *MockAMConfigStore_Expecter {
-	m.UpdateAlertmanagerConfiguration(mock.Anything, mock.Anything).
-		Return(nil).
-		Run(func(ctx context.Context, cmd *models.SaveAlertmanagerConfigurationCmd) {
-			*intercepted = *cmd
-		})
-	return m
+	return work(context.WithValue(ctx, NopTransactionManager{}, struct{}{}))
 }
 
 func (m *MockProvisioningStore_Expecter) GetReturns(p models.Provenance) *MockProvisioningStore_Expecter {
 	m.GetProvenance(mock.Anything, mock.Anything, mock.Anything).Return(p, nil)
+	m.GetProvenances(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
 	return m
 }
 
@@ -188,4 +91,153 @@ func (m *MockQuotaChecker_Expecter) LimitOK() *MockQuotaChecker_Expecter {
 func (m *MockQuotaChecker_Expecter) LimitExceeded() *MockQuotaChecker_Expecter {
 	m.CheckQuotaReached(mock.Anything, mock.Anything, mock.Anything).Return(true, nil)
 	return m
+}
+
+type NotificationSettingsValidatorProviderFake struct {
+}
+
+func (n *NotificationSettingsValidatorProviderFake) Validator(ctx context.Context, orgID int64) (notifier.NotificationSettingsValidator, error) {
+	return notifier.NoValidation{}, nil
+}
+
+type call struct {
+	Method string
+	Args   []interface{}
+}
+
+type fakeRuleAccessControlService struct {
+	mu                             sync.Mutex
+	Calls                          []call
+	AuthorizeAccessToRuleGroupFunc func(ctx context.Context, user identity.Requester, rules models.RulesGroup) error
+	AuthorizeAccessInFolderFunc    func(ctx context.Context, user identity.Requester, namespaced models.Namespaced) error
+	AuthorizeRuleChangesFunc       func(ctx context.Context, user identity.Requester, change *store.GroupDelta) error
+	CanReadAllRulesFunc            func(ctx context.Context, user identity.Requester) (bool, error)
+	CanWriteAllRulesFunc           func(ctx context.Context, user identity.Requester) (bool, error)
+}
+
+func (s *fakeRuleAccessControlService) RecordCall(method string, args ...interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	call := call{
+		Method: method,
+		Args:   args,
+	}
+
+	s.Calls = append(s.Calls, call)
+}
+
+func (s *fakeRuleAccessControlService) AuthorizeRuleGroupRead(ctx context.Context, user identity.Requester, rules models.RulesGroup) error {
+	s.RecordCall("AuthorizeRuleGroupRead", ctx, user, rules)
+	if s.AuthorizeAccessToRuleGroupFunc != nil {
+		return s.AuthorizeAccessToRuleGroupFunc(ctx, user, rules)
+	}
+	return nil
+}
+
+func (s *fakeRuleAccessControlService) AuthorizeRuleRead(ctx context.Context, user identity.Requester, rule *models.AlertRule) error {
+	s.RecordCall("AuthorizeRuleRead", ctx, user, rule)
+	if s.AuthorizeAccessInFolderFunc != nil {
+		return s.AuthorizeAccessInFolderFunc(ctx, user, rule)
+	}
+	return nil
+}
+
+func (s *fakeRuleAccessControlService) AuthorizeRuleGroupWrite(ctx context.Context, user identity.Requester, change *store.GroupDelta) error {
+	s.RecordCall("AuthorizeRuleGroupWrite", ctx, user, change)
+	if s.AuthorizeRuleChangesFunc != nil {
+		return s.AuthorizeRuleChangesFunc(ctx, user, change)
+	}
+	return nil
+}
+
+func (s *fakeRuleAccessControlService) CanReadAllRules(ctx context.Context, user identity.Requester) (bool, error) {
+	s.RecordCall("CanReadAllRules", ctx, user)
+	if s.CanReadAllRulesFunc != nil {
+		return s.CanReadAllRulesFunc(ctx, user)
+	}
+	return false, nil
+}
+
+func (s *fakeRuleAccessControlService) CanWriteAllRules(ctx context.Context, user identity.Requester) (bool, error) {
+	s.RecordCall("CanWriteAllRules", ctx, user)
+	if s.CanWriteAllRulesFunc != nil {
+		return s.CanWriteAllRulesFunc(ctx, user)
+	}
+	return false, nil
+}
+
+type fakeAlertRuleNotificationStore struct {
+	Calls []call
+
+	RenameReceiverInNotificationSettingsFn     func(ctx context.Context, orgID int64, oldReceiver, newReceiver string, validateProvenance func(models.Provenance) bool, dryRun bool) ([]models.AlertRuleKey, []models.AlertRuleKey, error)
+	RenameTimeIntervalInNotificationSettingsFn func(ctx context.Context, orgID int64, old, new string, validate func(models.Provenance) bool, dryRun bool) ([]models.AlertRuleKey, []models.AlertRuleKey, error)
+	ListNotificationSettingsFn                 func(ctx context.Context, q models.ListNotificationSettingsQuery) (map[models.AlertRuleKey][]models.NotificationSettings, error)
+}
+
+func (f *fakeAlertRuleNotificationStore) RenameReceiverInNotificationSettings(ctx context.Context, orgID int64, oldReceiver, newReceiver string, validateProvenance func(models.Provenance) bool, dryRun bool) ([]models.AlertRuleKey, []models.AlertRuleKey, error) {
+	call := call{
+		Method: "RenameReceiverInNotificationSettings",
+		Args:   []interface{}{ctx, orgID, oldReceiver, newReceiver, validateProvenance, dryRun},
+	}
+	f.Calls = append(f.Calls, call)
+
+	if f.RenameReceiverInNotificationSettingsFn != nil {
+		return f.RenameReceiverInNotificationSettingsFn(ctx, orgID, oldReceiver, newReceiver, validateProvenance, dryRun)
+	}
+
+	// Default values when no function hook is provided
+	return nil, nil, nil
+}
+
+func (f *fakeAlertRuleNotificationStore) RenameTimeIntervalInNotificationSettings(ctx context.Context, orgID int64, oldTimeInterval, newTimeInterval string, validate func(models.Provenance) bool, dryRun bool) ([]models.AlertRuleKey, []models.AlertRuleKey, error) {
+	call := call{
+		Method: "RenameTimeIntervalInNotificationSettings",
+		Args:   []interface{}{ctx, orgID, oldTimeInterval, newTimeInterval, validate, dryRun},
+	}
+	f.Calls = append(f.Calls, call)
+
+	if f.RenameTimeIntervalInNotificationSettingsFn != nil {
+		return f.RenameTimeIntervalInNotificationSettingsFn(ctx, orgID, oldTimeInterval, newTimeInterval, validate, dryRun)
+	}
+
+	// Default values when no function hook is provided
+	return nil, nil, nil
+}
+
+func (f *fakeAlertRuleNotificationStore) ListNotificationSettings(ctx context.Context, q models.ListNotificationSettingsQuery) (map[models.AlertRuleKey][]models.NotificationSettings, error) {
+	call := call{
+		Method: "ListNotificationSettings",
+		Args:   []interface{}{ctx, q},
+	}
+	f.Calls = append(f.Calls, call)
+
+	if f.ListNotificationSettingsFn != nil {
+		return f.ListNotificationSettingsFn(ctx, q)
+	}
+
+	// Default values when no function hook is provided
+	return nil, nil
+}
+
+type fakeReceiverService struct {
+	Calls                                  []call
+	GetReceiversFunc                       func(ctx context.Context, query models.GetReceiversQuery, user identity.Requester) ([]*models.Receiver, error)
+	RenameReceiverInDependentResourcesFunc func(ctx context.Context, orgID int64, route *apimodels.Route, oldName, newName string, receiverProvenance models.Provenance) error
+}
+
+func (f *fakeReceiverService) GetReceivers(ctx context.Context, query models.GetReceiversQuery, user identity.Requester) ([]*models.Receiver, error) {
+	f.Calls = append(f.Calls, call{Method: "GetReceivers", Args: []interface{}{ctx, query, user}})
+	if f.GetReceiversFunc != nil {
+		return f.GetReceiversFunc(ctx, query, user)
+	}
+	return nil, nil
+}
+
+func (f *fakeReceiverService) RenameReceiverInDependentResources(ctx context.Context, orgID int64, route *apimodels.Route, oldName, newName string, receiverProvenance models.Provenance) error {
+	f.Calls = append(f.Calls, call{Method: "RenameReceiverInDependentResources", Args: []interface{}{ctx, orgID, route, oldName, newName, receiverProvenance}})
+	if f.RenameReceiverInDependentResourcesFunc != nil {
+		return f.RenameReceiverInDependentResourcesFunc(ctx, orgID, route, oldName, newName, receiverProvenance)
+	}
+	return nil
 }

@@ -1,5 +1,6 @@
-import React, { ChangeEvent, MouseEvent, FC } from 'react';
+import { ChangeEvent, MouseEvent } from 'react';
 
+import { Trans } from '../../utils/i18n';
 import { Button } from '../Button';
 import { InlineField } from '../Forms/InlineField';
 import { InlineFieldRow } from '../Forms/InlineFieldRow';
@@ -15,7 +16,7 @@ interface Props {
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }
 
-export const CertificationKey: FC<Props> = ({ hasCert, label, onChange, onClick, placeholder }) => {
+export const CertificationKey = ({ hasCert, label, onChange, onClick, placeholder }: Props) => {
   return (
     <InlineFieldRow>
       <InlineField label={label} labelWidth={14} disabled={hasCert}>
@@ -27,7 +28,7 @@ export const CertificationKey: FC<Props> = ({ hasCert, label, onChange, onClick,
       </InlineField>
       {hasCert && (
         <Button variant="secondary" onClick={onClick} style={{ marginLeft: 4 }}>
-          Reset
+          <Trans i18nKey="grafana-ui.data-source-settings.cert-key-reset">Reset</Trans>
         </Button>
       )}
     </InlineFieldRow>

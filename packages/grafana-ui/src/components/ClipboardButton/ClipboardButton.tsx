@@ -1,5 +1,6 @@
 import { css, cx } from '@emotion/css';
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import * as React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
@@ -73,7 +74,7 @@ export function ClipboardButton({
         variant={showCopySuccess ? 'success' : variant}
         aria-label={showCopySuccess ? 'Copied' : undefined}
         {...buttonProps}
-        className={cx(styles.button, showCopySuccess && styles.successButton)}
+        className={cx(styles.button, showCopySuccess && styles.successButton, buttonProps.className)}
         ref={buttonRef}
       >
         {children}

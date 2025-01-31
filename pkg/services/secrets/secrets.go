@@ -5,12 +5,16 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"xorm.io/xorm"
 )
 
 // Service is an envelope encryption service in charge of encrypting/decrypting secrets.
 // It is a replacement for encryption.Service
+//
+// For all encrypted secrets stored in the database, a migrator is needed to re-encrypt
+// the secrets every time the encryption key has been rotated. Please add your database
+// secrets to the migrator slice available in ./migrator/migrator.go.
+//
+//go:generate mockery --name Service --structname MockService --outpkg fakes --filename mock_service.go --output ./fakes/
 type Service interface {
 	// Encrypt MUST NOT be used within database transactions, it may cause database locks.
 	// For those specific use cases where the encryption operation cannot be moved outside
@@ -36,7 +40,6 @@ type Store interface {
 	GetCurrentDataKey(ctx context.Context, label string) (*DataKey, error)
 	GetAllDataKeys(ctx context.Context) ([]*DataKey, error)
 	CreateDataKey(ctx context.Context, dataKey *DataKey) error
-	CreateDataKeyWithDBSession(ctx context.Context, dataKey *DataKey, sess *xorm.Session) error
 	DisableDataKeys(ctx context.Context) error
 	DeleteDataKey(ctx context.Context, id string) error
 	ReEncryptDataKeys(ctx context.Context, providers map[ProviderID]Provider, currProvider ProviderID) error

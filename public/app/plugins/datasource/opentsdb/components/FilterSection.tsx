@@ -1,8 +1,19 @@
+import debounce from 'debounce-promise';
 import { size } from 'lodash';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { SelectableValue, toOption } from '@grafana/data';
-import { InlineLabel, Select, InlineFormLabel, InlineSwitch, Icon, clearButtonStyles, useStyles2 } from '@grafana/ui';
+import {
+  InlineLabel,
+  Select,
+  InlineFormLabel,
+  InlineSwitch,
+  Icon,
+  clearButtonStyles,
+  useStyles2,
+  AsyncSelect,
+  Stack,
+} from '@grafana/ui';
 
 import { OpenTsdbFilter, OpenTsdbQuery } from '../types';
 
@@ -12,7 +23,7 @@ export interface FilterSectionProps {
   onRunQuery: () => void;
   suggestTagKeys: (query: OpenTsdbQuery) => Promise<string[]>;
   filterTypes: string[];
-  suggestTagValues: () => Promise<SelectableValue[]>;
+  suggestTagValues: (value: string) => Promise<SelectableValue[]>;
 }
 
 export function FilterSection({
@@ -27,9 +38,6 @@ export function FilterSection({
 
   const [tagKeys, updTagKeys] = useState<Array<SelectableValue<string>>>();
   const [keyIsLoading, updKeyIsLoading] = useState<boolean>();
-
-  const [tagValues, updTagValues] = useState<Array<SelectableValue<string>>>();
-  const [valueIsLoading, updValueIsLoading] = useState<boolean>();
 
   const [addFilterMode, updAddFilterMode] = useState<boolean>(false);
 
@@ -108,47 +116,48 @@ export function FilterSection({
     return searchWords.reduce((acc, cur) => acc && label.toLowerCase().includes(cur.toLowerCase()), true);
   }, []);
 
+  const tagValueSearch = debounce((query: string) => suggestTagValues(query), 350);
+
   return (
-    <div className="gf-form-inline" data-testid={testIds.section}>
-      <div className="gf-form">
-        <InlineFormLabel
-          className="query-keyword"
-          width={8}
-          tooltip={<div>Filters does not work with tags, either of the two will work but not both.</div>}
-        >
-          Filters
-        </InlineFormLabel>
-        {query.filters &&
-          query.filters.map((fil: OpenTsdbFilter, idx: number) => {
-            return (
-              <InlineFormLabel key={idx} width="auto" data-testid={testIds.list + idx}>
-                {fil.tagk} = {fil.type}({fil.filter}), groupBy = {'' + fil.groupBy}
-                <button type="button" className={buttonStyles} onClick={() => editFilter(fil, idx)}>
-                  <Icon name={'pen'} />
-                </button>
-                <button
-                  type="button"
-                  className={buttonStyles}
-                  onClick={() => removeFilter(idx)}
-                  data-testid={testIds.remove}
-                >
-                  <Icon name={'times'} />
-                </button>
-              </InlineFormLabel>
-            );
-          })}
-        {!addFilterMode && (
-          <button className="gf-form-label" type="button" onClick={changeAddFilterMode} aria-label="Add filter">
+    <Stack gap={0} data-testid={testIds.section}>
+      <InlineFormLabel
+        className="query-keyword"
+        width={8}
+        tooltip={<div>Filters does not work with tags, either of the two will work but not both.</div>}
+      >
+        Filters
+      </InlineFormLabel>
+      {query.filters &&
+        query.filters.map((fil: OpenTsdbFilter, idx: number) => {
+          return (
+            <InlineFormLabel key={idx} width="auto" data-testid={testIds.list + idx}>
+              {fil.tagk} = {fil.type}({fil.filter}), groupBy = {'' + fil.groupBy}
+              <button type="button" className={buttonStyles} onClick={() => editFilter(fil, idx)}>
+                <Icon name={'pen'} />
+              </button>
+              <button
+                type="button"
+                className={buttonStyles}
+                onClick={() => removeFilter(idx)}
+                data-testid={testIds.remove}
+              >
+                <Icon name={'times'} />
+              </button>
+            </InlineFormLabel>
+          );
+        })}
+      {!addFilterMode && (
+        <InlineFormLabel width={2}>
+          <button type="button" className={buttonStyles} onClick={changeAddFilterMode} aria-label="Add filter">
             <Icon name={'plus'} />
           </button>
-        )}
-      </div>
+        </InlineFormLabel>
+      )}
       {addFilterMode && (
-        <div className="gf-form-inline">
-          <div className="gf-form">
+        <Stack gap={0.5} alignItems="center">
+          <Stack gap={0}>
             <Select
               inputId="opentsdb-suggested-tagk-select"
-              className="gf-form-input"
               value={curFilterKey ? toOption(curFilterKey) : undefined}
               placeholder="key"
               allowCustomValue
@@ -168,9 +177,9 @@ export function FilterSection({
                 }
               }}
             />
-          </div>
+          </Stack>
 
-          <div className="gf-form">
+          <Stack gap={0}>
             <InlineLabel className="width-4 query-keyword">Type</InlineLabel>
             <Select
               inputId="opentsdb-aggregator-select"
@@ -182,33 +191,23 @@ export function FilterSection({
                 }
               }}
             />
-          </div>
+          </Stack>
 
-          <div className="gf-form">
-            <Select
+          <Stack gap={0}>
+            <AsyncSelect
               inputId="opentsdb-suggested-tagv-select"
-              className="gf-form-input"
               value={curFilterValue ? toOption(curFilterValue) : undefined}
               placeholder="filter"
               allowCustomValue
-              filterOption={customFilterOption}
-              onOpenMenu={async () => {
-                if (!tagValues) {
-                  updValueIsLoading(true);
-                  const tVs = await suggestTagValues();
-                  updTagValues(tVs);
-                  updValueIsLoading(false);
-                }
-              }}
-              isLoading={valueIsLoading}
-              options={tagValues}
+              loadOptions={tagValueSearch}
+              defaultOptions={[]}
               onChange={({ value }) => {
                 if (value) {
                   updCurFilterValue(value);
                 }
               }}
             />
-          </div>
+          </Stack>
 
           <InlineFormLabel width={5} className="query-keyword">
             Group by
@@ -221,27 +220,27 @@ export function FilterSection({
               updCurFilterGroupBy(!curFilterGroupBy);
             }}
           />
-          <div className="gf-form">
+          <Stack gap={0}>
             {errors && (
-              <div className="gf-form-label" title={errors} data-testid={testIds.error}>
+              <InlineLabel title={errors} data-testid={testIds.error}>
                 <Icon name={'exclamation-triangle'} color={'rgb(229, 189, 28)'} />
-              </div>
+              </InlineLabel>
             )}
-            <div className="gf-form-label">
+            <InlineFormLabel width={5.5}>
               <button type="button" className={buttonStyles} onClick={addFilter}>
                 add filter
               </button>
               <button type="button" className={buttonStyles} onClick={changeAddFilterMode}>
                 <Icon name={'times'} />
               </button>
-            </div>
-          </div>
-        </div>
+            </InlineFormLabel>
+          </Stack>
+        </Stack>
       )}
-      <div className="gf-form gf-form--grow">
-        <div className="gf-form-label gf-form-label--grow"></div>
-      </div>
-    </div>
+      <Stack gap={0} grow={1}>
+        <InlineLabel> </InlineLabel>
+      </Stack>
+    </Stack>
   );
 }
 

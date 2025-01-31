@@ -1,6 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 
 import { ColorPickerInput } from './ColorPickerInput';
 
@@ -24,7 +23,8 @@ describe('ColorPickerInput', () => {
     const mockOnChange = jest.fn();
     render(<ColorPickerInput onChange={mockOnChange} />);
     await userEvent.type(screen.getByRole('textbox'), 'some text');
-    screen.getByRole('textbox').blur();
+    // blur the input
+    await userEvent.click(document.body);
     await waitFor(() => expect(mockOnChange).not.toHaveBeenCalled());
     expect(screen.getByRole('textbox')).toHaveValue('');
   });

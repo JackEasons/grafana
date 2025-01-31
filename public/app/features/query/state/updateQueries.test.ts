@@ -1,10 +1,8 @@
-import {
-  DataQuery,
-  DataSourceApi,
-  DataSourceWithQueryExportSupport,
-  DataSourceWithQueryImportSupport,
-} from '@grafana/data';
+import { DataSourceApi, DataSourceWithQueryExportSupport, DataSourceWithQueryImportSupport } from '@grafana/data';
 import { ExpressionDatasourceRef } from '@grafana/runtime/src/utils/DataSourceWithBackend';
+import { DataQuery } from '@grafana/schema';
+import { TestQuery } from 'app/core/utils/query.test';
+import { TemplateSrv } from 'app/features/templating/template_srv';
 
 import { updateQueries } from './updateQueries';
 
@@ -14,6 +12,7 @@ const oldUidDS = {
   meta: {
     id: 'old-type',
   },
+  getRef: () => ({ uid: 'old-uid', type: 'old-type' }),
 } as DataSourceApi;
 
 const mixedDS = {
@@ -22,6 +21,7 @@ const mixedDS = {
     id: 'mixed',
     mixed: true,
   },
+  getRef: () => ({ uid: 'mixed' }),
 } as DataSourceApi;
 
 const newUidDS = {
@@ -30,6 +30,7 @@ const newUidDS = {
   meta: {
     id: 'new-type',
   },
+  getRef: () => ({ uid: 'new-uid', type: 'new-type' }),
 } as DataSourceApi;
 
 const newUidSameTypeDS = {
@@ -38,9 +39,20 @@ const newUidSameTypeDS = {
   meta: {
     id: 'old-type',
   },
+  getRef: () => ({ uid: 'new-uid-same-type', type: 'old-type' }),
 } as DataSourceApi;
 
+const templateSrv = new TemplateSrv();
+
+jest.mock('@grafana/runtime', () => ({
+  ...jest.requireActual('@grafana/runtime'),
+  getTemplateSrv: () => templateSrv,
+}));
+
 describe('updateQueries', () => {
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
   it('Should update all queries except expression query when changing data source with same type', async () => {
     const updated = await updateQueries(
       newUidSameTypeDS,
@@ -111,6 +123,53 @@ describe('updateQueries', () => {
     expect(updated[0].datasource).toEqual({ type: 'new-type', uid: 'new-uid' });
   });
 
+  it('Should clear queries and get default query from ds when changing type', async () => {
+    newUidDS.getDefaultQuery = jest.fn().mockReturnValue({ test: 'default-query1' } as Partial<TestQuery>);
+    const updated = await updateQueries(
+      newUidDS,
+      'new-uid',
+      [
+        {
+          refId: 'A',
+          datasource: {
+            uid: 'old-uid',
+            type: 'old-type',
+          },
+        },
+        {
+          refId: 'B',
+          datasource: {
+            uid: 'old-uid',
+            type: 'old-type',
+          },
+        },
+      ],
+      oldUidDS
+    );
+
+    expect(newUidDS.getDefaultQuery).toHaveBeenCalled();
+    expect(updated as TestQuery[]).toEqual([
+      {
+        datasource: { type: 'new-type', uid: 'new-uid' },
+        refId: 'A',
+        test: 'default-query1',
+      },
+    ]);
+  });
+
+  it('Should return default query from ds when changing type and no new queries exist', async () => {
+    newUidDS.getDefaultQuery = jest.fn().mockReturnValue({ test: 'default-query2' } as Partial<TestQuery>);
+    const updated = await updateQueries(newUidDS, 'new-uid', [], oldUidDS);
+    expect(newUidDS.getDefaultQuery).toHaveBeenCalled();
+    expect(updated as TestQuery[]).toEqual([
+      {
+        datasource: { type: 'new-type', uid: 'new-uid' },
+        refId: 'A',
+        test: 'default-query2',
+      },
+    ]);
+  });
+
   it('Should preserve query data source when changing to mixed', async () => {
     const updated = await updateQueries(
       mixedDS,
@@ -164,6 +223,144 @@ describe('updateQueries', () => {
     expect(updated[0].datasource).toEqual({ type: 'old-type', uid: 'old-uid' });
     expect(updated[1].datasource).toEqual({ type: 'other-type', uid: 'other-uid' });
   });
+
+  it('should preserve query when switching from mixed to a datasource where a query exists for the new datasource', async () => {
+    const updated = await updateQueries(
+      newUidDS,
+      'new-uid',
+      [
+        {
+          refId: 'A',
+          datasource: {
+            uid: 'new-uid',
+            type: 'new-type',
+          },
+        },
+        {
+          refId: 'B',
+          datasource: {
+            uid: 'other-uid',
+            type: 'other-type',
+          },
+        },
+      ],
+      mixedDS
+    );
+
+    expect(updated[0].datasource).toEqual({ type: 'new-type', uid: 'new-uid' });
+    expect(updated.length).toEqual(1);
+  });
+
+  it('should preserve query when switching from mixed to a datasource where a query exists for the new datasource - when using datasource template variable', async () => {
+    templateSrv.init([
+      {
+        current: {
+          text: 'Azure Monitor',
+          value: 'ds-uid',
+        },
+        name: 'ds',
+        type: 'datasource',
+        id: 'ds',
+      },
+    ]);
+    const updated = await updateQueries(
+      newUidDS,
+      '$ds',
+      [
+        {
+          refId: 'A',
+          datasource: {
+            uid: '$ds',
+            type: 'new-type',
+          },
+        },
+        {
+          refId: 'B',
+          datasource: {
+            uid: 'other-uid',
+            type: 'other-type',
+          },
+        },
+      ],
+      mixedDS
+    );
+
+    expect(updated[0].datasource).toEqual({ type: 'new-type', uid: '$ds' });
+    expect(updated.length).toEqual(1);
+  });
+
+  it('will not preserve query when switch from mixed with a ds variable query to the same datasource (non-variable)', async () => {
+    templateSrv.init([
+      {
+        current: {
+          text: 'Azure Monitor',
+          value: 'ds-uid',
+        },
+        name: 'ds',
+        type: 'datasource',
+        id: 'ds',
+      },
+    ]);
+    const updated = await updateQueries(
+      newUidDS,
+      'new-uid',
+      [
+        {
+          refId: 'A',
+          datasource: {
+            uid: '$ds',
+            type: 'new-type',
+          },
+        },
+        {
+          refId: 'B',
+          datasource: {
+            uid: 'other-uid',
+            type: 'other-type',
+          },
+        },
+      ],
+      mixedDS
+    );
+
+    expect(updated[0].datasource).toEqual({ type: 'new-type', uid: 'new-uid' });
+    expect(updated.length).toEqual(1);
+  });
+
+  it('should update query refs when switching from mixed to a datasource where queries exist for new datasource', async () => {
+    const updated = await updateQueries(
+      newUidDS,
+      'new-uid',
+      [
+        {
+          refId: 'A',
+          datasource: {
+            uid: 'new-uid',
+            type: 'new-type',
+          },
+        },
+        {
+          refId: 'B',
+          datasource: {
+            uid: 'other-uid',
+            type: 'other-type',
+          },
+        },
+        {
+          refId: 'C',
+          datasource: {
+            uid: 'new-uid',
+            type: 'new-type',
+          },
+        },
+      ],
+      mixedDS
+    );
+
+    expect(updated.length).toEqual(2);
+    expect(updated[0].refId).toEqual('A');
+    expect(updated[1].refId).toEqual('B');
+  });
 });
 
 describe('updateQueries with import', () => {
@@ -183,7 +380,8 @@ describe('updateQueries with import', () => {
           const importedQueries = queries.map((q) => ({ ...q, imported: true }));
           return Promise.resolve(importedQueries);
         },
-      } as DataSourceWithQueryImportSupport<any>;
+        getRef: () => ({ uid: 'new-uid', type: 'new-type' }),
+      } as DataSourceWithQueryImportSupport<DataQuery>;
 
       const oldUidDSWithAbstract = {
         uid: 'old-uid',
@@ -196,6 +394,7 @@ describe('updateQueries with import', () => {
           const exportedQueries = queries.map((q) => ({ ...q, exported: true }));
           return Promise.resolve(exportedQueries);
         },
+        getRef: () => ({ uid: 'old-uid', type: 'old-type' }),
       } as DataSourceWithQueryExportSupport<any>;
 
       const queries = [
@@ -222,8 +421,8 @@ describe('updateQueries with import', () => {
         oldUidDSWithAbstract as any
       );
 
-      expect(exportSpy).toBeCalledWith(queries);
-      expect(importSpy).toBeCalledWith(queries.map((q) => ({ ...q, exported: true })));
+      expect(exportSpy).toHaveBeenCalledWith(queries);
+      expect(importSpy).toHaveBeenCalledWith(queries.map((q) => ({ ...q, exported: true })));
 
       expect(updated).toMatchInlineSnapshot(`
         [
@@ -259,7 +458,8 @@ describe('updateQueries with import', () => {
         importFromAbstractQueries: () => {
           return Promise.resolve([]);
         },
-      } as DataSourceWithQueryImportSupport<any>;
+        getRef: () => ({ uid: 'new-uid', type: 'new-type' }),
+      } as DataSourceWithQueryImportSupport<DataQuery>;
 
       const oldUidDSWithAbstract = {
         uid: 'old-uid',
@@ -271,6 +471,7 @@ describe('updateQueries with import', () => {
           const exportedQueries = queries.map((q) => ({ ...q, exported: true }));
           return Promise.resolve(exportedQueries);
         },
+        getRef: () => ({ uid: 'old-uid', type: 'old-type' }),
       } as DataSourceWithQueryExportSupport<any>;
 
       const queries = [
@@ -317,6 +518,7 @@ describe('updateQueries with import', () => {
           const importedQueries = queries.map((q) => ({ ...q, imported: true }));
           return Promise.resolve(importedQueries);
         },
+        getRef: () => ({ uid: 'new-uid', type: 'new-type' }),
       } as DataSourceApi<any>;
 
       const oldUidDS = {
@@ -346,7 +548,7 @@ describe('updateQueries with import', () => {
 
       const updated = await updateQueries(newUidDSWithImport, newUidDSWithImport.uid, queries, oldUidDS);
 
-      expect(importSpy).toBeCalledWith(queries, { uid: 'old-uid', type: 'old-type', meta: { id: 'old-type' } });
+      expect(importSpy).toHaveBeenCalledWith(queries, { uid: 'old-uid', type: 'old-type', meta: { id: 'old-type' } });
 
       expect(updated).toMatchInlineSnapshot(`
         [
@@ -380,7 +582,8 @@ describe('updateQueries with import', () => {
         importQueries: (queries, origin) => {
           return Promise.resolve([] as DataQuery[]);
         },
-      } as DataSourceApi<any>;
+        getRef: () => ({ uid: 'new-uid', type: 'new-type' }),
+      } as DataSourceApi;
 
       const oldUidDS = {
         uid: 'old-uid',

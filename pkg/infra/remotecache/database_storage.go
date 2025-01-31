@@ -52,10 +52,9 @@ func (dc *databaseCache) internalRunGC() {
 	}
 }
 
-func (dc *databaseCache) Get(ctx context.Context, key string) (interface{}, error) {
+func (dc *databaseCache) Get(ctx context.Context, key string) ([]byte, error) {
 	cacheHit := CacheData{}
 
-	item := &cachedItem{}
 	err := dc.SQLStore.WithDbSession(ctx, func(session *db.Session) error {
 		exist, err := session.Where("cache_key= ?", key).Get(&cacheHit)
 
@@ -78,23 +77,13 @@ func (dc *databaseCache) Get(ctx context.Context, key string) (interface{}, erro
 			}
 		}
 
-		if err = decodeGob(cacheHit.Data, item); err != nil {
-			return err
-		}
-
 		return nil
 	})
 
-	return item.Val, err
+	return cacheHit.Data, err
 }
 
-func (dc *databaseCache) Set(ctx context.Context, key string, value interface{}, expire time.Duration) error {
-	item := &cachedItem{Val: value}
-	data, err := encodeGob(item)
-	if err != nil {
-		return err
-	}
-
+func (dc *databaseCache) Set(ctx context.Context, key string, data []byte, expire time.Duration) error {
 	return dc.SQLStore.WithDbSession(ctx, func(session *db.Session) error {
 		var expiresInSeconds int64
 		if expire != 0 {

@@ -1,6 +1,9 @@
-import React, { FC } from 'react';
+import * as React from 'react';
 
-import { DashboardModel, PanelModel } from '../../state';
+import { LoadingState } from '@grafana/data';
+
+import { DashboardModel } from '../../state/DashboardModel';
+import { PanelModel } from '../../state/PanelModel';
 
 import { PanelHeaderMenu } from './PanelHeaderMenu';
 import { PanelHeaderMenuProvider } from './PanelHeaderMenuProvider';
@@ -8,15 +11,16 @@ import { PanelHeaderMenuProvider } from './PanelHeaderMenuProvider';
 interface Props {
   panel: PanelModel;
   dashboard: DashboardModel;
-  onClose: () => void;
+  loadingState?: LoadingState;
+  style?: React.CSSProperties;
+  menuItemsClassName?: string;
+  menuWrapperClassName?: string;
 }
 
-export const PanelHeaderMenuWrapper: FC<Props> = ({ panel, dashboard }) => {
+export function PanelHeaderMenuWrapper({ style, panel, dashboard, loadingState }: Props) {
   return (
-    <PanelHeaderMenuProvider panel={panel} dashboard={dashboard}>
-      {({ items }) => {
-        return <PanelHeaderMenu items={items} />;
-      }}
+    <PanelHeaderMenuProvider panel={panel} dashboard={dashboard} loadingState={loadingState}>
+      {({ items }) => <PanelHeaderMenu style={style} items={items} />}
     </PanelHeaderMenuProvider>
   );
-};
+}

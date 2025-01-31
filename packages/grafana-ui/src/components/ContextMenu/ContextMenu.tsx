@@ -1,4 +1,5 @@
-import React, { useRef, useState, useLayoutEffect } from 'react';
+import { useRef, useState, useLayoutEffect } from 'react';
+import * as React from 'react';
 import { useClickAway } from 'react-use';
 
 import { selectors } from '@grafana/e2e-selectors';
@@ -21,8 +22,8 @@ export interface ContextMenuProps {
   renderHeader?: () => React.ReactNode;
 }
 
-export const ContextMenu: React.FC<ContextMenuProps> = React.memo(
-  ({ x, y, onClose, focusOnOpen = true, renderMenuItems, renderHeader }) => {
+export const ContextMenu = React.memo(
+  ({ x, y, onClose, focusOnOpen = true, renderMenuItems, renderHeader }: ContextMenuProps) => {
     const menuRef = useRef<HTMLDivElement>(null);
     const [positionStyles, setPositionStyles] = useState({});
 
@@ -33,13 +34,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = React.memo(
         const OFFSET = 5;
         const collisions = {
           right: window.innerWidth < x + rect.width,
-          bottom: window.innerHeight < rect.bottom + rect.height + OFFSET,
+          bottom: window.innerHeight < y + rect.height + OFFSET,
         };
 
         setPositionStyles({
           position: 'fixed',
           left: collisions.right ? x - rect.width - OFFSET : x - OFFSET,
-          top: collisions.bottom ? y - rect.height - OFFSET : y + OFFSET,
+          top: Math.max(0, collisions.bottom ? y - rect.height - OFFSET : y + OFFSET),
         });
       }
     }, [x, y]);

@@ -5,14 +5,26 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/grafana/grafana/pkg/bus"
+	"github.com/grafana/grafana/pkg/infra/db"
+	"github.com/grafana/grafana/pkg/infra/log/logtest"
+	"github.com/grafana/grafana/pkg/infra/tracing"
+	"github.com/grafana/grafana/pkg/services/folder/foldertest"
 	"github.com/grafana/grafana/pkg/services/ngalert/models"
+	"github.com/grafana/grafana/pkg/setting"
 )
 
-func NewFakeImageStore(t *testing.T) *FakeImageStore {
+func NewFakeImageStore(t *testing.T, images ...*models.Image) *FakeImageStore {
+	imageMap := make(map[string]*models.Image)
+	for _, image := range images {
+		imageMap[image.Token] = image
+	}
+
 	return &FakeImageStore{
 		t:      t,
-		images: make(map[string]*models.Image),
+		images: imageMap,
 	}
 }
 
@@ -29,6 +41,29 @@ func (s *FakeImageStore) GetImage(_ context.Context, token string) (*models.Imag
 		return image, nil
 	}
 	return nil, models.ErrImageNotFound
+}
+
+func (s *FakeImageStore) GetImageByURL(_ context.Context, url string) (*models.Image, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, image := range s.images {
+		if image.URL == url {
+			return image, nil
+		}
+	}
+
+	return nil, models.ErrImageNotFound
+}
+
+func (s *FakeImageStore) URLExists(_ context.Context, url string) (bool, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for _, image := range s.images {
+		if image.URL == url {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *FakeImageStore) GetImages(_ context.Context, tokens []string) ([]models.Image, []string, error) {
@@ -99,4 +134,21 @@ func (f *FakeAdminConfigStore) UpdateAdminConfiguration(cmd UpdateAdminConfigura
 	f.Configs[cmd.AdminConfiguration.OrgID] = cmd.AdminConfiguration
 
 	return nil
+}
+
+func SetupStoreForTesting(t *testing.T, db db.DB) *DBstore {
+	t.Helper()
+	cfg := setting.NewCfg()
+	cfg.UnifiedAlerting = setting.UnifiedAlertingSettings{BaseInterval: 1 * time.Second}
+
+	service := foldertest.NewFakeService()
+
+	store := &DBstore{
+		SQLStore:      db,
+		Cfg:           cfg.UnifiedAlerting,
+		FolderService: service,
+		Logger:        &logtest.Fake{},
+		Bus:           bus.ProvideBus(tracing.InitializeTracerForTest()),
+	}
+	return store
 }

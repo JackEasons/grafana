@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/grafana/grafana-azure-sdk-go/azcredentials"
-	"github.com/grafana/grafana-azure-sdk-go/azsettings"
-	"github.com/grafana/grafana-azure-sdk-go/aztokenprovider"
+	"github.com/grafana/grafana-azure-sdk-go/v2/azcredentials"
+	"github.com/grafana/grafana-azure-sdk-go/v2/azsettings"
+	"github.com/grafana/grafana-azure-sdk-go/v2/aztokenprovider"
 
 	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/setting"
@@ -20,7 +20,7 @@ type azureAccessTokenProvider struct {
 
 func newAzureAccessTokenProvider(ctx context.Context, cfg *setting.Cfg, authParams *plugins.JWTTokenAuth) (*azureAccessTokenProvider, error) {
 	credentials := getAzureCredentials(cfg.Azure, authParams)
-	tokenProvider, err := aztokenprovider.NewAzureAccessTokenProvider(cfg.Azure, credentials)
+	tokenProvider, err := aztokenprovider.NewAzureAccessTokenProvider(cfg.Azure, credentials, false)
 	if err != nil {
 		return nil, err
 	}

@@ -1,17 +1,16 @@
 package cloudwatch
 
 import (
+	"context"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 
-	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/tsdb/cloudwatch/models"
 )
 
-func (e *cloudWatchExecutor) buildMetricDataInput(logger log.Logger, startTime time.Time, endTime time.Time,
+func (e *cloudWatchExecutor) buildMetricDataInput(ctx context.Context, startTime time.Time, endTime time.Time,
 	queries []*models.CloudWatchQuery) (*cloudwatch.GetMetricDataInput, error) {
 	metricDataInput := &cloudwatch.GetMetricDataInput{
 		StartTime: aws.Time(startTime),
@@ -19,7 +18,7 @@ func (e *cloudWatchExecutor) buildMetricDataInput(logger log.Logger, startTime t
 		ScanBy:    aws.String("TimestampAscending"),
 	}
 
-	shouldSetLabelOptions := e.features.IsEnabled(featuremgmt.FlagCloudWatchDynamicLabels) && len(queries) > 0 && len(queries[0].TimezoneUTCOffset) > 0
+	shouldSetLabelOptions := len(queries) > 0 && len(queries[0].TimezoneUTCOffset) > 0
 
 	if shouldSetLabelOptions {
 		metricDataInput.LabelOptions = &cloudwatch.LabelOptions{
@@ -28,7 +27,7 @@ func (e *cloudWatchExecutor) buildMetricDataInput(logger log.Logger, startTime t
 	}
 
 	for _, query := range queries {
-		metricDataQuery, err := e.buildMetricDataQuery(logger, query)
+		metricDataQuery, err := e.buildMetricDataQuery(ctx, query)
 		if err != nil {
 			return nil, &models.QueryError{Err: err, RefID: query.RefId}
 		}

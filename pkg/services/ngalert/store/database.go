@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/grafana/grafana/pkg/bus"
 	"github.com/grafana/grafana/pkg/infra/db"
 	"github.com/grafana/grafana/pkg/infra/log"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
@@ -22,11 +23,14 @@ const AlertDefinitionMaxTitleLength = 190
 
 // AlertingStore is the database interface used by the Alertmanager service.
 type AlertingStore interface {
-	GetLatestAlertmanagerConfiguration(ctx context.Context, query *models.GetLatestAlertmanagerConfigurationQuery) error
+	GetLatestAlertmanagerConfiguration(ctx context.Context, orgID int64) (*models.AlertConfiguration, error)
 	GetAllLatestAlertmanagerConfiguration(ctx context.Context) ([]*models.AlertConfiguration, error)
 	SaveAlertmanagerConfiguration(ctx context.Context, cmd *models.SaveAlertmanagerConfigurationCmd) error
 	SaveAlertmanagerConfigurationWithCallback(ctx context.Context, cmd *models.SaveAlertmanagerConfigurationCmd, callback SaveCallback) error
 	UpdateAlertmanagerConfiguration(ctx context.Context, cmd *models.SaveAlertmanagerConfigurationCmd) error
+	MarkConfigurationAsApplied(ctx context.Context, cmd *models.MarkConfigurationAsAppliedCmd) error
+	GetAppliedConfigurations(ctx context.Context, orgID int64, limit int) ([]*models.HistoricAlertConfiguration, error)
+	GetHistoricalConfiguration(ctx context.Context, orgID int64, id int64) (*models.HistoricAlertConfiguration, error)
 }
 
 // DBstore stores the alert definitions and instances in the database.
@@ -36,20 +40,36 @@ type DBstore struct {
 	SQLStore         db.DB
 	Logger           log.Logger
 	FolderService    folder.Service
-	AccessControl    accesscontrol.AccessControl
 	DashboardService dashboards.DashboardService
+	AccessControl    accesscontrol.AccessControl
+	Bus              bus.Bus
 }
 
 func ProvideDBStore(
-	cfg *setting.Cfg, featureToggles featuremgmt.FeatureToggles, sqlstore db.DB, folderService folder.Service,
-	access accesscontrol.AccessControl, dashboards dashboards.DashboardService) *DBstore {
-	return &DBstore{
+	cfg *setting.Cfg,
+	featureToggles featuremgmt.FeatureToggles,
+	sqlstore db.DB,
+	folderService folder.Service,
+	dashboards dashboards.DashboardService,
+	ac accesscontrol.AccessControl,
+	bus bus.Bus,
+) (*DBstore, error) {
+	store := DBstore{
 		Cfg:              cfg.UnifiedAlerting,
 		FeatureToggles:   featureToggles,
 		SQLStore:         sqlstore,
-		Logger:           log.New("dbstore"),
+		Logger:           log.New("ngalert.dbstore"),
 		FolderService:    folderService,
-		AccessControl:    access,
 		DashboardService: dashboards,
+		AccessControl:    ac,
+		Bus:              bus,
 	}
+	if err := folderService.RegisterService(store); err != nil {
+		return nil, err
+	}
+	return &store, nil
+}
+
+type RuleChangeEvent struct {
+	RuleKeys []models.AlertRuleKey
 }

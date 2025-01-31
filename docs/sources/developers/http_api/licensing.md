@@ -1,7 +1,7 @@
 ---
 aliases:
-  - /docs/grafana/latest/developers/http_api/licensing/
-  - /docs/grafana/latest/http_api/licensing/
+  - ../../http_api/licensing/
+canonical: /docs/grafana/latest/developers/http_api/licensing/
 description: Enterprise Licensing HTTP API
 keywords:
   - grafana
@@ -10,14 +10,28 @@ keywords:
   - api
   - licensing
   - enterprise
-title: 'Licensing HTTP API'
+labels:
+  products:
+    - enterprise
+    - oss
+title: Licensing HTTP API
 ---
 
 # Enterprise License API
 
-Licensing is only available in Grafana Enterprise. Read more about [Grafana Enterprise]({{< relref "../../introduction/grafana-enterprise/" >}}).
+Licensing is only available in Grafana Enterprise. Read more about [Grafana Enterprise]({{< relref "/docs/grafana/latest/introduction/grafana-enterprise" >}}).
 
-> If you are running Grafana Enterprise, for some endpoints you'll need to have specific permissions. Refer to [Role-based access control permissions]({{< relref "../../administration/roles-and-permissions/access-control/custom-role-actions-scopes/" >}}) for more information.
+{{< admonition type="caution" >}}
+You can't authenticate to the Licensing HTTP API with service account tokens.
+Service accounts are limited to an organization and an organization role.
+They can't be granted [Grafana server administrator permissions](/docs/grafana/<GRAFANA_VERSION>/administration/roles-and-permissions/#grafana-server-administrators).
+
+To use these API endpoints you have to use Basic authentication and the Grafana user must have the Grafana server administrator permission.
+
+The `admin` user that Grafana is provisioned with by default has permissions to use these API endpoints.
+{{< /admonition >}}
+
+> If you are running Grafana Enterprise, for some endpoints you'll need to have specific permissions. Refer to [Role-based access control permissions]({{< relref "/docs/grafana/latest/administration/roles-and-permissions/access-control/custom-role-actions-scopes" >}}) for more information.
 
 ## Check license availability
 
@@ -61,7 +75,9 @@ Status codes:
 
 ## Add license
 
-> **Note:** Available in Grafana Enterprise v7.4+.
+{{% admonition type="note" %}}
+Available in Grafana Enterprise v7.4+.
+{{% /admonition %}}
 
 `POST /api/licensing/token`
 
@@ -121,7 +137,9 @@ Status Codes:
 
 ## Manually force license refresh
 
-> **Note:** Available in Grafana Enterprise v7.4+.
+{{% admonition type="note" %}}
+Available in Grafana Enterprise v7.4+.
+{{% /admonition %}}
 
 `POST /api/licensing/token/renew`
 
@@ -180,7 +198,9 @@ Status Codes:
 
 ## Remove license from database
 
-> **Note:** Available in Grafana Enterprise v7.4+.
+{{% admonition type="note" %}}
+Available in Grafana Enterprise v7.4+.
+{{% /admonition %}}
 
 `DELETE /api/licensing/token`
 

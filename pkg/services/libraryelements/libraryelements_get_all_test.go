@@ -8,7 +8,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/kinds/librarypanel"
+	"github.com/grafana/grafana/pkg/services/libraryelements/model"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/search"
 )
@@ -37,14 +38,15 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all panel elements and both panels and variables exist, it should only return panels",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreateVariableCommand(sc.folder.ID, "query0")
+			// nolint:staticcheck
+			command := getCreateVariableCommand(sc.folder.ID, sc.folder.UID, "query0")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
 
 			err := sc.reqContext.Req.ParseForm()
 			require.NoError(t, err)
-			sc.reqContext.Req.Form.Add("kind", strconv.FormatInt(int64(models.PanelElement), 10))
+			sc.reqContext.Req.Form.Add("kind", strconv.FormatInt(int64(model.PanelElement), 10))
 
 			resp = sc.service.getAllHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -61,10 +63,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -75,21 +78,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -103,14 +106,15 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all variable elements and both panels and variables exist, it should only return panels",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreateVariableCommand(sc.folder.ID, "query0")
+			// nolint:staticcheck
+			command := getCreateVariableCommand(sc.folder.ID, sc.folder.UID, "query0")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
 
 			err := sc.reqContext.Req.ParseForm()
 			require.NoError(t, err)
-			sc.reqContext.Req.Form.Add("kind", strconv.FormatInt(int64(models.VariableElement), 10))
+			sc.reqContext.Req.Form.Add("kind", strconv.FormatInt(int64(model.VariableElement), 10))
 
 			resp = sc.service.getAllHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -127,10 +131,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "query0",
-							Kind:        int64(models.VariableElement),
+							Kind:        int64(model.VariableElement),
 							Type:        "query",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -140,21 +145,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"description": "A description",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -168,7 +173,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist, it should succeed",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -188,10 +194,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -202,31 +209,32 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[1].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -237,21 +245,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[1].Meta.Created,
 								Updated:             result.Result.Elements[1].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -265,7 +273,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and sort desc is set, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -288,10 +297,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -302,31 +312,32 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[1].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -337,21 +348,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[1].Meta.Created,
 								Updated:             result.Result.Elements[1].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -365,7 +376,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and typeFilter is set to existing types, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreateCommandWithModel(sc.folder.ID, "Gauge - Library Panel", models.PanelElement, []byte(`
+			// nolint:staticcheck
+			command := getCreateCommandWithModel(sc.folder.ID, sc.folder.UID, "Gauge - Library Panel", model.PanelElement, []byte(`
 			{
 			  "datasource": "${DS_GDEV-TESTDATA}",
 			  "id": 1,
@@ -378,7 +390,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
 
-			command = getCreateCommandWithModel(sc.folder.ID, "BarGauge - Library Panel", models.PanelElement, []byte(`
+			// nolint:staticcheck
+			command = getCreateCommandWithModel(sc.folder.ID, sc.folder.UID, "BarGauge - Library Panel", model.PanelElement, []byte(`
 			{
 			  "datasource": "${DS_GDEV-TESTDATA}",
 			  "id": 1,
@@ -409,10 +422,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          3,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "BarGauge - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "bargauge",
 							Description: "BarGauge description",
 							Model: map[string]interface{}{
@@ -423,31 +437,32 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "bargauge",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[1].UID,
 							Name:        "Gauge - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "gauge",
 							Description: "Gauge description",
 							Model: map[string]interface{}{
@@ -458,21 +473,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"description": "Gauge description",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[1].Meta.Created,
 								Updated:             result.Result.Elements[1].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -486,7 +501,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and typeFilter is set to a nonexistent type, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreateCommandWithModel(sc.folder.ID, "Gauge - Library Panel", models.PanelElement, []byte(`
+			// nolint:staticcheck
+			command := getCreateCommandWithModel(sc.folder.ID, sc.folder.UID, "Gauge - Library Panel", model.PanelElement, []byte(`
 			{
 			  "datasource": "${DS_GDEV-TESTDATA}",
 			  "id": 1,
@@ -521,23 +537,24 @@ func TestGetAllLibraryElements(t *testing.T) {
 			}
 		})
 
-	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and folderFilter is set to existing folders, it should succeed and the result should be correct",
+	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and folderFilterUIDs is set to existing folders, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			newFolder := createFolderWithACL(t, sc.sqlStore, "NewFolder", sc.user, []folderACLItem{})
-			command := getCreatePanelCommand(newFolder.ID, "Text - Library Panel2")
+			newFolder := createFolder(t, sc, "NewFolder", nil)
+			// nolint:staticcheck
+			command := getCreatePanelCommand(newFolder.ID, newFolder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
-			folderFilter := strconv.FormatInt(newFolder.ID, 10)
-
+			folderFilterUID := newFolder.UID
 			err := sc.reqContext.Req.ParseForm()
 			require.NoError(t, err)
-			sc.reqContext.Req.Form.Add("folderFilter", folderFilter)
+			sc.reqContext.Req.Form.Add("folderFilterUIDs", folderFilterUID)
 			resp = sc.service.getAllHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
 
 			var result libraryElementsSearch
 			err = json.Unmarshal(resp.Body(), &result)
+
 			require.NoError(t, err)
 			var expected = libraryElementsSearch{
 				Result: libraryElementsSearchResult{
@@ -548,10 +565,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    newFolder.ID,
+							FolderID:    newFolder.ID, // nolint:staticcheck
+							FolderUID:   newFolder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -562,21 +580,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "NewFolder",
 								FolderUID:           newFolder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -590,16 +608,17 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and folderFilter is set to a nonexistent folders, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			newFolder := createFolderWithACL(t, sc.sqlStore, "NewFolder", sc.user, []folderACLItem{})
-			command := getCreatePanelCommand(newFolder.ID, "Text - Library Panel2")
+			newFolder := createFolder(t, sc, "NewFolder", nil)
+			// nolint:staticcheck
+			command := getCreatePanelCommand(newFolder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
-			folderFilter := "2020,2021"
+			folderFilterUIDs := "2020,2021"
 
 			err := sc.reqContext.Req.ParseForm()
 			require.NoError(t, err)
-			sc.reqContext.Req.Form.Add("folderFilter", folderFilter)
+			sc.reqContext.Req.Form.Add("folderFilterUIDs", folderFilterUIDs)
 			resp = sc.service.getAllHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
 
@@ -621,7 +640,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and folderFilter is set to General folder, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -645,10 +665,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -659,31 +680,32 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[1].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -694,21 +716,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[1].Meta.Created,
 								Updated:             result.Result.Elements[1].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -722,7 +744,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and excludeUID is set, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -745,10 +768,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -759,21 +783,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -787,7 +811,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and perPage is 1, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -810,10 +835,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -824,21 +850,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -852,7 +878,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and perPage is 1 and page is 2, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -876,10 +903,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -890,21 +918,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -918,7 +946,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and searchString exists in the description, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreateCommandWithModel(sc.folder.ID, "Text - Library Panel2", models.PanelElement, []byte(`
+			// nolint:staticcheck
+			command := getCreateCommandWithModel(sc.folder.ID, sc.folder.UID, "Text - Library Panel2", model.PanelElement, []byte(`
 			{
 			  "datasource": "${DS_GDEV-TESTDATA}",
 			  "id": 1,
@@ -951,10 +980,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -965,21 +995,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -993,7 +1023,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and searchString exists in both name and description, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreateCommandWithModel(sc.folder.ID, "Some Other", models.PanelElement, []byte(`
+			// nolint:staticcheck
+			command := getCreateCommandWithModel(sc.folder.ID, sc.folder.UID, "Some Other", model.PanelElement, []byte(`
 			{
 			  "datasource": "${DS_GDEV-TESTDATA}",
 			  "id": 1,
@@ -1024,10 +1055,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Some Other",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A Library Panel",
 							Model: map[string]interface{}{
@@ -1038,31 +1070,32 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
 						{
 							ID:          1,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[1].UID,
 							Name:        "Text - Library Panel",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -1073,21 +1106,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[1].Meta.Created,
 								Updated:             result.Result.Elements[1].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -1101,7 +1134,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and perPage is 1 and page is 1 and searchString is panel2, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -1126,10 +1160,11 @@ func TestGetAllLibraryElements(t *testing.T) {
 						{
 							ID:          2,
 							OrgID:       1,
-							FolderID:    1,
+							FolderID:    1, // nolint:staticcheck
+							FolderUID:   sc.folder.UID,
 							UID:         result.Result.Elements[0].UID,
 							Name:        "Text - Library Panel2",
-							Kind:        int64(models.PanelElement),
+							Kind:        int64(model.PanelElement),
 							Type:        "text",
 							Description: "A description",
 							Model: map[string]interface{}{
@@ -1140,21 +1175,21 @@ func TestGetAllLibraryElements(t *testing.T) {
 								"type":        "text",
 							},
 							Version: 1,
-							Meta: LibraryElementDTOMeta{
+							Meta: model.LibraryElementDTOMeta{
 								FolderName:          "ScenarioFolder",
 								FolderUID:           sc.folder.UID,
 								ConnectedDashboards: 0,
 								Created:             result.Result.Elements[0].Meta.Created,
 								Updated:             result.Result.Elements[0].Meta.Updated,
-								CreatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								CreatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
-								UpdatedBy: LibraryElementDTOMetaUser{
-									ID:        1,
+								UpdatedBy: librarypanel.LibraryElementDTOMetaUser{
+									Id:        1,
 									Name:      userInDbName,
-									AvatarURL: userInDbAvatar,
+									AvatarUrl: userInDbAvatar,
 								},
 							},
 						},
@@ -1168,7 +1203,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and perPage is 1 and page is 3 and searchString is panel, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -1199,7 +1235,8 @@ func TestGetAllLibraryElements(t *testing.T) {
 
 	scenarioWithPanel(t, "When an admin tries to get all library panels and two exist and perPage is 1 and page is 3 and searchString does not exist, it should succeed and the result should be correct",
 		func(t *testing.T, sc scenarioContext) {
-			command := getCreatePanelCommand(sc.folder.ID, "Text - Library Panel2")
+			// nolint:staticcheck
+			command := getCreatePanelCommand(sc.folder.ID, sc.folder.UID, "Text - Library Panel2")
 			sc.reqContext.Req.Body = mockRequestBody(command)
 			resp := sc.service.createHandler(sc.reqContext)
 			require.Equal(t, 200, resp.Status())
@@ -1237,6 +1274,7 @@ func TestGetAllLibraryElements(t *testing.T) {
 			err := json.Unmarshal(resp.Body(), &result)
 			require.NoError(t, err)
 			require.Equal(t, 1, len(result.Result.Elements))
+			// nolint:staticcheck
 			require.Equal(t, int64(1), result.Result.Elements[0].FolderID)
 			require.Equal(t, "Text - Library Panel", result.Result.Elements[0].Name)
 

@@ -1,6 +1,6 @@
 ---
 aliases:
-  - /docs/grafana/latest/data-sources/graphite/query-editor/
+  - ../../data-sources/graphite/query-editor/
 description: Guide for using the Graphite data source's query editor
 keywords:
   - grafana
@@ -11,9 +11,30 @@ keywords:
   - logs
   - resources
   - queries
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 menuTitle: Query editor
 title: Graphite query editor
 weight: 300
+refs:
+  query-transform-data:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/
+  annotate-visualizations:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/annotate-visualizations/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/annotate-visualizations/
+  set-up-grafana-monitoring:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/setup-grafana/set-up-grafana-monitoring/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/setup-grafana/set-up-grafana-monitoring/
 ---
 
 # Graphite query editor
@@ -22,7 +43,7 @@ Grafana includes a Graphite-specific query editor to help you build queries.
 The query editor helps you quickly navigate the metric space, add functions, and change function parameters.
 It can handle all types of Graphite queries, including complex nested queries through the use of query references.
 
-For general documentation on querying data sources in Grafana, see [Query and transform data]({{< relref "../../../panels-visualizations/query-transform-data" >}}).
+For general documentation on querying data sources in Grafana, see [Query and transform data](ref:query-transform-data).
 
 ## View the raw query
 
@@ -50,6 +71,10 @@ Some functions like aliasByNode support an optional second argument. To add an a
 
 To learn more, refer to [Graphite's documentation on functions](https://graphite.readthedocs.io/en/latest/functions.html).
 
+{{% admonition type="warning" %}}
+Some functions take a second argument that may be a function that returns a series. If you are adding a second argument that is a function, it is suggested to use a series reference from a second query instead of the function itself. The query editor does not currently support parsing of a second argument that is a function when switching between the query editor and the code editor.
+{{% /admonition %}}
+
 ### Sort labels
 
 If you have the same labels on multiple graphs, they are both sorted differently and use different colors.
@@ -66,8 +91,10 @@ Grafana consolidates all Graphite metrics so that Graphite doesn't return more d
 By default, Grafana consolidates data points using the `avg` function.
 To control how Graphite consolidates metrics, use the Graphite `consolidateBy()` function.
 
-> **Note:** Legend summary values (max, min, total) can't all be correct at the same time because they are calculated client-side by Grafana.
-> Depending on your consolidation function, only one or two can be correct at the same time.
+{{% admonition type="note" %}}
+Legend summary values (max, min, total) can't all be correct at the same time because they are calculated client-side by Grafana.
+Depending on your consolidation function, only one or two can be correct at the same time.
+{{% /admonition %}}
 
 ### Combine time series
 
@@ -82,8 +109,10 @@ To select data, use the `seriesByTag` function, which takes tag expressions (`=`
 
 The Grafana query builder does this for you automatically when you select a tag.
 
-> **Tip:** The regular expression search can be slow on high-cardinality tags, so try to use other tags to reduce the scope first.
-> To help reduce the results, start by filtering on a particular name or namespace.
+{{% admonition type="note" %}}
+The regular expression search can be slow on high-cardinality tags, so try to use other tags to reduce the scope first.
+To help reduce the results, start by filtering on a particular name or namespace.
+{{% /admonition %}}
 
 ## Nest queries
 
@@ -101,7 +130,7 @@ This is more efficient than adding a query for each time series, such as `cpu.pe
 
 ## Apply annotations
 
-[Annotations]({{< relref "../../../dashboards/build-dashboards/annotate-visualizations" >}}) overlay rich event information on top of graphs.
+[Annotations](ref:annotate-visualizations) overlay rich event information on top of graphs.
 You can add annotation queries in the Dashboard menu's Annotations view.
 
 Graphite supports two ways to query annotations:
@@ -112,7 +141,7 @@ Graphite supports two ways to query annotations:
 ## Get Grafana metrics into Graphite
 
 Grafana exposes metrics for Graphite on the `/metrics` endpoint.
-For detailed instructions, refer to [Internal Grafana metrics]({{< relref "../../../setup-grafana/set-up-grafana-monitoring" >}}).
+For detailed instructions, refer to [Internal Grafana metrics](ref:set-up-grafana-monitoring).
 
 ## Integration with Loki
 

@@ -1,71 +1,84 @@
 ---
 aliases:
-  - /docs/grafana/latest/panels/working-with-panels/navigate-panel-editor/
-  - /docs/grafana/latest/panels/working-with-panels/navigate-inspector-panel/
-  - /docs/grafana/latest/dashboards/dashboard-create/
-  - /docs/grafana/latest/features/dashboard/dashboards/
-  - /docs/grafana/latest/panels/working-with-panels/add-panel/
-  - /docs/grafana/latest/dashboards/add-organize-panels/
-  - /docs/grafana/latest/panels/add-panels-dynamically/about-repeating-panels-rows/
-  - /docs/grafana/latest/panels/add-panels-dynamically/configure-repeating-rows/
-  - /docs/grafana/latest/panels/add-panels-dynamically/configure-repeating-panels/
-  - /docs/grafana/next/dashboards/build-dashboards/add-organize-panels/
-  - /docs/grafana/latest/panels-visualizations/add-organize-panels/
-title: Panel editor overview
-menuTitle: Panel editor overview
-weight: 1
+  - ../dashboards/add-organize-panels/
+  - ../dashboards/dashboard-create/
+  - ../panels/add-panels-dynamically/about-repeating-panels-rows/
+  - ../panels/add-panels-dynamically/configure-repeating-panels/
+  - ../panels/add-panels-dynamically/configure-repeating-rows/
+  - ../panels/working-with-panels/
+  - ../panels/working-with-panels/add-panel/
+  - ../panels/working-with-panels/navigate-inspector-panel/
+  - ../panels/working-with-panels/navigate-panel-editor/
+  - add-organize-panels/
 keywords:
   - panel
   - dashboard
   - dynamic
-  - rows
   - add
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+menuTitle: Panel editor
+title: Panel editor
+description: Learn about the features of the panel editor
+weight: 20
+refs:
+  transform-data:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/transform-data/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/transform-data/
+  the-overview-of-grafana-alerting:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/
+  table:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/table/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/table/
+  add-a-query:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/#add-a-query
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/#add-a-query
 ---
 
-# Panel editor overview
+# Panel editor
 
-{{< figure src="/static/img/docs/panel-editor/panel-editor-8-0.png" class="docs-image--no-shadow" max-width="1500px" >}}
+In the panel editor, you can update all the elements of a visualization including the data source, queries, time range, and visualization display options.
 
-This section describes the areas of the Grafana panel editor.
+![Panel editor](/media/docs/grafana/panels-visualizations/screenshot-grafana-11.2-panel-editor.png)
 
-1. Panel header: The header section lists the dashboard in which the panel appears and the following controls:
+This following sections describe the areas of the Grafana panel editor.
 
-   - **Dashboard settings (gear) icon:** Click to access the dashboard settings.
-   - **Discard:** Discards changes you have made to the panel since you last saved the dashboard.
-   - **Save:** Saves changes you made to the panel.
-   - **Apply:** Applies changes you made and closes the panel editor, returning you to the dashboard. You will have to save the dashboard to persist the applied changes.
+## Panel header
 
-1. Visualization preview: The visualization preview section contains the following options:
+The header section lists the dashboard in which the panel appears and the following controls:
 
-   - **Table view:** Convert any visualization to a table so that you can see the data. Table views are useful for troubleshooting.
-   - **Fill:** The visualization preview fills the available space. If you change the width of the side pane or height of the bottom pane the visualization changes to fill the available space.
-   - **Actual:** The visualization preview will have the exact size as the size on the dashboard. If not enough space is available, the visualization will scale down preserving the aspect ratio.
-   - **Time range controls:** For more information, refer to [Time range controls]({{< relref "../../dashboards/manage-dashboards/#configure-dashboard-time-range-controls" >}}).
+- **Back to dashboard** - Return to the dashboard with changes applied, but not yet saved.
+- **Discard panel changes** - Discard changes you have made to the panel since you last saved the dashboard.
+- **Save dashboard** - Save your changes to the dashboard.
 
-1. Data section: The data section contains tabs where you enter queries, transform your data, and create alert rules (if applicable).
+## Visualization preview
 
-   - **Query tab:** Select your data source and enter queries here. For more information, refer to [Add a query]({{< relref "../query-transform-data/#add-a-query" >}}).
-   - **Transform tab:** Apply data transformations. For more information, refer to [Transform data]({{< relref "../query-transform-data/transform-data/" >}}).
-   - **Alert tab:** Write alert rules. For more information, refer to [Overview of Grafana 8 alerting]({{< relref "../../alerting/" >}}).
+The visualization preview section contains the following options:
 
-1. Panel display options: The display options section contains tabs where you configure almost every aspect of your data visualization.
+- **Table view** - Convert any visualization to a table so you can see the data. Table views are helpful for troubleshooting. This view only contains the raw data. It doesn't include transformations you might have applied to the data or the formatting options available in the [Table](ref:table) visualization.
+- **Time range controls** - **Default** is either the browser local timezone or the timezone selected at a higher level.
+- **Refresh** - Query the data source.
 
-## Open the panel inspect drawer
+## Data section
 
-The inspect drawer helps you understand and troubleshoot your panels. You can view the raw data for any panel, export that data to a comma-separated values (CSV) file, view query requests, and export panel and data JSON.
+The data section contains tabs where you enter queries, transform your data, and create alert rules (if applicable).
 
-> **Note:** Not all panel types include all tabs. For example, dashboard list panels do not have raw data to inspect, so they do not display the Stats, Data, or Query tabs.
+- **Queries** - Select your data source and enter queries here. For more information, refer to [Add a query](ref:add-a-query). When you create a new dashboard, you'll be prompted to select a data source before you get to the panel editor. You set or update the data source in existing dashboards using the drop-down in the **Queries** tab.
+- **Transformations** - Apply data transformations. For more information, refer to [Transform data](ref:transform-data).
+- **Alert** - Write alert rules. For more information, refer to [the overview of Grafana Alerting](ref:the-overview-of-grafana-alerting).
 
-The panel inspector consists of the following options:
+## Panel display options
 
-1. The panel inspect drawer displays opens a drawer on the right side. Click the arrow in the upper right corner to expand or reduce the drawer pane.
-
-1. **Data tab -** Shows the raw data returned by the query with transformations applied. Field options such as overrides and value mappings are not applied by default.
-
-1. **Stats tab -** Shows how long your query takes and how much it returns.
-
-1. **JSON tab -** Allows you to view and copy the panel JSON, panel data JSON, and data frame structure JSON. This is useful if you are provisioning or administering Grafana.
-
-1. **Query tab -** Shows you the requests to the server sent when Grafana queries the data source.
-
-1. **Error tab -** Shows the error. Only visible when query returns error.
+The display options section contains tabs where you configure almost every aspect of your data visualization.

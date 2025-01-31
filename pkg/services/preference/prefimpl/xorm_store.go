@@ -32,7 +32,7 @@ func (s *sqlStore) Get(ctx context.Context, query *pref.Preference) (*pref.Prefe
 
 func (s *sqlStore) List(ctx context.Context, query *pref.Preference) ([]*pref.Preference, error) {
 	prefs := make([]*pref.Preference, 0)
-	params := make([]interface{}, 0)
+	params := make([]any, 0)
 	filter := ""
 
 	if len(query.Teams) > 0 {
@@ -63,7 +63,7 @@ func (s *sqlStore) List(ctx context.Context, query *pref.Preference) ([]*pref.Pr
 }
 
 func (s *sqlStore) Update(ctx context.Context, cmd *pref.Preference) error {
-	return s.db.WithTransactionalDbSession(ctx, func(sess *db.Session) error {
+	return s.db.WithDbSession(ctx, func(sess *db.Session) error {
 		_, err := sess.ID(cmd.ID).AllCols().Update(cmd)
 		return err
 	})
@@ -72,8 +72,9 @@ func (s *sqlStore) Update(ctx context.Context, cmd *pref.Preference) error {
 func (s *sqlStore) Insert(ctx context.Context, cmd *pref.Preference) (int64, error) {
 	var ID int64
 	var err error
-	err = s.db.WithTransactionalDbSession(ctx, func(sess *db.Session) error {
-		ID, err = sess.Insert(cmd)
+	err = s.db.WithDbSession(ctx, func(sess *db.Session) error {
+		_, err = sess.Insert(cmd)
+		ID = cmd.ID
 		return err
 	})
 	return ID, err

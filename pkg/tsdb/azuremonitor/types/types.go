@@ -9,12 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/grafana-azure-sdk-go/azcredentials"
+	"github.com/grafana/grafana-azure-sdk-go/v2/azcredentials"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-)
-
-const (
-	TimeSeries = "time_series"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana/pkg/tsdb/azuremonitor/kinds/dataquery"
 )
 
 var (
@@ -41,31 +39,37 @@ type AzureMonitorCustomizedCloudSettings struct {
 type DatasourceService struct {
 	URL        string
 	HTTPClient *http.Client
+	Logger     log.Logger
 }
 
 type DatasourceInfo struct {
-	Cloud       string
 	Credentials azcredentials.AzureCredentials
 	Settings    AzureMonitorSettings
 	Routes      map[string]AzRoute
 	Services    map[string]DatasourceService
 
-	JSONData                map[string]interface{}
+	JSONData                map[string]any
 	DecryptedSecureJSONData map[string]string
 	DatasourceID            int64
 	OrgID                   int64
+
+	DatasourceName string
+	DatasourceUID  string
 }
 
 // AzureMonitorQuery is the query for all the services as they have similar queries
 // with a url, a querystring and an alias field
 type AzureMonitorQuery struct {
-	URL       string
-	Target    string
-	Params    url.Values
-	RefID     string
-	Alias     string
-	TimeRange backend.TimeRange
-	Filter    string
+	URL          string
+	Target       string
+	Params       url.Values
+	RefID        string
+	Alias        string
+	TimeRange    backend.TimeRange
+	BodyFilter   string
+	Dimensions   []dataquery.AzureMetricDimension
+	Resources    map[string]dataquery.AzureMonitorResource
+	Subscription string
 }
 
 // AzureMonitorResponse is the json response from the Azure Monitor API
@@ -110,7 +114,7 @@ type AzureResponseTable struct {
 		Name string `json:"name"`
 		Type string `json:"type"`
 	} `json:"columns"`
-	Rows [][]interface{} `json:"rows"`
+	Rows [][]any `json:"rows"`
 }
 
 type AzureMonitorResource struct {
@@ -118,68 +122,41 @@ type AzureMonitorResource struct {
 	ResourceName  string `json:"resourceName"`
 }
 
-// AzureMonitorJSONQuery is the frontend JSON query model for an Azure Monitor query.
-type AzureMonitorJSONQuery struct {
-	AzureMonitor struct {
-		ResourceURI string `json:"resourceUri"`
-		// These are used to reconstruct a resource URI
-		MetricNamespace string                 `json:"metricNamespace"`
-		CustomNamespace string                 `json:"customNamespace"`
-		MetricName      string                 `json:"metricName"`
-		Region          string                 `json:"region"`
-		Resources       []AzureMonitorResource `json:"resources"`
-
-		Aggregation      string                        `json:"aggregation"`
-		Alias            string                        `json:"alias"`
-		DimensionFilters []AzureMonitorDimensionFilter `json:"dimensionFilters"` // new model
-		TimeGrain        string                        `json:"timeGrain"`
-		Top              string                        `json:"top"`
-
-		AllowedTimeGrainsMs []int64 `json:"allowedTimeGrainsMs"`
-		Dimension           string  `json:"dimension"`       // old model
-		DimensionFilter     string  `json:"dimensionFilter"` // old model
-		Format              string  `json:"format"`
-
-		// Deprecated, MetricNamespace should be used instead
-		MetricDefinition string `json:"metricDefinition"`
-		// Deprecated: Use Resources with a single element instead
-		AzureMonitorResource
-	} `json:"azureMonitor"`
-	Subscription string `json:"subscription"`
+type AzureMonitorDimensionFilterBackend struct {
+	Key      string   `json:"key"`
+	Operator int      `json:"operator"`
+	Values   []string `json:"values"`
 }
 
-// AzureMonitorDimensionFilter is the model for the frontend sent for azureMonitor metric
-// queries like "BlobType", "eq", "*"
-type AzureMonitorDimensionFilter struct {
-	Dimension string   `json:"dimension"`
-	Operator  string   `json:"operator"`
-	Filters   []string `json:"filters,omitempty"`
-	// Deprecated: To support multiselection, filters are passed in a slice now. Also migrated in frontend.
-	Filter *string `json:"filter,omitempty"`
-}
+func ConstructFiltersString(a dataquery.AzureMetricDimension) string {
+	filterStrings := make([]string, len(a.Filters))
+	for i, filter := range a.Filters {
+		dimension := ""
+		operator := ""
+		if a.Dimension != nil {
+			dimension = *a.Dimension
+		}
+		if a.Operator != nil {
+			operator = *a.Operator
+		}
 
-func (a AzureMonitorDimensionFilter) ConstructFiltersString() string {
-	var filterStrings []string
-	for _, filter := range a.Filters {
-		filterStrings = append(filterStrings, fmt.Sprintf("%v %v '%v'", a.Dimension, a.Operator, filter))
+		filterStrings[i] = fmt.Sprintf("%v %v '%v'", dimension, operator, filter)
 	}
-	if a.Operator == "eq" {
+
+	if a.Operator != nil && *a.Operator == "eq" {
 		return strings.Join(filterStrings, " or ")
-	} else {
-		return strings.Join(filterStrings, " and ")
 	}
+
+	return strings.Join(filterStrings, " and ")
 }
 
 // LogJSONQuery is the frontend JSON query model for an Azure Log Analytics query.
 type LogJSONQuery struct {
-	AzureLogAnalytics struct {
-		Query        string `json:"query"`
-		ResultFormat string `json:"resultFormat"`
-		Resource     string `json:"resource"`
+	AzureLogAnalytics dataquery.AzureLogsQuery `json:"azureLogAnalytics"`
+}
 
-		// Deprecated: Queries should be migrated to use Resource instead
-		Workspace string `json:"workspace"`
-	} `json:"azureLogAnalytics"`
+type TracesJSONQuery struct {
+	AzureTraces dataquery.AzureTracesQuery `json:"azureTraces"`
 }
 
 // MetricChartDefinition is the JSON model for a metrics chart definition
@@ -199,7 +176,7 @@ type MetricVisualization struct {
 }
 
 type ServiceProxy interface {
-	Do(rw http.ResponseWriter, req *http.Request, cli *http.Client) http.ResponseWriter
+	Do(rw http.ResponseWriter, req *http.Request, cli *http.Client) (http.ResponseWriter, error)
 }
 
 type LogAnalyticsWorkspaceFeatures struct {
@@ -223,6 +200,13 @@ type LogAnalyticsWorkspaceResponse struct {
 	PublicNetworkAccessForIngestion string                          `json:"publicNetworkAccessForIngestion"`
 	PublicNetworkAccessForQuery     string                          `json:"publicNetworkAccessForQuery"`
 	RetentionInDays                 int                             `json:"retentionInDays"`
+}
+
+type SubscriptionsResponse struct {
+	ID             string `json:"id"`
+	SubscriptionID string `json:"subscriptionId"`
+	TenantID       string `json:"tenantId"`
+	DisplayName    string `json:"displayName"`
 }
 
 var ErrorAzureHealthCheck = errors.New("health check failed")

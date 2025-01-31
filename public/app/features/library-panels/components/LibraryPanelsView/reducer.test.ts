@@ -1,7 +1,8 @@
 import { LoadingState } from '@grafana/data';
+import { Panel } from '@grafana/schema';
 
 import { reducerTester } from '../../../../../test/core/redux/reducerTester';
-import { LibraryElementDTO, LibraryElementKind } from '../../types';
+import { LibraryElementDTO } from '../../types';
 
 import {
   changePage,
@@ -93,7 +94,6 @@ function getLibraryPanelMocks(count: number): LibraryElementDTO[] {
     mocks.push(
       mockLibraryPanel({
         uid: i.toString(10),
-        id: i,
         name: `Test Panel ${i}`,
       })
     );
@@ -104,13 +104,11 @@ function getLibraryPanelMocks(count: number): LibraryElementDTO[] {
 
 function mockLibraryPanel({
   uid = '1',
-  id = 1,
-  orgId = 1,
   folderUid = '',
   name = 'Test Panel',
-  model = { type: 'text', title: 'Test Panel' },
+  model = { type: 'text', title: 'Test Panel' } as Panel,
   meta = {
-    folderName: 'General',
+    folderName: 'Dashboards',
     folderUid: '',
     connectedDashboards: 0,
     created: '2021-01-01T00:00:00',
@@ -124,11 +122,8 @@ function mockLibraryPanel({
 }: Partial<LibraryElementDTO> = {}): LibraryElementDTO {
   return {
     uid,
-    id,
-    orgId,
     folderUid,
     name,
-    kind: LibraryElementKind.Panel,
     model,
     version,
     meta,

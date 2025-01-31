@@ -1,8 +1,8 @@
 import { css } from '@emotion/css';
-import React, { CSSProperties, FC } from 'react';
+import { CSSProperties, FC } from 'react';
 
 import {
-  FieldConfigEditorProps,
+  StandardEditorProps,
   FieldColorModeId,
   SelectableValue,
   FieldColor,
@@ -17,12 +17,9 @@ import { useStyles2, useTheme2, Field, RadioButtonGroup, Select } from '@grafana
 
 import { ColorValueEditor } from './color';
 
-export const FieldColorEditor: React.FC<FieldConfigEditorProps<FieldColor | undefined, FieldColorConfigSettings>> = ({
-  value,
-  onChange,
-  item,
-  id,
-}) => {
+type Props = StandardEditorProps<FieldColor | undefined, FieldColorConfigSettings>;
+
+export const FieldColorEditor = ({ value, onChange, item, id }: Props) => {
   const theme = useTheme2();
   const styles = useStyles2(getStyles);
 
@@ -31,20 +28,22 @@ export const FieldColorEditor: React.FC<FieldConfigEditorProps<FieldColor | unde
     ? fieldColorModeRegistry.list()
     : fieldColorModeRegistry.list().filter((m) => !m.isByValue);
 
-  const options = availableOptions.map((mode) => {
-    let suffix = mode.isByValue ? ' (by value)' : '';
+  const options = availableOptions
+    .filter((mode) => !mode.excludeFromPicker)
+    .map((mode) => {
+      let suffix = mode.isByValue ? ' (by value)' : '';
 
-    return {
-      value: mode.id,
-      label: `${mode.name}${suffix}`,
-      description: mode.description,
-      isContinuous: mode.isContinuous,
-      isByValue: mode.isByValue,
-      component() {
-        return <FieldColorModeViz mode={mode} theme={theme} />;
-      },
-    };
-  });
+      return {
+        value: mode.id,
+        label: `${mode.name}${suffix}`,
+        description: mode.description,
+        isContinuous: mode.isContinuous,
+        isByValue: mode.isByValue,
+        component() {
+          return <FieldColorModeViz mode={mode} theme={theme} />;
+        },
+      };
+    });
 
   const onModeChange = (newMode: SelectableValue<string>) => {
     onChange({
@@ -71,7 +70,7 @@ export const FieldColorEditor: React.FC<FieldConfigEditorProps<FieldColor | unde
 
   const mode = value?.mode ?? FieldColorModeId.Thresholds;
 
-  if (mode === FieldColorModeId.Fixed) {
+  if (mode === FieldColorModeId.Fixed || mode === FieldColorModeId.Shades) {
     return (
       <div className={styles.group}>
         <Select
@@ -153,12 +152,12 @@ const FieldColorModeViz: FC<ModeProps> = ({ mode, theme }) => {
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
-    group: css`
-      display: flex;
-    `,
-    select: css`
-      margin-right: 8px;
-      flex-grow: 1;
-    `,
+    group: css({
+      display: 'flex',
+    }),
+    select: css({
+      marginRight: theme.spacing(1),
+      flexGrow: 1,
+    }),
   };
 };

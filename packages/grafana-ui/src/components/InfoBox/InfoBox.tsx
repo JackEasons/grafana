@@ -1,9 +1,9 @@
 import { css, cx } from '@emotion/css';
-import React from 'react';
+import * as React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
-import { stylesFactory, useStyles2 } from '../../themes';
+import { useStyles2 } from '../../themes';
 import { Alert, AlertVariant } from '../Alert/Alert';
 import { Icon } from '../Icon/Icon';
 
@@ -30,6 +30,8 @@ export const InfoBox = React.memo(
       const styles = useStyles2(getStyles);
 
       return (
+        // component is deprecated so no point fixing this
+        // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
         <Alert severity={severity} className={className} {...otherProps} ref={ref} title={title as string}>
           <div>{children}</div>
           {url && (
@@ -45,11 +47,9 @@ export const InfoBox = React.memo(
 
 InfoBox.displayName = 'InfoBox';
 
-const getStyles = stylesFactory((theme: GrafanaTheme2) => {
-  return {
-    docsLink: css`
-      display: inline-block;
-      margin-top: ${theme.spacing(2)};
-    `,
-  };
+const getStyles = (theme: GrafanaTheme2) => ({
+  docsLink: css({
+    display: 'inline-block',
+    marginTop: theme.spacing(2),
+  }),
 });

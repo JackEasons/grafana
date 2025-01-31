@@ -19,7 +19,7 @@ func TestDatabaseStorageGarbageCollection(t *testing.T) {
 		log:      log.New("remotecache.database"),
 	}
 
-	obj := &CacheableStruct{String: "foolbar"}
+	obj := []byte("foolbar")
 
 	// set time.now to 2 weeks ago
 	var err error
@@ -67,7 +67,7 @@ func TestSecondSet(t *testing.T) {
 		log:      log.New("remotecache.database"),
 	}
 
-	obj := &CacheableStruct{String: "hey!"}
+	obj := []byte("hey!")
 
 	err = db.Set(context.Background(), "killa-gorilla", obj, 0)
 	assert.Equal(t, err, nil)

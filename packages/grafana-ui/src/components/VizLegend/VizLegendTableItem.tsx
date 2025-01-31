@@ -1,10 +1,12 @@
 import { css, cx } from '@emotion/css';
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
+import * as React from 'react';
 
 import { formattedValueToString, GrafanaTheme2 } from '@grafana/data';
 
 import { styleMixins } from '../../themes';
 import { useStyles2 } from '../../themes/ThemeContext';
+import { Trans } from '../../utils/i18n';
 
 import { VizLegendSeriesIcon } from './VizLegendSeriesIcon';
 import { VizLegendItem } from './types';
@@ -28,14 +30,14 @@ export interface Props {
 /**
  * @internal
  */
-export const LegendTableItem: React.FunctionComponent<Props> = ({
+export const LegendTableItem = ({
   item,
   onLabelClick,
   onLabelMouseOver,
   onLabelMouseOut,
   className,
   readonly,
-}) => {
+}: Props) => {
   const styles = useStyles2(getStyles);
 
   const onMouseOver = useCallback(
@@ -69,10 +71,16 @@ export const LegendTableItem: React.FunctionComponent<Props> = ({
     <tr className={cx(styles.row, className)}>
       <td>
         <span className={styles.itemWrapper}>
-          <VizLegendSeriesIcon color={item.color} seriesName={item.label} readonly={readonly} />
+          <VizLegendSeriesIcon
+            color={item.color}
+            seriesName={item.fieldName ?? item.label}
+            readonly={readonly}
+            lineStyle={item.lineStyle}
+          />
           <button
             disabled={readonly}
             type="button"
+            title={item.label}
             onBlur={onMouseOut}
             onFocus={onMouseOver}
             onMouseOver={onMouseOver}
@@ -80,7 +88,12 @@ export const LegendTableItem: React.FunctionComponent<Props> = ({
             onClick={!readonly ? onClick : undefined}
             className={cx(styles.label, item.disabled && styles.labelDisabled)}
           >
-            {item.label} {item.yAxis === 2 && <span className={styles.yAxisLabel}>(right y-axis)</span>}
+            {item.label}{' '}
+            {item.yAxis === 2 && (
+              <span className={styles.yAxisLabel}>
+                <Trans i18nKey="grafana-ui.viz-legend.right-axis-indicator">(right y-axis)</Trans>
+              </span>
+            )}
           </button>
         </span>
       </td>
@@ -102,41 +115,45 @@ const getStyles = (theme: GrafanaTheme2) => {
   const rowHoverBg = styleMixins.hoverColor(theme.colors.background.primary, theme);
 
   return {
-    row: css`
-      label: LegendRow;
-      font-size: ${theme.v1.typography.size.sm};
-      border-bottom: 1px solid ${theme.colors.border.weak};
-      td {
-        padding: ${theme.spacing(0.25, 1)};
-        white-space: nowrap;
-      }
+    row: css({
+      label: 'LegendRow',
+      fontSize: theme.v1.typography.size.sm,
+      borderBottom: `1px solid ${theme.colors.border.weak}`,
+      td: {
+        padding: theme.spacing(0.25, 1),
+        whiteSpace: 'nowrap',
+      },
 
-      &:hover {
-        background: ${rowHoverBg};
-      }
-    `,
-    label: css`
-      label: LegendLabel;
-      white-space: nowrap;
-      background: none;
-      border: none;
-      font-size: inherit;
-      padding: 0;
-    `,
-    labelDisabled: css`
-      label: LegendLabelDisabled;
-      color: ${theme.colors.text.disabled};
-    `,
-    itemWrapper: css`
-      display: flex;
-      white-space: nowrap;
-      align-items: center;
-    `,
-    value: css`
-      text-align: right;
-    `,
-    yAxisLabel: css`
-      color: ${theme.colors.text.secondary};
-    `,
+      '&:hover': {
+        background: rowHoverBg,
+      },
+    }),
+    label: css({
+      label: 'LegendLabel',
+      whiteSpace: 'nowrap',
+      background: 'none',
+      border: 'none',
+      fontSize: 'inherit',
+      padding: 0,
+      maxWidth: '600px',
+      textOverflow: 'ellipsis',
+      overflow: 'hidden',
+      userSelect: 'text',
+    }),
+    labelDisabled: css({
+      label: 'LegendLabelDisabled',
+      color: theme.colors.text.disabled,
+    }),
+    itemWrapper: css({
+      display: 'flex',
+      whiteSpace: 'nowrap',
+      alignItems: 'center',
+    }),
+    value: css({
+      textAlign: 'right',
+    }),
+    yAxisLabel: css({
+      color: theme.colors.text.secondary,
+    }),
   };
 };

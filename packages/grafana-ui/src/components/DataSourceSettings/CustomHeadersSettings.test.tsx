@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 
 import { CustomHeadersSettings, Props } from './CustomHeadersSettings';
 
@@ -32,7 +31,7 @@ const setup = (propOverrides?: object) => {
         password: true,
       },
       secureJsonFields: {},
-      readOnly: true,
+      readOnly: false,
     },
     onChange,
     ...propOverrides,

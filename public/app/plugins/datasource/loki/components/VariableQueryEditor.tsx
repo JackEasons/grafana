@@ -1,4 +1,5 @@
-import React, { FC, FormEvent, useState, useEffect } from 'react';
+import { FormEvent, useState, useEffect } from 'react';
+import { usePrevious } from 'react-use';
 
 import { QueryEditorProps, SelectableValue } from '@grafana/data';
 import { InlineField, InlineFieldRow, Input, Select } from '@grafana/ui';
@@ -16,11 +17,12 @@ export type Props = QueryEditorProps<LokiDatasource, LokiQuery, LokiOptions, Lok
 
 const refId = 'LokiVariableQueryEditor-VariableQuery';
 
-export const LokiVariableQueryEditor: FC<Props> = ({ onChange, query, datasource }) => {
+export const LokiVariableQueryEditor = ({ onChange, query, datasource, range }: Props) => {
   const [type, setType] = useState<number | undefined>(undefined);
   const [label, setLabel] = useState('');
   const [labelOptions, setLabelOptions] = useState<Array<SelectableValue<string>>>([]);
   const [stream, setStream] = useState('');
+  const previousType = usePrevious(type);
 
   useEffect(() => {
     if (!query) {
@@ -31,21 +33,18 @@ export const LokiVariableQueryEditor: FC<Props> = ({ onChange, query, datasource
     setType(variableQuery.type);
     setLabel(variableQuery.label || '');
     setStream(variableQuery.stream || '');
-
-    if (variableQuery.label) {
-      setLabelOptions([{ label: variableQuery.label, value: variableQuery.label }]);
-    }
   }, [query]);
 
   useEffect(() => {
-    if (type !== QueryType.LabelValues) {
+    // Fetch label names when the query type is LabelValues, and the previous type was not the same
+    if (type !== QueryType.LabelValues || previousType === type) {
       return;
     }
 
-    datasource.labelNamesQuery().then((labelNames: Array<{ text: string }>) => {
-      setLabelOptions(labelNames.map(({ text }) => ({ label: text, value: text })));
+    datasource.languageProvider.fetchLabels({ timeRange: range }).then((labelNames) => {
+      setLabelOptions(labelNames.map((labelName) => ({ label: labelName, value: labelName })));
     });
-  }, [datasource, type]);
+  }, [datasource, type, range, previousType]);
 
   const onQueryTypeChange = (newType: SelectableValue<QueryType>) => {
     setType(newType.value);
@@ -74,33 +73,40 @@ export const LokiVariableQueryEditor: FC<Props> = ({ onChange, query, datasource
   };
 
   return (
-    <InlineFieldRow>
-      <InlineField label="Query type" labelWidth={20}>
-        <Select
-          aria-label="Query type"
-          onChange={onQueryTypeChange}
-          onBlur={handleBlur}
-          value={type}
-          options={variableOptions}
-          width={16}
-        />
-      </InlineField>
+    <>
+      <InlineFieldRow>
+        <InlineField label="Query type" labelWidth={20}>
+          <Select
+            aria-label="Query type"
+            onChange={onQueryTypeChange}
+            onBlur={handleBlur}
+            value={type}
+            options={variableOptions}
+            width={16}
+          />
+        </InlineField>
+        {type === QueryType.LabelValues && (
+          <>
+            <InlineField label="Label" labelWidth={20}>
+              <Select
+                aria-label="Label"
+                onChange={onLabelChange}
+                onBlur={handleBlur}
+                value={{ label: label, value: label }}
+                options={labelOptions}
+                width={16}
+                allowCustomValue
+              />
+            </InlineField>
+          </>
+        )}
+      </InlineFieldRow>
       {type === QueryType.LabelValues && (
-        <>
-          <InlineField label="Label" labelWidth={20}>
-            <Select
-              aria-label="Label"
-              onChange={onLabelChange}
-              onBlur={handleBlur}
-              value={label}
-              options={labelOptions}
-              width={16}
-              allowCustomValue
-            />
-          </InlineField>
+        <InlineFieldRow>
           <InlineField
             label="Stream selector"
             labelWidth={20}
+            grow={true}
             tooltip={
               <div>
                 {
@@ -116,11 +122,10 @@ export const LokiVariableQueryEditor: FC<Props> = ({ onChange, query, datasource
               value={stream}
               onChange={onStreamChange}
               onBlur={handleBlur}
-              width={22}
             />
           </InlineField>
-        </>
+        </InlineFieldRow>
       )}
-    </InlineFieldRow>
+    </>
   );
 };

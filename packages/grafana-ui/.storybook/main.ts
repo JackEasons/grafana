@@ -1,47 +1,28 @@
-import path from 'path';
-import type { StorybookConfig } from '@storybook/react/types';
-import { getAvailableIcons, IconName } from '../src/types/icon';
-import { getIconSubDir } from '../src/components/Icon/utils';
+import path, { dirname, join } from 'node:path';
+import type { StorybookConfig } from '@storybook/react-webpack5';
+import { copyAssetsSync } from './copyAssets';
 
-const stories = ['../src/**/*.story.@(tsx|mdx)'];
+// Internal stories should only be visible during development
+const storyGlob =
+  process.env.NODE_ENV === 'production'
+    ? '../src/components/**/!(*.internal).story.tsx'
+    : '../src/components/**/*.story.tsx';
 
-if (process.env.NODE_ENV !== 'production') {
-  stories.push('../src/**/*.story.internal.@(tsx|mdx)');
-}
+const stories = ['../src/Intro.mdx', storyGlob];
 
-// We limit icon paths to only the available icons so publishing
-// doesn't require uploading 1000s of unused assets.
-const iconPaths = getAvailableIcons()
-  .filter((iconName) => !iconName.includes('fa'))
-  .map((iconName) => {
-    const subDir = getIconSubDir(iconName as IconName, 'default');
-    return {
-      from: `../../../public/img/icons/${subDir}/${iconName}.svg`,
-      to: `/public/img/icons/${subDir}/${iconName}.svg`,
-    };
-  });
+// Copy the assets required by storybook before starting the storybook server.
+copyAssetsSync();
 
 const mainConfig: StorybookConfig = {
   stories,
   addons: [
     {
-      // work around docs 6.5.x not resolving correctly with yarn PnP
-      name: path.dirname(require.resolve('@storybook/addon-docs/package.json')),
-      options: {
-        configureJSX: true,
-        babelOptions: {},
-      },
-    },
-    {
       name: '@storybook/addon-essentials',
       options: {
         backgrounds: false,
-        // work around docs 6.5.x not resolving correctly with yarn PnP
-        docs: false,
       },
     },
-    '@storybook/addon-a11y',
-    '@storybook/addon-knobs',
+    getAbsolutePath('@storybook/addon-a11y'),
     {
       name: '@storybook/preset-scss',
       options: {
@@ -53,42 +34,29 @@ const mainConfig: StorybookConfig = {
           url: false,
           importLoaders: 2,
         },
+        sassLoaderOptions: {
+          sassOptions: {
+            // silencing these warnings since we're planning to remove sass when angular is gone
+            silenceDeprecations: ['import', 'global-builtin'],
+          },
+        },
       },
     },
-    '@storybook/addon-storysource',
-    'storybook-dark-mode',
-    {
-      // replace babel-loader in manager and preview with esbuild-loader
-      name: 'storybook-addon-turbo-build',
-      options: {
-        optimizationLevel: 3,
-      },
-    },
+    getAbsolutePath('@storybook/addon-storysource'),
+    getAbsolutePath('storybook-dark-mode'),
+    getAbsolutePath('@storybook/addon-webpack5-compiler-swc'),
   ],
-  core: {
-    builder: {
-      name: 'webpack5',
-      options: {
+  framework: {
+    name: getAbsolutePath('@storybook/react-webpack5'),
+    options: {
+      fastRefresh: true,
+      builder: {
         fsCache: true,
       },
     },
   },
-  features: {
-    previewMdx2: true,
-  },
-  framework: '@storybook/react',
   logLevel: 'debug',
-  reactOptions: {
-    fastRefresh: true,
-  },
-  staticDirs: [
-    { from: '../../../public/fonts', to: '/public/fonts' },
-    { from: '../../../public/img/grafana_text_logo-dark.svg', to: '/public/img/grafana_text_logo-dark.svg' },
-    { from: '../../../public/img/grafana_text_logo-light.svg', to: '/public/img/grafana_text_logo-light.svg' },
-    { from: '../../../public/img/fav32.png', to: '/public/img/fav32.png' },
-    { from: '../../../public/lib', to: '/public/lib' },
-    ...iconPaths,
-  ],
+  staticDirs: ['static'],
   typescript: {
     check: true,
     reactDocgen: 'react-docgen-typescript',
@@ -96,10 +64,19 @@ const mainConfig: StorybookConfig = {
       tsconfigPath: path.resolve(__dirname, 'tsconfig.json'),
       shouldExtractLiteralValuesFromEnum: true,
       shouldRemoveUndefinedFromOptional: true,
-      propFilter: (prop: any) => (prop.parent ? !/node_modules/.test(prop.parent.fileName) : true),
+      propFilter: (prop) => (prop.parent ? !/node_modules/.test(prop.parent.fileName) : true),
       savePropValueAsString: true,
     },
   },
+  swc: () => ({
+    jsc: {
+      transform: {
+        react: {
+          runtime: 'automatic',
+        },
+      },
+    },
+  }),
   webpackFinal: async (config) => {
     // expose jquery as a global so jquery plugins don't break at runtime.
     config.module?.rules?.push({
@@ -110,14 +87,11 @@ const mainConfig: StorybookConfig = {
       },
     });
 
-    // use the asset module for SVGS for compatibility with grafana/ui Icon component.
-    config.module?.rules?.push({
-      test: /(unicons|mono|custom)[\\/].*\.svg$/,
-      type: 'asset/source',
-    });
-
     return config;
   },
 };
-
 module.exports = mainConfig;
+
+function getAbsolutePath(value: string): any {
+  return dirname(require.resolve(join(value, 'package.json')));
+}

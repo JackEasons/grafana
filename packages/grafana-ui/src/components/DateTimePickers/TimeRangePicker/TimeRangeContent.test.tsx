@@ -1,7 +1,7 @@
 import { fireEvent, render, RenderResult } from '@testing-library/react';
-import React from 'react';
+import userEvent from '@testing-library/user-event';
 
-import { dateTimeParse, TimeRange } from '@grafana/data';
+import { dateTimeParse, systemDateFormats, TimeRange } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 
 import { TimeRangeContent } from './TimeRangeContent';
@@ -10,6 +10,15 @@ type TimeRangeFormRenderResult = RenderResult & {
   getCalendarDayByLabelText(label: string): HTMLButtonElement;
 };
 
+const mockClipboard = {
+  writeText: jest.fn(),
+  readText: jest.fn(),
+};
+
+Object.defineProperty(global.navigator, 'clipboard', {
+  value: mockClipboard,
+});
+
 const defaultTimeRange: TimeRange = {
   from: dateTimeParse('2021-06-17 00:00:00', { timeZone: 'utc' }),
   to: dateTimeParse('2021-06-19 23:59:00', { timeZone: 'utc' }),
@@ -17,6 +26,11 @@ const defaultTimeRange: TimeRange = {
     from: '2021-06-17 00:00:00',
     to: '2021-06-19 23:59:00',
   },
+};
+
+const customRawTimeRange = {
+  from: '2023-06-17 00:00:00',
+  to: '2023-06-19 23:59:00',
 };
 
 function setup(initial: TimeRange = defaultTimeRange, timeZone = 'utc'): TimeRangeFormRenderResult {
@@ -34,20 +48,19 @@ function setup(initial: TimeRange = defaultTimeRange, timeZone = 'utc'): TimeRan
 }
 
 describe('TimeRangeForm', () => {
-  it('should render form correcty', () => {
+  it('should render form correctly', () => {
     const { getByLabelText, getByText, getAllByRole } = setup();
-    const { TimePicker } = selectors.components;
 
     expect(getByText('Apply time range')).toBeInTheDocument();
-    expect(getAllByRole('button', { name: TimePicker.calendar.openButton })).toHaveLength(2);
-    expect(getByLabelText(TimePicker.fromField)).toBeInTheDocument();
-    expect(getByLabelText(TimePicker.toField)).toBeInTheDocument();
+    expect(getAllByRole('button', { name: 'Open calendar' })).toHaveLength(2);
+    expect(getByLabelText('From')).toBeInTheDocument();
+    expect(getByLabelText('To')).toBeInTheDocument();
   });
 
   it('should display calendar when clicking the calendar icon', () => {
     const { getByLabelText, getAllByRole } = setup();
     const { TimePicker } = selectors.components;
-    const openCalendarButton = getAllByRole('button', { name: TimePicker.calendar.openButton });
+    const openCalendarButton = getAllByRole('button', { name: 'Open calendar' });
 
     fireEvent.click(openCalendarButton[0]);
     expect(getByLabelText(TimePicker.calendar.label)).toBeInTheDocument();
@@ -55,24 +68,68 @@ describe('TimeRangeForm', () => {
 
   it('should have passed time range entered in form', () => {
     const { getByLabelText } = setup();
-    const { TimePicker } = selectors.components;
 
     const fromValue = defaultTimeRange.raw.from as string;
     const toValue = defaultTimeRange.raw.to as string;
 
-    expect(getByLabelText(TimePicker.fromField)).toHaveValue(fromValue);
-    expect(getByLabelText(TimePicker.toField)).toHaveValue(toValue);
+    expect(getByLabelText('From')).toHaveValue(fromValue);
+    expect(getByLabelText('To')).toHaveValue(toValue);
+  });
+
+  it('should parse UTC iso strings and render in current timezone', () => {
+    const { getByLabelText } = setup(
+      {
+        from: defaultTimeRange.from,
+        to: defaultTimeRange.to,
+        raw: {
+          from: defaultTimeRange.from.toISOString(),
+          to: defaultTimeRange.to.toISOString(),
+        },
+      },
+      'America/New_York'
+    );
+
+    expect(getByLabelText('From')).toHaveValue('2021-06-16 20:00:00');
+    expect(getByLabelText('To')).toHaveValue('2021-06-19 19:59:00');
+  });
+
+  describe('Given custom system date format', () => {
+    const originalFullDate = systemDateFormats.fullDate;
+    beforeEach(() => {
+      systemDateFormats.fullDate = 'DD.MM.YYYY HH:mm:ss';
+    });
+
+    afterAll(() => {
+      systemDateFormats.fullDate = originalFullDate;
+    });
+
+    it('should parse UTC iso strings and render in current timezone', () => {
+      const { getByLabelText } = setup(
+        {
+          from: defaultTimeRange.from,
+          to: defaultTimeRange.to,
+          raw: {
+            from: defaultTimeRange.from.toISOString(),
+            to: defaultTimeRange.to.toISOString(),
+          },
+        },
+        'America/New_York'
+      );
+
+      expect(getByLabelText('From')).toHaveValue('16.06.2021 20:00:00');
+      expect(getByLabelText('To')).toHaveValue('19.06.2021 19:59:00');
+    });
   });
 
   it('should close calendar when clicking the close icon', () => {
     const { queryByLabelText, getAllByRole, getByRole } = setup();
     const { TimePicker } = selectors.components;
-    const openCalendarButton = getAllByRole('button', { name: TimePicker.calendar.openButton });
+    const openCalendarButton = getAllByRole('button', { name: 'Open calendar' });
 
     fireEvent.click(openCalendarButton[0]);
-    expect(getByRole('button', { name: TimePicker.calendar.closeButton })).toBeInTheDocument();
+    expect(getByRole('button', { name: 'Close calendar' })).toBeInTheDocument();
 
-    fireEvent.click(getByRole('button', { name: TimePicker.calendar.closeButton }));
+    fireEvent.click(getByRole('button', { name: 'Close calendar' }));
     expect(queryByLabelText(TimePicker.calendar.label)).toBeNull();
   });
 
@@ -85,8 +142,7 @@ describe('TimeRangeForm', () => {
 
   it('should have passed time range selected in calendar', () => {
     const { getAllByRole, getCalendarDayByLabelText } = setup();
-    const { TimePicker } = selectors.components;
-    const openCalendarButton = getAllByRole('button', { name: TimePicker.calendar.openButton });
+    const openCalendarButton = getAllByRole('button', { name: 'Open calendar' });
 
     fireEvent.click(openCalendarButton[0]);
     const from = getCalendarDayByLabelText('June 17, 2021');
@@ -98,8 +154,7 @@ describe('TimeRangeForm', () => {
 
   it('should select correct time range in calendar when having a custom time zone', () => {
     const { getAllByRole, getCalendarDayByLabelText } = setup(defaultTimeRange, 'Asia/Tokyo');
-    const { TimePicker } = selectors.components;
-    const openCalendarButton = getAllByRole('button', { name: TimePicker.calendar.openButton });
+    const openCalendarButton = getAllByRole('button', { name: 'Open calendar' });
 
     fireEvent.click(openCalendarButton[1]);
     const from = getCalendarDayByLabelText('June 17, 2021');
@@ -107,6 +162,26 @@ describe('TimeRangeForm', () => {
 
     expect(from).toHaveClass('react-calendar__tile--rangeStart');
     expect(to).toHaveClass('react-calendar__tile--rangeEnd');
+  });
+
+  it('should copy time range to clipboard', async () => {
+    const { getByTestId } = setup();
+
+    await userEvent.click(getByTestId('data-testid TimePicker copy button'));
+    expect(global.navigator.clipboard.writeText).toHaveBeenCalledWith(
+      JSON.stringify({ from: defaultTimeRange.raw.from, to: defaultTimeRange.raw.to })
+    );
+  });
+
+  it('should paste time range from clipboard', async () => {
+    const { getByTestId, getByLabelText } = setup();
+
+    mockClipboard.readText.mockResolvedValue(JSON.stringify(customRawTimeRange));
+
+    await userEvent.click(getByTestId('data-testid TimePicker paste button'));
+
+    expect(getByLabelText('From')).toHaveValue(customRawTimeRange.from);
+    expect(getByLabelText('To')).toHaveValue(customRawTimeRange.to);
   });
 
   describe('dates error handling', () => {

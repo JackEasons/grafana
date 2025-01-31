@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/preferences/org-preferences-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Click Org preferences
 ---
 

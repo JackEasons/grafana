@@ -1,9 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
-import { Provider } from 'react-redux';
-
-import { configureStore } from '../../store/configureStore';
+import { TestProvider } from 'test/helpers/TestProvider';
 
 import { ServiceAccountCreatePage, Props } from './ServiceAccountCreatePage';
 
@@ -19,6 +16,7 @@ jest.mock('@grafana/runtime', () => ({
     put: putMock,
   }),
   config: {
+    ...jest.requireActual('@grafana/runtime').config,
     loginError: false,
     buildInfo: {
       version: 'v1.0',
@@ -41,11 +39,11 @@ jest.mock('app/core/core', () => ({
     hasPermission: () => true,
     hasPermissionInMetadata: () => true,
     user: { orgId: 1 },
+    fetchUserPermissions: () => Promise.resolve(),
   },
 }));
 
 const setup = (propOverrides: Partial<Props>) => {
-  const store = configureStore();
   const props: Props = {
     navModel: {
       main: {
@@ -60,9 +58,9 @@ const setup = (propOverrides: Partial<Props>) => {
   Object.assign(props, propOverrides);
 
   render(
-    <Provider store={store}>
+    <TestProvider>
       <ServiceAccountCreatePage {...props} />
-    </Provider>
+    </TestProvider>
   );
 };
 

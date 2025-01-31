@@ -1,12 +1,12 @@
 import { css } from '@emotion/css';
-import React, { FC } from 'react';
 
-import { GrafanaTheme2 } from '@grafana/data';
+import { GrafanaTheme2, OneClickMode } from '@grafana/data';
+import { ScalarDimensionConfig } from '@grafana/schema';
 import { useStyles2 } from '@grafana/ui';
-import { DimensionContext, ScalarDimensionConfig } from 'app/features/dimensions';
+import { DimensionContext } from 'app/features/dimensions';
 import { ScalarDimensionEditor } from 'app/features/dimensions/editors';
 
-import { CanvasElementItem, CanvasElementProps, defaultBgColor } from '../element';
+import { CanvasElementItem, CanvasElementOptions, CanvasElementProps, defaultBgColor } from '../element';
 
 interface DroneSideData {
   pitchAngle?: number;
@@ -16,10 +16,8 @@ interface DroneSideConfig {
   pitchAngle?: ScalarDimensionConfig;
 }
 
-const DroneSideDisplay: FC<CanvasElementProps<DroneSideConfig, DroneSideData>> = (props) => {
+const DroneSideDisplay = ({ data }: CanvasElementProps<DroneSideConfig, DroneSideData>) => {
   const styles = useStyles2(getStyles);
-
-  const { data } = props;
 
   const droneSidePitchTransformStyle = `rotate(${data?.pitchAngle ? data.pitchAngle : 0}deg)`;
 
@@ -69,7 +67,7 @@ const DroneSideDisplay: FC<CanvasElementProps<DroneSideConfig, DroneSideData>> =
   );
 };
 
-export const droneSideItem: CanvasElementItem<any, any> = {
+export const droneSideItem: CanvasElementItem = {
   id: 'droneSide',
   name: 'Drone Side',
   description: 'Drone Side',
@@ -93,13 +91,18 @@ export const droneSideItem: CanvasElementItem<any, any> = {
       height: options?.placement?.height ?? 26,
       top: options?.placement?.top,
       left: options?.placement?.left,
+      rotation: options?.placement?.rotation ?? 0,
     },
+    oneClickMode: options?.oneClickMode ?? OneClickMode.Off,
+    links: options?.links ?? [],
   }),
 
   // Called when data changes
-  prepareData: (ctx: DimensionContext, cfg: DroneSideConfig) => {
+  prepareData: (dimensionContext: DimensionContext, elementOptions: CanvasElementOptions<DroneSideConfig>) => {
+    const droneSideConfig = elementOptions.config;
+
     const data: DroneSideData = {
-      pitchAngle: cfg?.pitchAngle ? ctx.getScalar(cfg.pitchAngle).value() : 0,
+      pitchAngle: droneSideConfig?.pitchAngle ? dimensionContext.getScalar(droneSideConfig.pitchAngle).value() : 0,
     };
 
     return data;
@@ -118,7 +121,9 @@ export const droneSideItem: CanvasElementItem<any, any> = {
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  droneSide: css`
-    transition: transform 0.4s;
-  `,
+  droneSide: css({
+    // TODO: figure out what styles to apply when prefers-reduced-motion is set
+    // eslint-disable-next-line @grafana/no-unreduced-motion
+    transition: 'transform 0.4s',
+  }),
 });

@@ -1,5 +1,5 @@
 import { toDataFrame } from '../../dataframe/processDataFrame';
-import { ScopedVars } from '../../types';
+import { ScopedVars } from '../../types/ScopedVars';
 import { FieldType } from '../../types/dataFrame';
 import { mockTransformationsRegistry } from '../../utils/tests/mockTransformationsRegistry';
 import { transformDataFrame } from '../transformDataFrame';
@@ -196,8 +196,83 @@ describe('filterByName transformer', () => {
         expect(filtered.fields[0].name).toBe('B');
       });
     });
+    it('it can use a variable with multiple comma separated', async () => {
+      const cfg = {
+        id: DataTransformerID.filterFieldsByName,
+        options: {
+          include: {
+            variable: '$var',
+          },
+          byVariable: true,
+        },
+      };
 
-    it('uses template variable substituion', async () => {
+      const ctx = {
+        interpolate: (target: string | undefined, scopedVars?: ScopedVars, format?: string | Function): string => {
+          if (!target) {
+            return '';
+          }
+          const variables: ScopedVars = {
+            var: {
+              value: 'B,D',
+              text: 'Test',
+            },
+          };
+          for (const key in variables) {
+            return target.replace(`$${key}`, variables[key]!.value);
+          }
+          return target;
+        },
+      };
+
+      await expect(transformDataFrame([cfg], [seriesWithNamesToMatch], ctx)).toEmitValuesWith((received) => {
+        const data = received[0];
+        const filtered = data[0];
+        expect(filtered.fields.length).toBe(2);
+        expect(filtered.fields[0].name).toBe('B');
+        expect(filtered.fields[1].name).toBe('D');
+      });
+    });
+
+    it('it can use a variable with multiple comma separated values in {}', async () => {
+      const cfg = {
+        id: DataTransformerID.filterFieldsByName,
+        options: {
+          include: {
+            variable: '$var',
+          },
+          byVariable: true,
+        },
+      };
+
+      const ctx = {
+        interpolate: (target: string | undefined, scopedVars?: ScopedVars, format?: string | Function): string => {
+          if (!target) {
+            return '';
+          }
+          const variables: ScopedVars = {
+            var: {
+              value: '{B,D}',
+              text: 'Test',
+            },
+          };
+          for (const key in variables) {
+            return target.replace(`$${key}`, variables[key]!.value);
+          }
+          return target;
+        },
+      };
+
+      await expect(transformDataFrame([cfg], [seriesWithNamesToMatch], ctx)).toEmitValuesWith((received) => {
+        const data = received[0];
+        const filtered = data[0];
+        expect(filtered.fields.length).toBe(2);
+        expect(filtered.fields[0].name).toBe('B');
+        expect(filtered.fields[1].name).toBe('D');
+      });
+    });
+
+    it('uses template variable substitution', async () => {
       const cfg = {
         id: DataTransformerID.filterFieldsByName,
         options: {
@@ -205,7 +280,10 @@ describe('filterByName transformer', () => {
             pattern: '/^$var1/',
           },
         },
-        replace: (target: string | undefined, scopedVars?: ScopedVars, format?: string | Function): string => {
+      };
+
+      const ctx = {
+        interpolate: (target: string | undefined, scopedVars?: ScopedVars, format?: string | Function): string => {
           if (!target) {
             return '';
           }
@@ -215,14 +293,14 @@ describe('filterByName transformer', () => {
               text: 'Test',
             },
           };
-          for (const key of Object.keys(variables)) {
-            return target.replace(`$${key}`, variables[key].value);
+          for (const key in variables) {
+            return target.replace(`$${key}`, variables[key]!.value);
           }
           return target;
         },
       };
 
-      await expect(transformDataFrame([cfg], [seriesWithNamesToMatch])).toEmitValuesWith((received) => {
+      await expect(transformDataFrame([cfg], [seriesWithNamesToMatch], ctx)).toEmitValuesWith((received) => {
         const data = received[0];
         const filtered = data[0];
         expect(filtered.fields.length).toBe(2);

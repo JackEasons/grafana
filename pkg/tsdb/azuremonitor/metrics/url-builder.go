@@ -3,69 +3,87 @@ package metrics
 import (
 	"fmt"
 	"strings"
+
+	"github.com/grafana/grafana-plugin-sdk-go/experimental/errorsource"
 )
 
 // urlBuilder builds the URL for calling the Azure Monitor API
 type urlBuilder struct {
-	ResourceURI string
+	ResourceURI *string
 
 	// Following fields will be used to generate a ResourceURI
-	DefaultSubscription string
-	Subscription        string
-	ResourceGroup       string
-	MetricNamespace     string
-	ResourceName        string
+	DefaultSubscription *string
+	Subscription        *string
+	ResourceGroup       *string
+	MetricNamespace     *string
+	ResourceName        *string
+	MetricDefinition    *string
 }
 
-func (params *urlBuilder) buildResourceURI() string {
-	if params.ResourceURI != "" {
-		return params.ResourceURI
+func (params *urlBuilder) buildResourceURI() (*string, error) {
+	if params.ResourceURI != nil && *params.ResourceURI != "" {
+		return params.ResourceURI, nil
 	}
 
 	subscription := params.Subscription
 
-	if params.Subscription == "" {
+	if params.Subscription == nil || *params.Subscription == "" {
 		subscription = params.DefaultSubscription
 	}
 
-	metricNamespaceArray := strings.Split(params.MetricNamespace, "/")
-	resourceNameArray := strings.Split(params.ResourceName, "/")
-	provider := metricNamespaceArray[0]
-	metricNamespaceArray = metricNamespaceArray[1:]
+	metricNamespace := params.MetricNamespace
 
-	if strings.HasPrefix(strings.ToLower(params.MetricNamespace), "microsoft.storage/storageaccounts/") &&
-		!strings.HasSuffix(params.ResourceName, "default") {
+	if metricNamespace == nil || *metricNamespace == "" {
+		if params.MetricDefinition == nil || *params.MetricDefinition == "" {
+			return nil, errorsource.DownstreamError(fmt.Errorf("no metricNamespace or metricDefiniton value provided"), false)
+		}
+		metricNamespace = params.MetricDefinition
+	}
+
+	metricNamespaceArray := strings.Split(*metricNamespace, "/")
+
+	provider := ""
+	if len(metricNamespaceArray) > 1 {
+		provider = metricNamespaceArray[0]
+		metricNamespaceArray = metricNamespaceArray[1:]
+	} else {
+		return nil, errorsource.DownstreamError(fmt.Errorf("metricNamespace is not in the correct format"), false)
+	}
+
+	var resourceNameArray []string
+	if params.ResourceName != nil && *params.ResourceName != "" {
+		resourceNameArray = strings.Split(*params.ResourceName, "/")
+	}
+
+	if strings.HasPrefix(strings.ToLower(*metricNamespace), "microsoft.storage/storageaccounts/") &&
+		params.ResourceName != nil &&
+		!strings.HasSuffix(*params.ResourceName, "default") {
 		resourceNameArray = append(resourceNameArray, "default")
 	}
 
+	resGroup := ""
+	if params.ResourceGroup != nil {
+		resGroup = *params.ResourceGroup
+	}
 	urlArray := []string{
 		"/subscriptions",
-		subscription,
+		*subscription,
 		"resourceGroups",
-		params.ResourceGroup,
+		resGroup,
 		"providers",
 		provider,
 	}
 
 	for i, namespace := range metricNamespaceArray {
-		urlArray = append(urlArray, namespace, resourceNameArray[i])
+		if i < len(resourceNameArray) {
+			urlArray = append(urlArray, namespace, resourceNameArray[i])
+		} else {
+			return nil, errorsource.DownstreamError(fmt.Errorf("resourceNameArray does not have enough elements"), false)
+		}
 	}
 
 	resourceURI := strings.Join(urlArray, "/")
-	return resourceURI
-}
-
-// BuildMetricsURL checks the metric properties to see which form of the url
-// should be returned
-func (params *urlBuilder) BuildMetricsURL() string {
-	resourceURI := params.ResourceURI
-
-	// Prior to Grafana 9, we had a legacy query object rather than a resourceURI, so we manually create the resource URI
-	if resourceURI == "" {
-		resourceURI = params.buildResourceURI()
-	}
-
-	return fmt.Sprintf("%s/providers/microsoft.insights/metrics", resourceURI)
+	return &resourceURI, nil
 }
 
 // BuildSubscriptionMetricsURL returns a URL for querying metrics for all resources in a subscription

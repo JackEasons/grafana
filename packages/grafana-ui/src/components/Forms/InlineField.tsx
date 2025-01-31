@@ -1,5 +1,5 @@
 import { cx, css } from '@emotion/css';
-import React, { FC } from 'react';
+import { cloneElement } from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
@@ -29,7 +29,7 @@ export interface Props extends Omit<FieldProps, 'css' | 'horizontal' | 'descript
   interactive?: boolean;
 }
 
-export const InlineField: FC<Props> = ({
+export const InlineField = ({
   children,
   label,
   tooltip,
@@ -45,8 +45,9 @@ export const InlineField: FC<Props> = ({
   error,
   transparent,
   interactive,
+  validationMessageHorizontalOverflow,
   ...htmlProps
-}) => {
+}: Props) => {
   const theme = useTheme2();
   const styles = getStyles(theme, grow, shrink);
   const inputId = htmlFor ?? getChildId(children);
@@ -70,9 +71,13 @@ export const InlineField: FC<Props> = ({
     <div className={cx(styles.container, className)} {...htmlProps}>
       {labelElement}
       <div className={styles.childContainer}>
-        {React.cloneElement(children, { invalid, disabled, loading })}
+        {cloneElement(children, { invalid, disabled, loading })}
         {invalid && error && (
-          <div className={cx(styles.fieldValidationWrapper)}>
+          <div
+            className={cx(styles.fieldValidationWrapper, {
+              [styles.validationMessageHorizontalOverflow]: !!validationMessageHorizontalOverflow,
+            })}
+          >
             <FieldValidationMessage>{error}</FieldValidationMessage>
           </div>
         )}
@@ -85,20 +90,28 @@ InlineField.displayName = 'InlineField';
 
 const getStyles = (theme: GrafanaTheme2, grow?: boolean, shrink?: boolean) => {
   return {
-    container: css`
-      display: flex;
-      flex-direction: row;
-      align-items: flex-start;
-      text-align: left;
-      position: relative;
-      flex: ${grow ? 1 : 0} ${shrink ? 1 : 0} auto;
-      margin: 0 ${theme.spacing(0.5)} ${theme.spacing(0.5)} 0;
-    `,
-    childContainer: css`
-      flex: ${grow ? 1 : 0} ${shrink ? 1 : 0} auto;
-    `,
-    fieldValidationWrapper: css`
-      margin-top: ${theme.spacing(0.5)};
-    `,
+    container: css({
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      textAlign: 'left',
+      position: 'relative',
+      flex: `${grow ? 1 : 0} ${shrink ? 1 : 0} auto`,
+      margin: `0 ${theme.spacing(0.5)} ${theme.spacing(0.5)} 0`,
+    }),
+    childContainer: css({
+      flex: `${grow ? 1 : 0} ${shrink ? 1 : 0} auto`,
+    }),
+    fieldValidationWrapper: css({
+      marginTop: theme.spacing(0.5),
+    }),
+    validationMessageHorizontalOverflow: css({
+      width: 0,
+      overflowX: 'visible',
+
+      '& > *': {
+        whiteSpace: 'nowrap',
+      },
+    }),
   };
 };

@@ -1,12 +1,13 @@
 import { css } from '@emotion/css';
-import React, { MouseEvent, useCallback, useState } from 'react';
+import { MouseEvent, useCallback, useState } from 'react';
+import * as React from 'react';
 
-import { DataFrame, GrafanaTheme2, LinkModel } from '@grafana/data';
-import { ContextMenu, MenuGroup, MenuItem, useStyles2, useTheme2 } from '@grafana/ui';
+import { DataFrame, Field, GrafanaTheme2, LinkModel, LinkTarget } from '@grafana/data';
+import { ContextMenu, MenuGroup, MenuItem, useStyles2 } from '@grafana/ui';
 
 import { Config } from './layout';
-import { EdgeDatum, NodeDatum } from './types';
-import { getEdgeFields, getNodeFields } from './utils';
+import { EdgeDatumLayout, NodeDatum } from './types';
+import { getEdgeFields, getNodeFields, statToString } from './utils';
 
 /**
  * Hook that contains state of the context menu, both for edges and nodes and provides appropriate component when
@@ -22,7 +23,7 @@ export function useContextMenu(
   setConfig: (config: Config) => void,
   setFocusedNodeId: (id: string) => void
 ): {
-  onEdgeOpen: (event: MouseEvent<SVGElement>, edge: EdgeDatum) => void;
+  onEdgeOpen: (event: MouseEvent<SVGElement>, edge: EdgeDatumLayout) => void;
   onNodeOpen: (event: MouseEvent<SVGElement>, node: NodeDatum) => void;
   MenuComponent: React.ReactNode;
 } {
@@ -47,16 +48,13 @@ export function useContextMenu(
 
       const links = nodes ? getLinks(nodes, node.dataFrameRowIndex) : [];
       const renderer = getItemsRenderer(links, node, extraNodeItem);
-
-      if (renderer) {
-        setMenu(makeContextMenu(<NodeHeader node={node} nodes={nodes} />, renderer, event, setMenu));
-      }
+      setMenu(makeContextMenu(<NodeHeader node={node} nodes={nodes} />, event, setMenu, renderer));
     },
     [config, nodes, getLinks, setMenu, setConfig, setFocusedNodeId]
   );
 
   const onEdgeOpen = useCallback(
-    (event: MouseEvent<SVGElement>, edge: EdgeDatum) => {
+    (event: MouseEvent<SVGElement>, edge: EdgeDatumLayout) => {
       if (!edges) {
         // This could happen if we have only one node and no edges, in which case this is not needed as there is no edge
         // to click on.
@@ -64,10 +62,7 @@ export function useContextMenu(
       }
       const links = getLinks(edges, edge.dataFrameRowIndex);
       const renderer = getItemsRenderer(links, edge);
-
-      if (renderer) {
-        setMenu(makeContextMenu(<EdgeHeader edge={edge} edges={edges} />, renderer, event, setMenu));
-      }
+      setMenu(makeContextMenu(<EdgeHeader edge={edge} edges={edges} />, event, setMenu, renderer));
     },
     [edges, getLinks, setMenu]
   );
@@ -77,9 +72,9 @@ export function useContextMenu(
 
 function makeContextMenu(
   header: JSX.Element,
-  renderer: () => React.ReactNode,
   event: MouseEvent<SVGElement>,
-  setMenu: (el: JSX.Element | undefined) => void
+  setMenu: (el: JSX.Element | undefined) => void,
+  renderer?: () => React.ReactNode
 ) {
   return (
     <ContextMenu
@@ -92,7 +87,7 @@ function makeContextMenu(
   );
 }
 
-function getItemsRenderer<T extends NodeDatum | EdgeDatum>(
+function getItemsRenderer<T extends NodeDatum | EdgeDatumLayout>(
   links: LinkModel[],
   item: T,
   extraItems?: Array<LinkData<T>> | undefined
@@ -115,7 +110,7 @@ function getItemsRenderer<T extends NodeDatum | EdgeDatum>(
   };
 }
 
-function mapMenuItem<T extends NodeDatum | EdgeDatum>(item: T) {
+function mapMenuItem<T extends NodeDatum | EdgeDatumLayout>(item: T) {
   return function NodeGraphMenuItem(link: LinkData<T>) {
     return (
       <MenuItem
@@ -134,17 +129,18 @@ function mapMenuItem<T extends NodeDatum | EdgeDatum>(item: T) {
               }
             : undefined
         }
-        target={'_self'}
+        target={link.target || '_self'}
       />
     );
   };
 }
 
-type LinkData<T extends NodeDatum | EdgeDatum> = {
+type LinkData<T extends NodeDatum | EdgeDatumLayout> = {
   label: string;
   ariaLabel?: string;
   url?: string;
   onClick?: (item: T) => void;
+  target?: LinkTarget;
 };
 
 function getItems(links: LinkModel[]) {
@@ -174,99 +170,102 @@ function getItems(links: LinkModel[]) {
         ariaLabel: link.newTitle || link.l.title,
         url: link.l.href,
         onClick: link.l.onClick,
+        target: link.l.target,
       })),
     };
   });
 }
 
-function NodeHeader({ node, nodes }: { node: NodeDatum; nodes?: DataFrame }) {
-  const index = node.dataFrameRowIndex;
-  if (nodes) {
-    const fields = getNodeFields(nodes);
-
-    return (
-      <div>
-        {fields.title && (
-          <Label
-            label={fields.title.config.displayName || fields.title.name}
-            value={fields.title.values.get(index) || ''}
-          />
-        )}
-        {fields.subTitle && (
-          <Label
-            label={fields.subTitle.config.displayName || fields.subTitle.name}
-            value={fields.subTitle.values.get(index) || ''}
-          />
-        )}
-        {fields.details.map((f) => (
-          <Label key={f.name} label={f.config.displayName || f.name} value={f.values.get(index) || ''} />
-        ))}
-      </div>
-    );
-  } else {
-    // Fallback if we don't have nodes dataFrame. Can happen if we use just the edges frame to construct this.
-    return (
-      <div>
-        {node.title && <Label label={'Title'} value={node.title} />}
-        {node.subTitle && <Label label={'Subtitle'} value={node.subTitle} />}
-      </div>
-    );
-  }
-}
-
-function EdgeHeader(props: { edge: EdgeDatum; edges: DataFrame }) {
-  const index = props.edge.dataFrameRowIndex;
-  const styles = getLabelStyles(useTheme2());
-  const fields = getEdgeFields(props.edges);
-  const valueSource = fields.source?.values.get(index) || '';
-  const valueTarget = fields.target?.values.get(index) || '';
-
+function FieldRow({ field, index }: { field: Field; index: number }) {
   return (
-    <div>
-      {fields.source && fields.target && (
-        <div className={styles.label}>
-          <div>Source → Target</div>
-          <span className={styles.value}>
-            {valueSource} → {valueTarget}
-          </span>
-        </div>
-      )}
-      {fields.details.map((f) => (
-        <Label key={f.name} label={f.config.displayName || f.name} value={f.values.get(index) || ''} />
-      ))}
-    </div>
+    <HeaderRow
+      label={field.config?.displayName || field.name}
+      value={statToString(field.config, field.values[index] || '')}
+    />
   );
 }
 
-function Label({ label, value }: { label: string; value: string | number }) {
+function HeaderRow({ label, value }: { label: string; value: string }) {
   const styles = useStyles2(getLabelStyles);
+  return (
+    <tr>
+      <td className={styles.label}>{label}: </td>
+      <td className={styles.value}>{value}</td>
+    </tr>
+  );
+}
+
+/**
+ * Shows some field values in a table on top of the context menu.
+ */
+function NodeHeader({ node, nodes }: { node: NodeDatum; nodes?: DataFrame }) {
+  const rows = [];
+  if (nodes) {
+    const fields = getNodeFields(nodes);
+    for (const f of [fields.title, fields.subTitle, fields.mainStat, fields.secondaryStat, ...fields.details]) {
+      if (f && f.values[node.dataFrameRowIndex]) {
+        rows.push(<FieldRow key={f.name} field={f} index={node.dataFrameRowIndex} />);
+      }
+    }
+  } else {
+    // Fallback if we don't have nodes dataFrame. Can happen if we use just the edges frame to construct this.
+    if (node.title) {
+      rows.push(<HeaderRow key="title" label={'Title'} value={node.title} />);
+    }
+    if (node.subTitle) {
+      rows.push(<HeaderRow key="subtitle" label={'Subtitle'} value={node.subTitle} />);
+    }
+  }
 
   return (
-    <div className={styles.label}>
-      <div>{label}</div>
-      <span className={styles.value}>{value}</span>
-    </div>
+    <table style={{ width: '100%' }}>
+      <tbody>{rows}</tbody>
+    </table>
+  );
+}
+
+/**
+ * Shows some of the field values in a table on top of the context menu.
+ */
+function EdgeHeader(props: { edge: EdgeDatumLayout; edges: DataFrame }) {
+  const index = props.edge.dataFrameRowIndex;
+  const fields = getEdgeFields(props.edges);
+  const valueSource = fields.source?.values[index] || '';
+  const valueTarget = fields.target?.values[index] || '';
+
+  const rows = [];
+  if (valueSource && valueTarget) {
+    rows.push(<HeaderRow key={'header-row'} label={'Source → Target'} value={`${valueSource} → ${valueTarget}`} />);
+  }
+
+  for (const f of [fields.mainStat, fields.secondaryStat, ...fields.details]) {
+    if (f && f.values[index]) {
+      rows.push(<FieldRow key={`field-row-${index}`} field={f} index={index} />);
+    }
+  }
+
+  return (
+    <table style={{ width: '100%' }}>
+      <tbody>{rows}</tbody>
+    </table>
   );
 }
 
 export const getLabelStyles = (theme: GrafanaTheme2) => {
   return {
-    label: css`
-      label: Label;
-      line-height: 1.25;
-      margin-bottom: ${theme.spacing(0.5)};
-      padding-left: ${theme.spacing(0.25)};
-      color: ${theme.colors.text.disabled};
-      font-size: ${theme.typography.size.sm};
-      font-weight: ${theme.typography.fontWeightMedium};
-    `,
-    value: css`
-      label: Value;
-      font-size: ${theme.typography.size.sm};
-      font-weight: ${theme.typography.fontWeightMedium};
-      color: ${theme.colors.text.primary};
-      margin-top: ${theme.spacing(0.25)};
-      display: block;
-    `,
+    label: css({
+      label: 'Label',
+      lineHeight: 1.25,
+      color: theme.colors.text.disabled,
+      fontSize: theme.typography.size.sm,
+      fontWeight: theme.typography.fontWeightMedium,
+      paddingRight: theme.spacing(1),
+    }),
+    value: css({
+      label: 'Value',
+      fontSize: theme.typography.size.sm,
+      fontWeight: theme.typography.fontWeightMedium,
+      color: theme.colors.text.primary,
+    }),
   };
 };

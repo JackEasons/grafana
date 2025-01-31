@@ -1,5 +1,6 @@
 import { css, cx } from '@emotion/css';
-import React, { FormEvent, useCallback, useState } from 'react';
+import { FormEvent, useCallback, useState } from 'react';
+import * as React from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { GrafanaTheme2 } from '@grafana/data';
@@ -10,7 +11,7 @@ import { getFocusStyles } from '../../themes/mixins';
 import { ComponentSize } from '../../types/size';
 import { trimFileName } from '../../utils/file';
 import { getButtonStyles } from '../Button';
-import { Icon } from '../index';
+import { Icon } from '../Icon/Icon';
 
 export interface Props {
   /** Callback function to handle uploaded file  */
@@ -31,6 +32,7 @@ export const FileUpload = ({
   children = 'Upload file',
   accept = '*',
   size = 'md',
+  showFileName,
 }: React.PropsWithChildren<Props>) => {
   const style = useStyles2(getStyles(size));
   const [fileName, setFileName] = useState('');
@@ -63,7 +65,7 @@ export const FileUpload = ({
         {children}
       </label>
 
-      {fileName && (
+      {showFileName && fileName && (
         <span
           aria-label="File name"
           className={style.fileName}

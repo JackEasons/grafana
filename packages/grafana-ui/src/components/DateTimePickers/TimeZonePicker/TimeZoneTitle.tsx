@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import React, { ReactNode } from 'react';
+import { ReactNode } from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
@@ -21,9 +21,9 @@ export const TimeZoneTitle = ({ title }: Props) => {
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
-    title: css`
-      font-weight: ${theme.typography.fontWeightRegular};
-      text-overflow: ellipsis;
-    `,
+    title: css({
+      fontWeight: theme.typography.fontWeightRegular,
+      textOverflow: 'ellipsis',
+    }),
   };
 };

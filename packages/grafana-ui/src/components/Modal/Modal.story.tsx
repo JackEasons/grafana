@@ -1,19 +1,19 @@
 import { css, cx } from '@emotion/css';
-import { Story, Meta } from '@storybook/react';
+import { StoryFn, Meta } from '@storybook/react';
 import { oneLineTrim } from 'common-tags';
-import React, { useState } from 'react';
-
-import { Button, Modal, ModalTabsHeader, TabContent } from '@grafana/ui';
+import { useState } from 'react';
 
 import { getAvailableIcons } from '../../types';
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
+import { Button } from '../Button';
+import { TabContent } from '../Tabs';
 
+import { Modal } from './Modal';
 import mdx from './Modal.mdx';
+import { ModalTabsHeader } from './ModalTabsHeader';
 
 const meta: Meta = {
   title: 'Overlays/Modal',
   component: Modal,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -48,13 +48,15 @@ const meta: Meta = {
   },
 };
 
-export const Basic: Story = ({ body, title, ...args }) => {
+export const Basic: StoryFn = ({ body, title, ...args }) => {
   return (
     <Modal title={title} {...args}>
       {body}
       <Modal.ButtonRow>
+        <Button variant="secondary" fill="outline">
+          Cancel
+        </Button>
         <Button>Button1</Button>
-        <Button variant="secondary">Cancel</Button>
       </Modal.ButtonRow>
     </Modal>
   );
@@ -73,7 +75,7 @@ const tabs = [
   { label: '3rd child', value: 'third', active: false },
 ];
 
-export const WithTabs: Story = (args) => {
+export const WithTabs: StoryFn = (args) => {
   const [activeTab, setActiveTab] = useState('first');
   const modalHeader = (
     <ModalTabsHeader
@@ -103,11 +105,11 @@ WithTabs.args = {
   icon: 'cog',
 };
 
-export const UsingContentClassName: Story = ({ title, body, ...args }) => {
+export const UsingContentClassName: StoryFn = ({ title, body, ...args }) => {
   const override = {
-    modalContent: css`
-      background-color: darkorange;
-    `,
+    modalContent: css({
+      backgroundColor: 'darkorange',
+    }),
   };
   return (
     <Modal title={title} {...args} contentClassName={cx(override.modalContent)}>

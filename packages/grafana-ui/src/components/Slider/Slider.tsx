@@ -1,9 +1,9 @@
 import { cx } from '@emotion/css';
 import { Global } from '@emotion/react';
 import SliderComponent from 'rc-slider';
-import React, { useState, useCallback, ChangeEvent, FunctionComponent, FocusEvent } from 'react';
+import { useState, useCallback, ChangeEvent, FocusEvent } from 'react';
 
-import { useTheme2 } from '../../themes/ThemeContext';
+import { useStyles2 } from '../../themes/ThemeContext';
 import { Input } from '../Input/Input';
 
 import { getStyles } from './styles';
@@ -12,7 +12,7 @@ import { SliderProps } from './types';
 /**
  * @public
  */
-export const Slider: FunctionComponent<SliderProps> = ({
+export const Slider = ({
   min,
   max,
   onChange,
@@ -24,10 +24,9 @@ export const Slider: FunctionComponent<SliderProps> = ({
   ariaLabelForHandle,
   marks,
   included,
-}) => {
+}: SliderProps) => {
   const isHorizontal = orientation === 'horizontal';
-  const theme = useTheme2();
-  const styles = getStyles(theme, isHorizontal, Boolean(marks));
+  const styles = useStyles2(getStyles, isHorizontal, Boolean(marks));
   const SliderWithTooltip = SliderComponent;
   const [sliderValue, setSliderValue] = useState<number>(value ?? min);
 
@@ -77,7 +76,7 @@ export const Slider: FunctionComponent<SliderProps> = ({
     [max, min]
   );
 
-  const handleAfterChange = useCallback(
+  const handleChangeComplete = useCallback(
     (v: number | number[]) => {
       const value = typeof v === 'number' ? v : v[0];
       onAfterChange?.(value);
@@ -100,7 +99,7 @@ export const Slider: FunctionComponent<SliderProps> = ({
           defaultValue={value}
           value={sliderValue}
           onChange={onSliderChange}
-          onAfterChange={handleAfterChange}
+          onChangeComplete={handleChangeComplete}
           vertical={!isHorizontal}
           reverse={reverse}
           ariaLabelForHandle={ariaLabelForHandle}

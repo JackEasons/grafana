@@ -1,48 +1,111 @@
 ---
 aliases:
-  - /docs/grafana/latest/datasources/influxdb/influxdb-flux/
-  - /docs/grafana/latest/datasources/influxdb/query-editor/
-  - /docs/grafana/latest/data-sources/influxdb/query-editor/
-description: Guide for Flux in Grafana
-title: Flux support in Grafana
-weight: 200
+  - ../../data-sources/influxdb/query-editor/
+  - influxdb-flux/
+description: This topic describes the InfluxDB query editor, modes and querying the InfluxDB data source.
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+title: InfluxDB query Editor
+menuTitle: Query editor
+weight: 400
+refs:
+  explore:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/explore/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/explore/
+  query-transform-data:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/visualizations/panels-visualizations/query-transform-data/
+  panel-inspector:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/panel-inspector/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/visualizations/panels-visualizations/panel-inspector/
+  logs:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/logs/
+    - pattern: /docs/grafana-cloud/
+      destination: grafana-cloud/visualizations/panels-visualizations/visualizations/logs/
+  query-editor:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/query-transform-data/#query-editors
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/visualizations/panels-visualizations/query-transform-data/#query-editors
+  build-dashboards:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/visualizations/dashboards/build-dashboards/
+  data-source-management:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/administration/data-source-management/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/administration/data-source-management/
+  annotations:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/dashboards/build-dashboards/annotate-visualizations/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/visualizations/dashboards/build-dashboards/annotate-visualizations/
+  configure-influxdb-data-source:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/datasources/influxdb/configure-influxdb-data-source/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/datasources/influxdb/configure-influxdb-data-source/
 ---
 
 # InfluxDB query editor
 
-This topic explains querying specific to the InfluxDB data source.
-For general documentation on querying data sources in Grafana, see [Query and transform data]({{< relref "../../../panels-visualizations/query-transform-data" >}}).
+Grafana's query editors are unique to each data source. For general information on Grafana query editors, refer to [Query editors](ref:query-editor). For general information on querying data sources in Grafana, refer to [Query and transform data](ref:query-transform-data).
+
+The InfluxDB query editor is located on the [Explore page](ref:explore). You can also access the InfluxDB query editor from a dashboard panel. Click the ellipsis in the upper right of the panel and select **Edit**.
+
+You can also use the query editor to retrieve [log data](#query-logs) and [annotate](#apply-annotations) visualizations.
 
 ## Choose a query editing mode
 
-The InfluxDB data source's query editor has two modes depending on your choice of query language in the [data source configuration]({{< relref "../#configure-the-data-source" >}}):
+The InfluxDB data source has three different types of query editors, each corresponding to the query language selected in the [data source configuration](https://grafana.com/docs/grafana/<GRAFANA_VERSION>/datasources/influxdb/configure-influxdb-data-source/#influxdb-configuration-options):
 
-- [InfluxQL]({{< relref "#influxql-query-editor" >}})
-- [Flux]({{< relref "#flux-query-editor" >}})
+- [InfluxQL](#influxql-query-editor)
+- [SQL](#sql-query-editor)
+- [Flux](#flux-query-editor)
 
-You also use the query editor to retrieve [log data]({{< relref "#query-logs" >}}) and [annotate]({{< relref "#apply-annotations" >}}) visualizations.
+Editor options vary based on query language.
 
 ## InfluxQL query editor
 
-The InfluxQL query editor helps you select metrics and tags to create InfluxQL queries.
+The InfluxQL query editor helps you select metrics and tags to create InfluxQL queries. There are two modes: `visual editor mode` and `raw query mode`. To switch between the two modes click the **pencil icon** in the upper right.
 
-**To enter edit mode:**
+Visual query editor mode contains the following components:
 
-1. Click the panel title.
-1. Click **Edit**.
+- **FROM** - Select a measurement to query.
+- **WHERE** - Select filters by clicking the **+ sign**.
+- **SELECT** - Select fields and functions from the drop-down. You can add multiple fields and functions by clicking the **+ sign**.
+- **GROUP BY** - Select a tag from the drop-down menu.
+- **TIMEZONE** - _Optional_ Group data by a specific timezone.
+- **ORDER BY TIME** - Sort data by time in either ascending or descending order.
+- **LIMIT** - _Optional_ Limits the number of rows returned by the query.
+- **SLIMIT** - _Optional_ Limits the number of series returned by the query. Refer to [SLIMIT clause](https://docs.influxdata.com/influxdb/cloud/query-data/influxql/explore-data/limit-and-slimit/#slimit-clause) for more information on this option.
+- **FORMAT AS** - Select a format option from the drop-down menu.
+- **ALIAS** - Add an alias. Refer to [Alias patterns](#alias-patterns) for more information.
+
+### Raw query editor mode
+
+You can write raw InfluxQL queries by switching to raw query mode. Click the pencil in the upper right of the query editor to switch modes. Note that when you switch to visual editor mode, you will lose any changes made in raw query mode.
+
+If you use raw query mode, your query must include `WHERE $timeFilter`. You should also provide a group by time and an aggregation function. Otherwise, InfluxDB may return hundreds of thousands of data points, potentially causing your browser to hang.
 
 ![InfluxQL query editor](/static/img/docs/influxdb/influxql-query-editor-8-0.png)
 
-### Filter data (WHERE)
-
-To add a tag filter, click the plus icon to the right of the `WHERE` condition.
-
-To remove tag filters, click the tag key, then select **--remove tag filter--**.
-
-#### Match by regular expressions
+### Match by regular expressions
 
 You can enter regular expressions for metric names or tag filter values.
-Wrap the regex pattern in forward slashes (`/`).
+Wrap the regex pattern in forward slashes (`/`), as shown in this example: `/measurement/`.
 
 Grafana automatically adjusts the filter tag condition to use the InfluxDB regex match condition operator (`=~`).
 
@@ -50,55 +113,35 @@ Grafana automatically adjusts the filter tag condition to use the InfluxDB regex
 
 In the `SELECT` row, you can specify which fields and functions to use.
 
-If you have a group by time, you must have an aggregation function.
-Some functions like `derivative` also require an aggregation function.
+If you **group by time** you must use an aggregation function. Certain functions such as `derivative` also require an aggregation function.
 
-The editor helps you build this part of the query.
-For example:
+If you have the following:
 
 ![](/static/img/docs/influxdb/select_editor.png)
 
-This query editor input generates an InfluxDB `SELECT` clause:
+The query editor input generates an InfluxDB `SELECT` clause:
 
 ```sql
-SELECT derivative(mean("value"), 10s) /10 AS "REQ/s" FROM ....
+SELECT derivative(mean("value"), 10s) / 10 AS "REQ/s"
+FROM....
 ```
 
-**To select multiple fields:**
+You can also use a \* in a SELECT statement to select all fields.
 
-1. Click the plus button.
-1. Select **Field > field** to add another `SELECT` clause.
+```sql
+SELECT * FROM <measurement_name>
+```
 
-   You can also `SELECT` an asterisk (`*`) to select all fields.
+### GROUP BY results
 
-### Group query results
+To group results by a tag, specify the tag in the **GROUP BY** row:
 
-To group results by a tag, define it in a "Group By".
+1. Click the **+ sign** in the GROUP BY row.
+1. Select a tag from the drop-down.
 
-**To group by a tag:**
+You can GROUP BY multiple options.
 
-1. Click the plus icon at the end of the GROUP BY row.
-1. Select a tag from the dropdown that appears.
-
-**To remove the "Group By":**
-
-1. Click the tag.
-1. Click the "x" icon.
-
-### Text editor mode (RAW)
-
-You can write raw InfluxQL queries by switching the editor mode.
-However, be careful when writing queries manually.
-
-If you use raw query mode, your query _must_ include at least `WHERE $timeFilter`.
-
-Also, _always_ provide a group by time and an aggregation function.
-Otherwise, InfluxDB can easily return hundreds of thousands of data points that can hang your browser.
-
-**To switch to raw query mode:**
-
-1. Click the hamburger icon.
-1. Toggle **Switch editor mode**.
+To remove a GROUP BY option click the **X icon** next to the option.
 
 ### Alias patterns
 
@@ -110,17 +153,54 @@ Otherwise, InfluxDB can easily return hundreds of thousands of data points that 
 | `$col`            | Column name.                                                                                                                                                                                       |
 | `$tag_exampletag` | The value of the `exampletag` tag. The syntax is `$tag*yourTagName` and must start with `$tag*`. To use your tag as an alias in the ALIAS BY field, you must use the tag to group by in the query. |
 
-You can also use `[[tag_hostname]]` pattern replacement syntax.
+You can also use the `[[tag_hostname]]` pattern replacement syntax.
 
 For example, entering the value `Host: [[tag_hostname]]` in the ALIAS BY field replaces it with the `hostname` tag value for each legend value.
-An example legend value would be `Host: server1`.
+
+An example legend value is `Host: server1`.
+
+## SQL query editor
+
+Grafana supports the [SQL query language](https://docs.influxdata.com/influxdb/cloud-serverless/query-data/sql/) in [InfluxDB v3.0](https://www.influxdata.com/blog/introducing-influxdb-3-0/) and higher.
+
+You construct your SQL query directly in the query editor.
+
+### Macros
+
+You can use macros in your query to automatically substitute them with values from Grafana's context.
+
+| Macro example               | Replaced with                                                                                                                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$__timeFrom`               | The start of the currently active time selection, such as `2020-06-11T13:31:00Z`.                                                                                                   |
+| `$__timeTo`                 | The end of the currently active time selection, such as `2020-06-11T14:31:00Z`.                                                                                                     |
+| `$__timeFilter`             | The time range that applies the start and the end of currently active time selection.                                                                                               |
+| `$__interval`               | An interval string that corresponds to Grafana's calculated interval based on the time range of the active time selection, such as `5s`.                                            |
+| `$__dateBin(<column>)`      | Applies [date_bin](https://docs.influxdata.com/influxdb/cloud-serverless/reference/sql/functions/time-and-date/#date_bin) function. Column must be timestamp.                       |
+| `$__dateBinAlias(<column>)` | Applies [date_bin](https://docs.influxdata.com/influxdb/cloud-serverless/reference/sql/functions/time-and-date/#date_bin) function with suffix `_binned`. Column must be timestamp. |
+
+Examples:
+
+```
+// with macro
+1. SELECT * FROM cpu WHERE time >= $__timeFrom AND time <= $__timeTo
+2. SELECT * FROM cpu WHERE $__timeFilter(time)
+3. SELECT $__dateBin(time) from cpu
+
+// interpolated
+1. SELECT * FROM iox.cpu WHERE time >= cast('2023-12-15T12:38:30Z' as timestamp) AND time <= cast('2023-12-15T18:38:30Z' as timestamp)
+2. SELECT * FROM cpu WHERE time >= '2023-12-15T12:41:28Z' AND time <= '2023-12-15T18:41:28Z'
+3. SELECT date_bin(interval '15 second', time, timestamp '1970-01-01T00:00:00Z') from cpu
+```
 
 ## Flux query editor
 
 Grafana supports Flux when running InfluxDB v1.8 and higher.
-If your data source is [configured for Flux]({{< relref "./#configure-the-data-source" >}}), you can use the [Flux query and scripting language](https://www.influxdata.com/products/flux/) in the query editor, which serves as a text editor for raw Flux queries with macro support.
+If your data source is [configured for Flux](ref:configure-influxdb-data-source), you can use
+the [Flux](https://docs.influxdata.com/flux/v0/) in the query editor, which serves as
+a text editor for raw Flux queries with macro support.
 
-For more information and connection details, refer to [1.8 compatibility](https://github.com/influxdata/influxdb-client-go/#influxdb-18-api-compatibility).
+For more information and connection details, refer
+to [InfluxDB 1.8 API compatibility](https://github.com/influxdata/influxdb-client-go/#influxdb-18-api-compatibility).
 
 ### Use macros
 
@@ -135,7 +215,7 @@ Macros support copying and pasting from [Chronograf](https://www.influxdata.com/
 | `v.defaultBucket`  | The data source configuration's "Default Bucket" setting.                                                                                                     |
 | `v.organization`   | The data source configuration's "Organization" setting.                                                                                                       |
 
-For example, the query editor interpolates this query:
+For example, consider the following Flux query:
 
 ```flux
 from(bucket: v.defaultBucket)
@@ -146,7 +226,7 @@ from(bucket: v.defaultBucket)
   |> yield(name: "mean")
 ```
 
-Into this query to send to InfluxDB, with interval and time period values changing according to the active time selection:
+This Flux query is interpolated into the following query and sent to InfluxDB, with the interval and time period values changing according to the active time selection:
 
 ```flux
 from(bucket: "grafana")
@@ -157,31 +237,20 @@ from(bucket: "grafana")
   |> yield(name: "mean")
 ```
 
-To view the interpolated version of a query with the query inspector, refer to [Panel Inspector]({{< relref "../../../panels-visualizations/panel-inspector" >}}).
+To view the interpolated version of a query with the Query inspector, refer to [Panel Inspector](ref:panel-inspector).
 
 ## Query logs
 
-You can query and display log data from InfluxDB in [Explore]({{< relref "../../../explore" >}}) and with the [Logs panel]({{< relref "../../../panels-visualizations/visualizations/logs" >}}) for dashboards.
+You can query and display log data from InfluxDB in [Explore](ref:explore) and in the dashboard [Logs panel](ref:logs).
 
-Select the InfluxDB data source, then enter a query to display your logs.
+Select an InfluxDB data source in the Query editor. Under the **Select measurement field** next to the **FROM** section, choose a measurement containing your log data, then choose the appropriate fields that will display the log message. Add any additional filters by clicking the **+ sign** next to the **WHERE** field. Add additional conditions in the GROUP BY, ORDER BY and the rest of the options.
 
-### Create log queries
-
-The Logs Explorer next to the query field, accessed by the **Measurements/Fields** button, lists measurements and fields.
-Choose the desired measurement that contains your log data, then choose which field to use to display the log message.
-
-Once InfluxDB returns the result, the log panel lists log rows and displays a bar chart, where the x axis represents the time and the y axis represents the frequency/count.
-
-### Filter search
-
-To add a filter, click the plus icon to the right of the **Measurements/Fields** button, or next to a condition.
-
-To remove tag filters, click the first select, then choose **--remove filter--**.
+After InfluxDB returns the results, the log panel displays log rows along with a bar chart. The x-axis represents time, while the y-axis shows the frequency or count.
 
 ## Apply annotations
 
-[Annotations]({{< relref "../../../dashboards/build-dashboards/annotate-visualizations" >}}) overlay rich event information on top of graphs.
-You can add annotation queries in the Dashboard menu's Annotations view.
+[Annotations](ref:annotations) overlay rich event information on top of graphs.
+You can add annotation queries in the dashboard menu's **Annotations view**.
 
 For InfluxDB, your query **must** include `WHERE $timeFilter`.
 
@@ -192,5 +261,8 @@ The **Tags** field's value can be a comma-separated string.
 ### Annotation query example
 
 ```sql
-SELECT title, description from events WHERE $timeFilter ORDER BY time ASC
+SELECT title, description
+from events
+WHERE $timeFilter
+ORDER BY time ASC
 ```

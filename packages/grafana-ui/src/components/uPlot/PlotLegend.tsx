@@ -1,16 +1,6 @@
-import React from 'react';
+import { memo } from 'react';
 
-import {
-  DataFrame,
-  DisplayProcessor,
-  DisplayValue,
-  fieldReducers,
-  getDisplayProcessor,
-  getFieldDisplayName,
-  getFieldSeriesColor,
-  reduceField,
-  ReducerID,
-} from '@grafana/data';
+import { DataFrame, getFieldDisplayName, getFieldSeriesColor } from '@grafana/data';
 import { VizLegendOptions, AxisPlacement } from '@grafana/schema';
 
 import { useTheme2 } from '../../themes';
@@ -19,16 +9,38 @@ import { VizLegend } from '../VizLegend/VizLegend';
 import { VizLegendItem } from '../VizLegend/types';
 
 import { UPlotConfigBuilder } from './config/UPlotConfigBuilder';
-
-const defaultFormatter = (v: any) => (v == null ? '-' : v.toFixed(1));
+import { getDisplayValuesForCalcs } from './utils';
 
 interface PlotLegendProps extends VizLegendOptions, Omit<VizLayoutLegendProps, 'children'> {
   data: DataFrame[];
   config: UPlotConfigBuilder;
 }
 
-export const PlotLegend: React.FC<PlotLegendProps> = React.memo(
-  ({ data, config, placement, calcs, displayMode, ...vizLayoutLegendProps }) => {
+/**
+ * mostly duplicates logic in PlotLegend below :(
+ *
+ * @internal
+ */
+export function hasVisibleLegendSeries(config: UPlotConfigBuilder, data: DataFrame[]) {
+  return config.getSeries().some((s) => {
+    const fieldIndex = s.props.dataFrameFieldIndex;
+
+    if (!fieldIndex) {
+      return false;
+    }
+
+    const field = data[fieldIndex.frameIndex]?.fields[fieldIndex.fieldIndex];
+
+    if (!field || field.config.custom?.hideFrom?.legend) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+export const PlotLegend = memo(
+  ({ data, config, placement, calcs, displayMode, ...vizLayoutLegendProps }: PlotLegendProps) => {
     const theme = useTheme2();
     const legendItems = config
       .getSeries()
@@ -56,68 +68,13 @@ export const PlotLegend: React.FC<PlotLegendProps> = React.memo(
           fieldIndex,
           color: seriesColor,
           label,
-          yAxis: axisPlacement === AxisPlacement.Left ? 1 : 2,
-          getDisplayValues: () => {
-            if (!calcs?.length) {
-              return [];
-            }
-
-            const fmt = field.display ?? defaultFormatter;
-            let countFormatter: DisplayProcessor | null = null;
-
-            const fieldCalcs = reduceField({
-              field,
-              reducers: calcs,
-            });
-
-            return calcs.map<DisplayValue>((reducerId) => {
-              const fieldReducer = fieldReducers.get(reducerId);
-              let formatter = fmt;
-
-              if (fieldReducer.id === ReducerID.diffperc) {
-                formatter = getDisplayProcessor({
-                  field: {
-                    ...field,
-                    config: {
-                      ...field.config,
-                      unit: 'percentunit',
-                    },
-                  },
-                  theme,
-                });
-              }
-
-              if (
-                fieldReducer.id === ReducerID.count ||
-                fieldReducer.id === ReducerID.changeCount ||
-                fieldReducer.id === ReducerID.distinctCount
-              ) {
-                if (!countFormatter) {
-                  countFormatter = getDisplayProcessor({
-                    field: {
-                      ...field,
-                      config: {
-                        ...field.config,
-                        unit: 'none',
-                      },
-                    },
-                    theme,
-                  });
-                }
-                formatter = countFormatter;
-              }
-
-              return {
-                ...formatter(fieldCalcs[reducerId]),
-                title: fieldReducer.name,
-                description: fieldReducer.description,
-              };
-            });
-          },
+          yAxis: axisPlacement === AxisPlacement.Left || axisPlacement === AxisPlacement.Bottom ? 1 : 2,
+          getDisplayValues: () => getDisplayValuesForCalcs(calcs, field, theme),
           getItemKey: () => `${label}-${fieldIndex.frameIndex}-${fieldIndex.fieldIndex}`,
+          lineStyle: seriesConfig.lineStyle,
         };
       })
-      .filter((i) => i !== undefined) as VizLegendItem[];
+      .filter((i): i is VizLegendItem => i !== undefined);
 
     return (
       <VizLayout.Legend placement={placement} {...vizLayoutLegendProps}>
@@ -127,6 +84,7 @@ export const PlotLegend: React.FC<PlotLegendProps> = React.memo(
           displayMode={displayMode}
           sortBy={vizLayoutLegendProps.sortBy}
           sortDesc={vizLayoutLegendProps.sortDesc}
+          isSortable={true}
         />
       </VizLayout.Legend>
     );

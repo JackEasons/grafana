@@ -32,6 +32,8 @@ func mockGithubRepositoryClient(context.Context, string) githubRepositoryService
 
 func TestPublishGithub(t *testing.T) {
 	t.Setenv("DRONE_BUILD_EVENT", "promote")
+	t.Setenv("DRONE_TAG", "v1.0.0")
+	t.Setenv("DRONE_COMMIT", "abcdefgh")
 	testApp, testPath := setupPublishGithubTests(t)
 	mockErrUnauthorized := errors.New("401")
 
@@ -221,4 +223,16 @@ func (m *mockGithubRepositoryServiceImpl) UploadReleaseAsset(ctx context.Context
 	assetName := "test"
 	assetUrl := "testurl.com.br"
 	return &github.ReleaseAsset{Name: &assetName, BrowserDownloadURL: &assetUrl}, &github.Response{}, m.uploadErr
+}
+
+func (m *mockGithubRepositoryServiceImpl) DeleteReleaseAsset(ctx context.Context, owner string, repo string, id int64) (*github.Response, error) {
+	return nil, nil
+}
+
+func (m *mockGithubRepositoryServiceImpl) ListReleaseAssets(ctx context.Context, owner string, repo string, id int64, opts *github.ListOptions) ([]*github.ReleaseAsset, *github.Response, error) {
+	resp := github.Response{}
+	resp.LastPage = 1
+	resp.FirstPage = 1
+	resp.NextPage = 0
+	return []*github.ReleaseAsset{}, &resp, nil
 }

@@ -1,13 +1,13 @@
 import { concat } from 'lodash';
-import type { languages, editor, Position, IRange, IDisposable } from 'monaco-editor/esm/vs/editor/editor.api';
+import type { IDisposable, IRange, Position, editor, languages } from 'monaco-editor/esm/vs/editor/editor.api';
 
 import type { Monaco } from '@grafana/ui';
 
 import { getAlertManagerSuggestions } from './alertManagerSuggestions';
 import { SuggestionDefinition } from './suggestionDefinition';
 import {
-  getAlertsSuggestions,
   getAlertSuggestions,
+  getAlertsSuggestions,
   getGlobalSuggestions,
   getKeyValueSuggestions,
   getSnippetsSuggestions,
@@ -63,7 +63,10 @@ function isInsideGoExpression(model: editor.ITextModel, position: Position) {
 }
 
 export class CompletionProvider {
-  constructor(private readonly monaco: Monaco, private readonly range: IRange) {}
+  constructor(
+    private readonly monaco: Monaco,
+    private readonly range: IRange
+  ) {}
 
   getSnippetsSuggestions = (): languages.ProviderResult<languages.CompletionList> => {
     return this.getCompletionsFromDefinitions(getSnippetsSuggestions(this.monaco));

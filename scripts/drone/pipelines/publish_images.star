@@ -1,50 +1,130 @@
-load(
-    'scripts/drone/steps/lib.star',
-    'download_grabpl_step',
-    'publish_images_step',
-    'compile_build_cmd',
-    'fetch_images_step',
-)
+"""
+This module returns the pipeline used for publishing Docker images and its steps.
+"""
 
 load(
-    'scripts/drone/utils/utils.star',
-    'pipeline',
+    "scripts/drone/steps/lib.star",
+    "compile_build_cmd",
+    "download_grabpl_step",
+    "fetch_images_step",
+    "identify_runner_step",
+    "publish_images_step",
+)
+load(
+    "scripts/drone/utils/images.star",
+    "images",
+)
+load(
+    "scripts/drone/utils/utils.star",
+    "pipeline",
+)
+load(
+    "scripts/drone/vault.star",
+    "from_secret",
 )
 
+def publish_image_public_step():
+    """Returns a step which publishes images
 
-def publish_image_steps(edition, mode, docker_repo):
-    additional_docker_repo = ""
-    if edition == 'oss':
-        additional_docker_repo='grafana/grafana-oss'
-    steps = [
-        download_grabpl_step(),
-        compile_build_cmd(),
-        fetch_images_step(edition),
-        publish_images_step(edition, 'release', mode, docker_repo),
-    ]
-    if additional_docker_repo != "":
-        steps.extend([publish_images_step(edition, 'release', mode, additional_docker_repo)])
+    Returns:
+      A drone step which publishes Docker images for a public release.
+    """
+    command = """
+    bash -c '
+    IMAGE_TAG=$(echo "$${TAG}" | sed -e "s/+/-/g")
+    debug=
+    if [[ -n $${DRY_RUN} ]];  then debug=echo; fi
+    docker login -u $${DOCKER_USER} -p $${DOCKER_PASSWORD}
 
-    return steps
+    # Push the grafana-image-tags images
+    $$debug docker push grafana/grafana-image-tags:$${IMAGE_TAG}-amd64
+    $$debug docker push grafana/grafana-image-tags:$${IMAGE_TAG}-arm64
+    $$debug docker push grafana/grafana-image-tags:$${IMAGE_TAG}-armv7
+    $$debug docker push grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-amd64
+    $$debug docker push grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-arm64
+    $$debug docker push grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-armv7
+
+    # Create the grafana manifests
+    $$debug docker manifest create grafana/grafana:$${IMAGE_TAG} \
+      grafana/grafana-image-tags:$${IMAGE_TAG}-amd64 \
+      grafana/grafana-image-tags:$${IMAGE_TAG}-arm64 \
+      grafana/grafana-image-tags:$${IMAGE_TAG}-armv7
+
+    $$debug docker manifest create grafana/grafana:$${IMAGE_TAG}-ubuntu \
+      grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-amd64 \
+      grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-arm64 \
+      grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-armv7
+
+    # Push the grafana manifests
+    $$debug docker manifest push grafana/grafana:$${IMAGE_TAG}
+    $$debug docker manifest push grafana/grafana:$${IMAGE_TAG}-ubuntu
+
+    # if LATEST is set, then also create & push latest
+    if [[ -n $${LATEST} ]]; then
+        $$debug docker manifest create grafana/grafana:latest \
+          grafana/grafana-image-tags:$${IMAGE_TAG}-amd64 \
+          grafana/grafana-image-tags:$${IMAGE_TAG}-arm64 \
+          grafana/grafana-image-tags:$${IMAGE_TAG}-armv7
+        $$debug docker manifest create grafana/grafana:latest-ubuntu \
+          grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-amd64 \
+          grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-arm64 \
+          grafana/grafana-image-tags:$${IMAGE_TAG}-ubuntu-armv7
+
+        $$debug docker manifest push grafana/grafana:latest
+        $$debug docker manifest push grafana/grafana:latest-ubuntu
+
+    fi'"""
+    return {
+        "environment": {
+            "DOCKER_USER": from_secret("docker_username"),
+            "DOCKER_PASSWORD": from_secret("docker_password"),
+        },
+        "name": "publish-images-grafana",
+        "image": images["docker"],
+        "depends_on": ["fetch-images"],
+        "commands": [
+            "apk add bash",
+            command,
+        ],
+        "volumes": [{"name": "docker", "path": "/var/run/docker.sock"}],
+    }
 
 def publish_image_pipelines_public():
-    mode='public'
-    trigger = {
-        'event': ['promote'],
-        'target': [mode],
-    }
-    return [pipeline(
-        name='publish-docker-oss-{}'.format(mode), trigger=trigger, steps=publish_image_steps(edition='oss',  mode=mode, docker_repo='grafana'), edition="", environment = {'EDITION': 'oss'}
-    ), pipeline(
-        name='publish-docker-enterprise-{}'.format(mode), trigger=trigger, steps=publish_image_steps(edition='enterprise',  mode=mode, docker_repo='grafana-enterprise'), edition="", environment = {'EDITION': 'enterprise'}
-    ),]
+    """Generates the pipeline used for publising public Docker images.
 
-def publish_image_pipelines_security():
-    mode='security'
-    trigger = {
-        'event': ['promote'],
-        'target': [mode],
-    }
-    return [pipeline(
-        name='publish-docker-enterprise-{}'.format(mode), trigger=trigger, steps=publish_image_steps(edition='enterprise',  mode=mode, docker_repo='grafana-enterprise'), edition="", environment = {'EDITION': 'enterprise'}
-    ),]
+    Returns:
+      Drone pipeline
+    """
+    return [
+        pipeline(
+            name = "publish-docker-public",
+            trigger = {
+                "event": ["promote"],
+                "target": ["public"],
+            },
+            steps = [
+                identify_runner_step(),
+                download_grabpl_step(),
+                compile_build_cmd(),
+                fetch_images_step(),
+                publish_image_public_step(),
+                publish_images_step("release", "grafana-oss"),
+            ],
+            environment = {"EDITION": "oss"},
+        ),
+        pipeline(
+            name = "manually-publish-docker-public",
+            trigger = {
+                "event": ["promote"],
+                "target": ["publish-docker-public"],
+            },
+            steps = [
+                identify_runner_step(),
+                download_grabpl_step(),
+                compile_build_cmd(),
+                fetch_images_step(),
+                publish_image_public_step(),
+            ],
+            environment = {"EDITION": "oss"},
+        ),
+    ]

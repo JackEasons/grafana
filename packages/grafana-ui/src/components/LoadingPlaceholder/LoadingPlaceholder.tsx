@@ -1,5 +1,6 @@
 import { css, cx } from '@emotion/css';
-import React, { HTMLAttributes } from 'react';
+import { HTMLAttributes } from 'react';
+import * as React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
@@ -27,8 +28,8 @@ export const LoadingPlaceholder = ({ text, className, ...rest }: LoadingPlacehol
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
-    container: css`
-      margin-bottom: ${theme.spacing(4)};
-    `,
+    container: css({
+      marginBottom: theme.spacing(4),
+    }),
   };
 };

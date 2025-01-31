@@ -11,31 +11,41 @@ import (
 	"github.com/grafana/grafana/pkg/plugins"
 )
 
-const pluginID = "test-ds"
+const (
+	pluginID = "test-ds"
+	v1       = "1.0.0"
+	v2       = "2.0.0"
+)
 
 func TestInMemory(t *testing.T) {
 	t.Run("Test mix of registry operations", func(t *testing.T) {
-		i := &InMemory{
-			store: map[string]*plugins.Plugin{},
-		}
+		i := NewInMemory()
 		ctx := context.Background()
 
-		p, exists := i.Plugin(ctx, pluginID)
+		p, exists := i.Plugin(ctx, pluginID, v1)
 		require.False(t, exists)
 		require.Nil(t, p)
 
-		err := i.Remove(ctx, pluginID)
+		err := i.Remove(ctx, pluginID, v1)
 		require.EqualError(t, err, fmt.Errorf("plugin %s is not registered", pluginID).Error())
+
+		pv1 := &plugins.Plugin{JSONData: plugins.JSONData{ID: pluginID, Info: plugins.Info{Version: v1}}}
+		err = i.Add(ctx, pv1)
+		require.NoError(t, err)
+
+		pv2 := &plugins.Plugin{JSONData: plugins.JSONData{ID: pluginID, Info: plugins.Info{Version: v2}}}
+		err = i.Add(ctx, pv2)
+		require.Errorf(t, err, fmt.Sprintf("plugin %s is already registered", pluginID))
+
+		existingP, exists := i.Plugin(ctx, pluginID, v1)
+		require.True(t, exists)
+		require.Equal(t, pv1, existingP)
 
 		p = &plugins.Plugin{JSONData: plugins.JSONData{ID: pluginID}}
 		err = i.Add(ctx, p)
-		require.NoError(t, err)
+		require.Errorf(t, err, fmt.Sprintf("plugin %s is already registered", pluginID))
 
-		existingP, exists := i.Plugin(ctx, pluginID)
-		require.True(t, exists)
-		require.Equal(t, p, existingP)
-
-		err = i.Remove(ctx, pluginID)
+		err = i.Remove(ctx, pluginID, v1)
 		require.NoError(t, err)
 
 		existingPlugins := i.Plugins(ctx)
@@ -84,6 +94,28 @@ func TestInMemory_Add(t *testing.T) {
 				p: &plugins.Plugin{
 					JSONData: plugins.JSONData{
 						ID: pluginID,
+					},
+				},
+			},
+			err: fmt.Errorf("plugin %s is already registered", pluginID),
+		},
+		{
+			name: "Cannot add a plugin to the registry even if it has a different version",
+			mocks: mocks{
+				store: map[string]*plugins.Plugin{
+					pluginID: {
+						JSONData: plugins.JSONData{
+							ID:   pluginID,
+							Info: plugins.Info{Version: v1},
+						},
+					},
+				},
+			},
+			args: args{
+				p: &plugins.Plugin{
+					JSONData: plugins.JSONData{
+						ID:   pluginID,
+						Info: plugins.Info{Version: v2},
 					},
 				},
 			},
@@ -153,7 +185,7 @@ func TestInMemory_Plugin(t *testing.T) {
 			i := &InMemory{
 				store: tt.mocks.store,
 			}
-			p, exists := i.Plugin(context.Background(), tt.args.pluginID)
+			p, exists := i.Plugin(context.Background(), tt.args.pluginID, "")
 			if exists != tt.exists {
 				t.Errorf("Plugin() got1 = %v, expected %v", exists, tt.exists)
 			}
@@ -267,8 +299,56 @@ func TestInMemory_Remove(t *testing.T) {
 			i := &InMemory{
 				store: tt.mocks.store,
 			}
-			err := i.Remove(context.Background(), tt.args.pluginID)
+			err := i.Remove(context.Background(), tt.args.pluginID, "")
 			require.Equal(t, tt.err, err)
 		})
 	}
+}
+
+func TestAliasSupport(t *testing.T) {
+	t.Run("Test alias operations", func(t *testing.T) {
+		i := NewInMemory()
+		ctx := context.Background()
+
+		pluginIdNew := "plugin-new"
+		pluginIdOld := "plugin-old"
+		pluginIdOld2 := "plugin-old2"
+
+		p, exists := i.Plugin(ctx, pluginIdNew, "")
+		require.False(t, exists)
+		require.Nil(t, p)
+
+		pluginNew := &plugins.Plugin{
+			JSONData: plugins.JSONData{
+				ID:       pluginIdNew,
+				AliasIDs: []string{pluginIdOld, pluginIdOld2},
+			},
+		}
+		err := i.Add(ctx, pluginNew)
+		require.NoError(t, err)
+
+		// Can lookup by the new ID
+		found, exists := i.Plugin(ctx, pluginIdNew, "")
+		require.True(t, exists)
+		require.Equal(t, pluginNew, found)
+
+		// Can lookup by the old ID
+		found, exists = i.Plugin(ctx, pluginIdOld, "")
+		require.True(t, exists)
+		require.Equal(t, pluginNew, found)
+
+		// Can lookup by the other old ID
+		found, exists = i.Plugin(ctx, pluginIdOld2, "")
+		require.True(t, exists)
+		require.Equal(t, pluginNew, found)
+
+		// Register the old plugin and look it up
+		pluginOld := &plugins.Plugin{JSONData: plugins.JSONData{
+			ID: pluginIdOld,
+		}}
+		require.NoError(t, i.Add(ctx, pluginOld))
+		found, exists = i.Plugin(ctx, pluginIdOld, "")
+		require.True(t, exists)
+		require.Equal(t, pluginOld, found)
+	})
 }

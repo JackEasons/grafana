@@ -9,17 +9,18 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-
 	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/urfave/cli/v2"
+
 	"github.com/grafana/grafana/pkg/build/config"
 	"github.com/grafana/grafana/pkg/build/gcloud"
 	"github.com/grafana/grafana/pkg/build/gcloud/storage"
+	"github.com/grafana/grafana/pkg/build/gcom"
 	"github.com/grafana/grafana/pkg/build/packaging"
-	"github.com/urfave/cli/v2"
 )
 
 const grafanaAPI = "https://grafana.com/api"
@@ -33,7 +34,7 @@ func GrafanaCom(c *cli.Context) error {
 		return fmt.Errorf("couldn't activate service account, err: %w", err)
 	}
 
-	metadata, err := GenerateMetadata(c)
+	metadata, err := config.GenerateMetadata(c)
 	if err != nil {
 		return err
 	}
@@ -66,11 +67,11 @@ func GrafanaCom(c *cli.Context) error {
 
 	grafanaAPIKey := strings.TrimSpace(os.Getenv("GRAFANA_COM_API_KEY"))
 	if grafanaAPIKey == "" {
-		return cli.NewExitError("the environment variable GRAFANA_COM_API_KEY must be set", 1)
+		return cli.Exit("the environment variable GRAFANA_COM_API_KEY must be set", 1)
 	}
 	whatsNewURL, releaseNotesURL, err := getReleaseURLs()
 	if err != nil {
-		return cli.NewExitError(err.Error(), 1)
+		return cli.Exit(err.Error(), 1)
 	}
 
 	// TODO: Verify config values
@@ -89,7 +90,7 @@ func GrafanaCom(c *cli.Context) error {
 	}
 
 	if err := publishPackages(cfg); err != nil {
-		return cli.NewExitError(err.Error(), 1)
+		return cli.Exit(err.Error(), 1)
 	}
 
 	log.Println("Successfully published packages to grafana.com!")
@@ -125,6 +126,51 @@ func getReleaseURLs() (string, string, error) {
 	return pconf.Grafana.WhatsNewURL, pconf.Grafana.ReleaseNotesURL, nil
 }
 
+func Builds(baseURL *url.URL, grafana, version string, packages []packaging.BuildArtifact) ([]GCOMPackage, error) {
+	builds := make([]GCOMPackage, len(packages))
+	for i, v := range packages {
+		var (
+			os   = v.Distro
+			arch = v.Arch
+		)
+
+		if v.Distro == "windows" {
+			os = "win"
+			if v.Ext == "msi" {
+				os = "win-installer"
+			}
+		}
+
+		if v.Distro == "rhel" {
+			if arch == "aarch64" {
+				arch = "arm64"
+			}
+			if arch == "x86_64" {
+				arch = "amd64"
+			}
+		}
+
+		if v.Distro == "deb" {
+			if arch == "armhf" {
+				arch = "armv7"
+				if v.RaspberryPi {
+					log.Println(v.Distro, arch, "raspberrypi == true")
+					arch = "armv6"
+				}
+			}
+		}
+
+		u := gcom.GetURL(baseURL, version, grafana, v.Distro, v.Arch, v.Ext, v.Musl, v.RaspberryPi)
+		builds[i] = GCOMPackage{
+			OS:   os,
+			URL:  u.String(),
+			Arch: arch,
+		}
+	}
+
+	return builds, nil
+}
+
 // publishPackages publishes packages to grafana.com.
 func publishPackages(cfg packaging.PublishConfig) error {
 	log.Printf("Publishing Grafana packages, version %s, %s edition, %s mode, dryRun: %v, simulating: %v...\n",
@@ -133,52 +179,46 @@ func publishPackages(cfg packaging.PublishConfig) error {
 	versionStr := fmt.Sprintf("v%s", cfg.Version)
 	log.Printf("Creating release %s at grafana.com...\n", versionStr)
 
-	var sfx string
-	var pth string
+	var (
+		pth     string
+		grafana = "grafana"
+	)
+
 	switch cfg.Edition {
 	case config.EditionOSS:
 		pth = "oss"
 	case config.EditionEnterprise:
+		grafana = "grafana-enterprise"
 		pth = "enterprise"
-		sfx = packaging.EnterpriseSfx
 	default:
 		return fmt.Errorf("unrecognized edition %q", cfg.Edition)
 	}
 
 	switch cfg.ReleaseMode.Mode {
-	case config.MainMode, config.CustomMode, config.CronjobMode:
+	case config.MainMode, config.DownstreamMode, config.CronjobMode:
 		pth = path.Join(pth, packaging.MainFolder)
 	default:
 		pth = path.Join(pth, packaging.ReleaseFolder)
 	}
 
-	product := fmt.Sprintf("grafana%s", sfx)
-	pth = path.Join(pth, product)
-	baseArchiveURL := fmt.Sprintf("https://dl.grafana.com/%s", pth)
-
-	var builds []buildRepr
-	for _, ba := range packaging.ArtifactConfigs {
-		u := ba.GetURL(baseArchiveURL, cfg)
-
-		sha256, err := getSHA256(u)
-		if err != nil {
-			return err
-		}
-
-		builds = append(builds, buildRepr{
-			OS:     ba.Os,
-			URL:    u,
-			SHA256: string(sha256),
-			Arch:   ba.Arch,
-		})
+	pth = path.Join(pth)
+	baseArchiveURL := &url.URL{
+		Scheme: "https",
+		Host:   "dl.grafana.com",
+		Path:   pth,
 	}
 
-	r := releaseRepr{
+	builds, err := Builds(baseArchiveURL, grafana, cfg.Version, packaging.ArtifactConfigs)
+	if err != nil {
+		return err
+	}
+
+	r := Release{
 		Version:     cfg.Version,
 		ReleaseDate: time.Now().UTC(),
 		Builds:      builds,
-		Stable:      cfg.ReleaseMode.Mode == config.TagMode && !cfg.ReleaseMode.IsBeta && !cfg.ReleaseMode.IsTest,
-		Beta:        cfg.ReleaseMode.IsBeta,
+		Stable:      cfg.ReleaseMode.Mode == config.TagMode && !cfg.ReleaseMode.IsPreview && !cfg.ReleaseMode.IsTest,
+		Beta:        cfg.ReleaseMode.IsPreview,
 		Nightly:     cfg.ReleaseMode.Mode == config.CronjobMode,
 	}
 	if cfg.ReleaseMode.Mode == config.TagMode || r.Beta {
@@ -193,6 +233,15 @@ func publishPackages(cfg packaging.PublishConfig) error {
 	if err := postRequest(cfg, fmt.Sprintf("versions/%s", cfg.Version), r,
 		fmt.Sprintf("update release %s", cfg.Version)); err != nil {
 		return err
+	}
+
+	for i, v := range r.Builds {
+		sha, err := getSHA256(v.URL)
+		if err != nil {
+			return err
+		}
+
+		r.Builds[i].SHA256 = string(sha)
 	}
 
 	for _, b := range r.Builds {
@@ -211,6 +260,7 @@ func publishPackages(cfg packaging.PublishConfig) error {
 
 func getSHA256(u string) ([]byte, error) {
 	shaURL := fmt.Sprintf("%s.sha256", u)
+
 	// nolint:gosec
 	resp, err := http.Get(shaURL)
 	if err != nil {
@@ -232,7 +282,7 @@ func getSHA256(u string) ([]byte, error) {
 	return sha256, nil
 }
 
-func postRequest(cfg packaging.PublishConfig, pth string, obj interface{}, descr string) error {
+func postRequest(cfg packaging.PublishConfig, pth string, body any, descr string) error {
 	var sfx string
 	switch cfg.Edition {
 	case config.EditionOSS:
@@ -243,7 +293,7 @@ func postRequest(cfg packaging.PublishConfig, pth string, obj interface{}, descr
 	}
 	product := fmt.Sprintf("grafana%s", sfx)
 
-	jsonB, err := json.Marshal(obj)
+	jsonB, err := json.Marshal(body)
 	if err != nil {
 		return fmt.Errorf("failed to JSON encode release: %w", err)
 	}
@@ -303,20 +353,20 @@ func constructURL(product string, pth string) (string, error) {
 	return u.String(), err
 }
 
-type buildRepr struct {
+type GCOMPackage struct {
 	OS     string `json:"os"`
 	URL    string `json:"url"`
 	SHA256 string `json:"sha256"`
 	Arch   string `json:"arch"`
 }
 
-type releaseRepr struct {
-	Version         string      `json:"version"`
-	ReleaseDate     time.Time   `json:"releaseDate"`
-	Stable          bool        `json:"stable"`
-	Beta            bool        `json:"beta"`
-	Nightly         bool        `json:"nightly"`
-	WhatsNewURL     string      `json:"whatsNewUrl"`
-	ReleaseNotesURL string      `json:"releaseNotesUrl"`
-	Builds          []buildRepr `json:"-"`
+type Release struct {
+	Version         string        `json:"version"`
+	ReleaseDate     time.Time     `json:"releaseDate"`
+	Stable          bool          `json:"stable"`
+	Beta            bool          `json:"beta"`
+	Nightly         bool          `json:"nightly"`
+	WhatsNewURL     string        `json:"whatsNewUrl"`
+	ReleaseNotesURL string        `json:"releaseNotesUrl"`
+	Builds          []GCOMPackage `json:"-"`
 }

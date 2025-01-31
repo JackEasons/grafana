@@ -1,13 +1,10 @@
 import { action } from '@storybook/addon-actions';
-import { useArgs } from '@storybook/client-api';
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
+import { useArgs } from '@storybook/preview-api';
+import { Meta, StoryFn } from '@storybook/react';
 
 import { dateTime, DefaultTimeZone, isDateTime, TimeRange } from '@grafana/data';
-import { TimeRangeInput } from '@grafana/ui';
 
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
-
+import { TimeRangeInput } from './TimeRangeInput';
 import mdx from './TimeRangeInput.mdx';
 
 const now = dateTime(Date.now());
@@ -32,10 +29,9 @@ const nullRange = {
   },
 };
 
-const meta: ComponentMeta<typeof TimeRangeInput> = {
+const meta: Meta<typeof TimeRangeInput> = {
   title: 'Pickers and Editors/TimePickers/TimeRangeInput',
   component: TimeRangeInput,
-  decorators: [withCenteredStory],
   parameters: {
     controls: {
       exclude: ['onChange', 'onChangeTimeZone'],
@@ -57,7 +53,7 @@ const meta: ComponentMeta<typeof TimeRangeInput> = {
   },
 };
 
-export const Basic: ComponentStory<typeof TimeRangeInput> = (args) => {
+export const Basic: StoryFn<typeof TimeRangeInput> = (args) => {
   const [, updateArgs] = useArgs();
   return (
     <TimeRangeInput

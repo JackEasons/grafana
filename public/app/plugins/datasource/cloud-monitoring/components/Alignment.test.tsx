@@ -1,25 +1,36 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 import { openMenu } from 'react-select-event';
 
-import { TemplateSrvMock } from 'app/features/templating/template_srv.mock';
+import { CustomVariableModel } from '@grafana/data';
 
 import { createMockDatasource } from '../__mocks__/cloudMonitoringDatasource';
-import { createMockMetricQuery } from '../__mocks__/cloudMonitoringQuery';
-import { MetricKind, ValueTypes } from '../types';
+import { createMockMetricDescriptor } from '../__mocks__/cloudMonitoringMetricDescriptor';
+import { createMockTimeSeriesList } from '../__mocks__/cloudMonitoringQuery';
+import { MetricKind, ValueTypes } from '../types/query';
 
 import { Alignment } from './Alignment';
 
-jest.mock('@grafana/runtime', () => ({
-  ...jest.requireActual('@grafana/runtime'),
-  getTemplateSrv: () => new TemplateSrvMock({}),
-}));
+let getTempVars = () => [] as CustomVariableModel[];
+let replace = () => '';
+
+jest.mock('@grafana/runtime', () => {
+  return {
+    __esModule: true,
+    ...jest.requireActual('@grafana/runtime'),
+    getTemplateSrv: () => ({
+      replace: replace,
+      getVariables: getTempVars,
+      updateTimeRange: jest.fn(),
+      containsTemplate: jest.fn(),
+    }),
+  };
+});
 
 describe('Alignment', () => {
   it('renders alignment fields', () => {
     const datasource = createMockDatasource();
-    const query = createMockMetricQuery();
+    const query = createMockTimeSeriesList();
     const onChange = jest.fn();
 
     render(
@@ -39,7 +50,7 @@ describe('Alignment', () => {
 
   it('can set the alignment function', async () => {
     const datasource = createMockDatasource();
-    const query = createMockMetricQuery({ metricKind: MetricKind.GAUGE, valueType: ValueTypes.INT64 });
+    const query = createMockTimeSeriesList();
     const onChange = jest.fn();
 
     render(
@@ -50,6 +61,7 @@ describe('Alignment', () => {
         query={query}
         onChange={onChange}
         templateVariableOptions={[]}
+        metricDescriptor={createMockMetricDescriptor({ metricKind: MetricKind.GAUGE, valueType: ValueTypes.INT64 })}
       />
     );
 
@@ -61,7 +73,7 @@ describe('Alignment', () => {
 
   it('can set the alignment period', async () => {
     const datasource = createMockDatasource();
-    const query = createMockMetricQuery();
+    const query = createMockTimeSeriesList();
     const onChange = jest.fn();
 
     render(

@@ -1,4 +1,11 @@
-import { Centrifuge, State } from 'centrifuge';
+import {
+  Centrifuge,
+  ConnectedContext,
+  ConnectingContext,
+  DisconnectedContext,
+  ServerPublicationContext,
+  State,
+} from 'centrifuge';
 import { BehaviorSubject, Observable, share, startWith } from 'rxjs';
 
 import {
@@ -29,7 +36,6 @@ export type CentrifugeSrvDeps = {
   appUrl: string;
   orgId: number;
   orgRole: string;
-  sessionId: string;
   liveEnabled: boolean;
   dataStreamSubscriberReadiness: Observable<boolean>;
 };
@@ -105,15 +111,15 @@ export class CentrifugeService implements CentrifugeSrv {
   // Internal functions
   //----------------------------------------------------------
 
-  private onConnect = (context: any) => {
+  private onConnect = (context: ConnectedContext) => {
     this.connectionState.next(true);
   };
 
-  private onDisconnect = (context: any) => {
+  private onDisconnect = (context: ConnectingContext | DisconnectedContext) => {
     this.connectionState.next(false);
   };
 
-  private onServerSideMessage = (context: any) => {
+  private onServerSideMessage = (context: ServerPublicationContext) => {
     console.log('Publication from server-side channel', context);
   };
 
@@ -133,7 +139,10 @@ export class CentrifugeService implements CentrifugeSrv {
       return channel;
     }
     channel.shutdownCallback = () => {
-      this.open.delete(id); // remove it from the list of open channels
+      this.open.delete(id);
+
+      // without a call to `removeSubscription`, the subscription will remain in centrifuge's internal registry
+      this.centrifuge.removeSubscription(this.centrifuge.getSubscription(id));
     };
     this.open.set(id, channel);
 

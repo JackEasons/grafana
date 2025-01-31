@@ -1,4 +1,4 @@
-import React, { PureComponent, createRef } from 'react';
+import { PureComponent, createRef } from 'react';
 
 import { JsonExplorer, JsonExplorerConfig } from './json_explorer/json_explorer'; // We have made some monkey-patching of json-formatter-js so we can't switch right now
 
@@ -7,7 +7,7 @@ interface Props {
   json: {};
   config?: JsonExplorerConfig;
   open?: number;
-  onDidRender?: (formattedJson: any) => void;
+  onDidRender?: (formattedJson: {}) => void;
 }
 
 export class JSONFormatter extends PureComponent<Props> {

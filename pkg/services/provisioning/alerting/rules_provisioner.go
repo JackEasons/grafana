@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/grafana/grafana/pkg/apimachinery/identity"
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
+	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/dashboards"
+	"github.com/grafana/grafana/pkg/services/folder"
+	"github.com/grafana/grafana/pkg/services/folder/folderimpl"
 	alert_models "github.com/grafana/grafana/pkg/services/ngalert/models"
 	"github.com/grafana/grafana/pkg/services/ngalert/provisioning"
+	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/util"
 )
 
@@ -19,12 +23,12 @@ type AlertRuleProvisioner interface {
 
 func NewAlertRuleProvisioner(
 	logger log.Logger,
-	dashboardService dashboards.DashboardService,
+	folderService folder.Service,
 	dashboardProvService dashboards.DashboardProvisioningService,
 	ruleService provisioning.AlertRuleService) AlertRuleProvisioner {
 	return &defaultAlertRuleProvisioner{
 		logger:               logger,
-		dashboardService:     dashboardService,
+		folderService:        folderService,
 		dashboardProvService: dashboardProvService,
 		ruleService:          ruleService,
 	}
@@ -32,7 +36,7 @@ func NewAlertRuleProvisioner(
 
 type defaultAlertRuleProvisioner struct {
 	logger               log.Logger
-	dashboardService     dashboards.DashboardService
+	folderService        folder.Service
 	dashboardProvService dashboards.DashboardProvisioningService
 	ruleService          provisioning.AlertRuleService
 }
@@ -41,31 +45,33 @@ func (prov *defaultAlertRuleProvisioner) Provision(ctx context.Context,
 	files []*AlertingFile) error {
 	for _, file := range files {
 		for _, group := range file.Groups {
-			folderUID, err := prov.getOrCreateFolderUID(ctx, group.Folder, group.OrgID)
+			ctx, u := identity.WithServiceIdentitiy(ctx, group.OrgID)
+
+			folderUID, err := prov.getOrCreateFolderFullpath(ctx, group.FolderFullpath, group.OrgID)
 			if err != nil {
+				prov.logger.Error("failed to get or create folder", "folder", group.FolderFullpath, "org", group.OrgID, "err", err)
 				return err
 			}
 			prov.logger.Debug("provisioning alert rule group",
 				"org", group.OrgID,
-				"folder", group.Folder,
+				"folder", group.FolderFullpath,
 				"folderUID", folderUID,
-				"name", group.Name)
+				"name", group.Title)
 			for _, rule := range group.Rules {
 				rule.NamespaceUID = folderUID
-				rule.RuleGroup = group.Name
-				err = prov.provisionRule(ctx, group.OrgID, rule, group.Folder, folderUID)
+				rule.RuleGroup = group.Title
+				err = prov.provisionRule(ctx, u, rule)
 				if err != nil {
 					return err
 				}
 			}
-			err = prov.ruleService.UpdateRuleGroup(ctx, group.OrgID, folderUID, group.Name, int64(group.Interval.Seconds()))
+			err = prov.ruleService.UpdateRuleGroup(ctx, u, folderUID, group.Title, group.Interval)
 			if err != nil {
 				return err
 			}
 		}
 		for _, deleteRule := range file.DeleteRules {
-			err := prov.ruleService.DeleteAlertRule(ctx, deleteRule.OrgID,
-				deleteRule.UID, alert_models.ProvenanceFile)
+			err := prov.ruleService.DeleteAlertRule(ctx, provisionerUser(deleteRule.OrgID), deleteRule.UID, alert_models.ProvenanceFile)
 			if err != nil {
 				return err
 			}
@@ -76,56 +82,92 @@ func (prov *defaultAlertRuleProvisioner) Provision(ctx context.Context,
 
 func (prov *defaultAlertRuleProvisioner) provisionRule(
 	ctx context.Context,
-	orgID int64,
-	rule alert_models.AlertRule,
-	folder,
-	folderUID string) error {
+	user identity.Requester,
+	rule alert_models.AlertRule) error {
 	prov.logger.Debug("provisioning alert rule", "uid", rule.UID, "org", rule.OrgID)
-	_, _, err := prov.ruleService.GetAlertRule(ctx, orgID, rule.UID)
+	_, _, err := prov.ruleService.GetAlertRule(ctx, user, rule.UID)
 	if err != nil && !errors.Is(err, alert_models.ErrAlertRuleNotFound) {
 		return err
 	} else if err != nil {
 		prov.logger.Debug("creating rule", "uid", rule.UID, "org", rule.OrgID)
-		// 0 is passed as userID as then the quota logic will only check for
-		// the organization quota, as we don't have any user scope here.
-		_, err = prov.ruleService.CreateAlertRule(ctx, rule, alert_models.ProvenanceFile, 0)
+		// a nil user is passed in as then the quota logic will only check for
+		// the organization quota since we don't have any user scope here.
+		_, err = prov.ruleService.CreateAlertRule(ctx, user, rule, alert_models.ProvenanceFile)
 	} else {
 		prov.logger.Debug("updating rule", "uid", rule.UID, "org", rule.OrgID)
-		_, err = prov.ruleService.UpdateAlertRule(ctx, rule, alert_models.ProvenanceFile)
+		_, err = prov.ruleService.UpdateAlertRule(ctx, user, rule, alert_models.ProvenanceFile)
 	}
 	return err
 }
 
-func (prov *defaultAlertRuleProvisioner) getOrCreateFolderUID(
-	ctx context.Context, folderName string, orgID int64) (string, error) {
-	cmd := &models.GetDashboardQuery{
-		Slug:  models.SlugifyTitle(folderName),
-		OrgId: orgID,
+func (prov *defaultAlertRuleProvisioner) getOrCreateFolderFullpath(
+	ctx context.Context, folderFullpath string, orgID int64) (string, error) {
+	folderTitles := folderimpl.SplitFullpath(folderFullpath)
+	if len(folderTitles) == 0 {
+		return "", fmt.Errorf("invalid folder fullpath: %s", folderFullpath)
 	}
-	err := prov.dashboardService.GetDashboard(ctx, cmd)
-	if err != nil && !errors.Is(err, dashboards.ErrDashboardNotFound) {
+
+	var folderUID *string
+	for i := range folderTitles {
+		uid, err := prov.getOrCreateFolderByTitle(ctx, folderTitles[i], orgID, folderUID)
+		if err != nil {
+			prov.logger.Error("failed to get or create folder", "folder", folderTitles[i], "org", orgID, "err", err)
+			return "", err
+		}
+		folderUID = &uid
+	}
+	return *folderUID, nil
+}
+
+func (prov *defaultAlertRuleProvisioner) getOrCreateFolderByTitle(
+	ctx context.Context, folderName string, orgID int64, parentUID *string) (string, error) {
+	ctx, user := identity.WithServiceIdentitiy(ctx, orgID)
+
+	cmd := &folder.GetFolderQuery{
+		Title:        &folderName,
+		ParentUID:    parentUID,
+		OrgID:        orgID,
+		SignedInUser: user,
+	}
+
+	cmdResult, err := prov.folderService.Get(ctx, cmd)
+	if err != nil && !errors.Is(err, dashboards.ErrFolderNotFound) {
 		return "", err
 	}
 
 	// dashboard folder not found. create one.
-	if errors.Is(err, dashboards.ErrDashboardNotFound) {
-		dash := &dashboards.SaveDashboardDTO{}
-		dash.Dashboard = models.NewDashboardFolder(folderName)
-		dash.Dashboard.IsFolder = true
-		dash.Overwrite = true
-		dash.OrgId = orgID
-		dash.Dashboard.SetUid(util.GenerateShortUID())
-		dbDash, err := prov.dashboardProvService.SaveFolderForProvisionedDashboards(ctx, dash)
+	if errors.Is(err, dashboards.ErrFolderNotFound) {
+		createCmd := &folder.CreateFolderCommand{
+			OrgID: orgID,
+			UID:   util.GenerateShortUID(),
+			Title: folderName,
+		}
+
+		if parentUID != nil {
+			createCmd.ParentUID = *parentUID
+		}
+
+		f, err := prov.dashboardProvService.SaveFolderForProvisionedDashboards(ctx, createCmd)
 		if err != nil {
 			return "", err
 		}
 
-		return dbDash.Uid, nil
+		return f.UID, nil
 	}
 
-	if !cmd.Result.IsFolder {
-		return "", fmt.Errorf("got invalid response. expected folder, found dashboard")
-	}
+	return cmdResult.UID, nil
+}
 
-	return cmd.Result.Uid, nil
+var provisionerUser = func(orgID int64) identity.Requester {
+	// this user has 0 ID and therefore, organization wide quota will be applied
+	return accesscontrol.BackgroundUser(
+		"alert_provisioner",
+		orgID,
+		org.RoleAdmin,
+		[]accesscontrol.Permission{
+			{Action: dashboards.ActionFoldersRead, Scope: dashboards.ScopeFoldersAll},
+			{Action: accesscontrol.ActionAlertingProvisioningReadSecrets, Scope: dashboards.ScopeFoldersAll},
+			{Action: accesscontrol.ActionAlertingProvisioningWrite, Scope: dashboards.ScopeFoldersAll},
+		},
+	)
 }

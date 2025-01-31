@@ -44,34 +44,6 @@ func LoadStorageConfig(cfg *setting.Cfg, features featuremgmt.FeatureToggles) (*
 		changed = true
 	}
 
-	if g.Roots == nil && features.IsEnabled(featuremgmt.FlagDashboardsFromStorage) {
-		g.Roots = append(g.Roots, RootStorageConfig{
-			Type:   "git",
-			Prefix: "it-A",
-			Name:   "Repository that requires pull requests",
-			Git: &StorageGitConfig{
-				Remote:             "https://github.com/grafana/hackathon-2022-03-git-dash-A",
-				Branch:             "main",
-				Root:               "dashboards", // the dashboard files
-				RequirePullRequest: true,
-				AccessToken:        "$GRAFANA_STORAGE_GITHUB_ACCESS_TOKEN",
-			},
-		})
-		g.Roots = append(g.Roots, RootStorageConfig{
-			Type:   "git",
-			Prefix: "it-B",
-			Name:   "Another repo (can push to main)",
-			Git: &StorageGitConfig{
-				Remote:             "https://github.com/grafana/hackathon-2022-03-git-dash-B",
-				Branch:             "main",
-				Root:               "dashboards", // the dashboard files
-				RequirePullRequest: false,
-				AccessToken:        "$GRAFANA_STORAGE_GITHUB_ACCESS_TOKEN",
-			},
-		})
-		changed = true
-	}
-
 	g.filepath = fpath
 
 	// Also configured from ini files
@@ -80,7 +52,7 @@ func LoadStorageConfig(cfg *setting.Cfg, features featuremgmt.FeatureToggles) (*
 	}
 
 	// Save a template version in config
-	if changed && setting.Env != setting.Prod {
+	if changed && cfg.Env != setting.Prod {
 		return g, g.save()
 	}
 	return g, nil
@@ -154,13 +126,11 @@ type StorageGCSConfig struct {
 	CredentialsFile string `json:"credentialsFile"`
 }
 
-func newStorage(cfg RootStorageConfig, localWorkCache string) (storageRuntime, error) {
+func newStorage(cfg RootStorageConfig, _ string) (storageRuntime, error) {
 	switch cfg.Type {
 	case rootStorageTypeDisk:
 		return newDiskStorage(RootStorageMeta{}, cfg), nil
-	case rootStorageTypeGit:
-		return newGitStorage(RootStorageMeta{}, cfg, localWorkCache), nil
 	}
 
-	return nil, fmt.Errorf("unsupported store: " + cfg.Type)
+	return nil, fmt.Errorf("unsupported store: %s", cfg.Type)
 }

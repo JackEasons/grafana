@@ -1,7 +1,4 @@
-import { Meta, Story } from '@storybook/react';
-import React from 'react';
-
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
+import { Meta, StoryFn } from '@storybook/react';
 
 import { FileListItem as FileListItemComponent, FileListItemProps } from './FileListItem';
 import mdx from './FileListItem.mdx';
@@ -9,7 +6,6 @@ import mdx from './FileListItem.mdx';
 const meta: Meta = {
   title: 'Forms/FileListItem',
   component: FileListItemComponent,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -25,7 +21,7 @@ const meta: Meta = {
   },
 };
 
-export const FileListItem: Story<FileListItemProps> = (args) => {
+export const FileListItem: StoryFn<FileListItemProps> = (args) => {
   return <FileListItemComponent {...args} />;
 };
 

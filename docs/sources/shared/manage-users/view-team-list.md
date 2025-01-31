@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/manage-users/view-team-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: View team list
 ---
 

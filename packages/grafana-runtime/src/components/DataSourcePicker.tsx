@@ -1,5 +1,5 @@
 // Libraries
-import React, { PureComponent } from 'react';
+import { PureComponent } from 'react';
 
 // Components
 import {
@@ -10,7 +10,7 @@ import {
   SelectableValue,
 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { ActionMeta, HorizontalGroup, PluginSignatureBadge, Select } from '@grafana/ui';
+import { ActionMeta, PluginSignatureBadge, Select, Stack } from '@grafana/ui';
 
 import { getDataSourceSrv } from '../services/dataSourceSrv';
 
@@ -47,6 +47,8 @@ export interface DataSourcePickerProps {
   filter?: (dataSource: DataSourceInstanceSettings) => boolean;
   onClear?: () => void;
   invalid?: boolean;
+  disabled?: boolean;
+  isLoading?: boolean;
 }
 
 /**
@@ -162,16 +164,32 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
   }
 
   render() {
-    const { autoFocus, onBlur, onClear, openMenuOnFocus, placeholder, width, inputId } = this.props;
+    const {
+      autoFocus,
+      onBlur,
+      onClear,
+      openMenuOnFocus,
+      placeholder,
+      width,
+      inputId,
+      disabled = false,
+      isLoading = false,
+    } = this.props;
     const { error } = this.state;
     const options = this.getDataSourceOptions();
     const value = this.getCurrentValue();
     const isClearable = typeof onClear === 'function';
 
     return (
-      <div aria-label={selectors.components.DataSourcePicker.container}>
+      <div
+        aria-label="Data source picker select container"
+        data-testid={selectors.components.DataSourcePicker.container}
+      >
         <Select
-          aria-label={selectors.components.DataSourcePicker.inputV2}
+          isLoading={isLoading}
+          disabled={disabled}
+          aria-label={'Select a data source'}
+          data-testid={selectors.components.DataSourcePicker.inputV2}
           inputId={inputId || 'data-source-picker'}
           className="ds-picker select-container"
           isMulti={false}
@@ -191,9 +209,9 @@ export class DataSourcePicker extends PureComponent<DataSourcePickerProps, DataS
           getOptionLabel={(o) => {
             if (o.meta && isUnsignedPluginSignature(o.meta.signature) && o !== value) {
               return (
-                <HorizontalGroup align="center" justify="space-between" height="auto">
+                <Stack alignItems="center" justifyContent="space-between">
                   <span>{o.label}</span> <PluginSignatureBadge status={o.meta.signature} />
-                </HorizontalGroup>
+                </Stack>
               );
             }
             return o.label || '';

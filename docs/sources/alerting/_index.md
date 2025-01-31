@@ -1,74 +1,62 @@
 ---
 aliases:
-  - /docs/grafana/latest/alerting/
-  - /docs/grafana/latest/alerting/unified-alerting/alerting/
-  - /docs/grafana/latest/about-alerting
-title: Alerting
+  - about-alerting/ # /docs/grafana/<GRAFANA_VERSION>/about-alerting
+  - ./unified-alerting/alerting/ # /docs/grafana/<GRAFANA_VERSION>/unified-alerting/alerting/
+  - ./alerting/unified-alerting/ # /docs/grafana/<GRAFANA_VERSION>/alerting/unified-alerting/
+canonical: https://grafana.com/docs/grafana/latest/alerting/
+description: Learn about the key benefits and features of Grafana Alerting
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+menuTitle: Alerting
+title: Grafana Alerting
 weight: 114
+hero:
+  title: Grafana Alerting
+  level: 1
+  image: /media/docs/grafana-cloud/alerting-and-irm/grafana-icon-alerting.svg
+  width: 100
+  height: 100
+  description: Grafana Alerting allows you to learn about problems in your systems moments after they occur.
+cards:
+  title_class: pt-0 lh-1
+  items:
+    - title: Introduction
+      href: ./fundamentals/
+      description: Learn more about the fundamentals and available features that help you create, manage, and respond to alerts; and improve your team’s ability to resolve issues quickly.
+      height: 24
+    - title: Configure alert rules
+      href: ./alerting-rules/
+      description: Create, manage, view, and adjust alert rules to alert on your metrics data or log entries from multiple data sources — no matter where your data is stored.
+      height: 24
+    - title: Configure notifications
+      href: ./configure-notifications/
+      description: Choose how, when, and where to send your alert notifications.
+      height: 24
+    - title: Monitor status
+      href: ./monitor-status/
+      description: Monitor, respond to, and triage issues within your services.
+      height: 24
+    - title: Additional configuration
+      href: ./set-up/
+      description: Use advanced configuration options to further tailor your alerting setup. These options can enhance security, scalability, and automation in complex environments.
+      height: 24
 ---
 
-# Alerting
+{{< docs/hero-simple key="hero" >}}
 
-Grafana Alerting allows you to learn about problems in your systems moments after they occur. Create, manage, and take action on your alerts in a single, consolidated view, and improve your team’s ability to identify and resolve issues quickly.
-
-Grafana Alerting is available for Grafana OSS, Grafana Enterprise, or Grafana Cloud. With Mimir and Loki alert rules you can run alert expressions closer to your data and at massive scale, all managed by the Grafana UI you are already familiar with.
-
-Watch this video to learn more about Grafana Alerting: {{< vimeo 720001629 >}}
+---
 
 ## Overview
 
-The following diagram gives you an overview of how Grafana Alerting works and introduces you to some of the key concepts that work together and form the core of our flexible and powerful alerting engine.
+Monitor your incoming metrics data or log entries and set up your Grafana Alerting system to watch for specific events or circumstances.
 
-{{< figure src="/static/img/docs/alerting/unified/about-alerting-flow-diagram-latest.png" caption="Grafana Alerting overview" >}}
+In this way, you eliminate the need for manual monitoring and provide a first line of defense against system outages or changes that could turn into major incidents.
 
-1. Alert rules
+Using Grafana Alerting, you create queries and expressions from multiple data sources — no matter where your data is stored — giving you the flexibility to combine your data and alert on your metrics and logs in new and unique ways. You can then create, manage, and take action on your alerts from a single, consolidated view, and improve your team’s ability to identify and resolve issues quickly.
 
-   Set evaluation criteria that determines whether an alert instance will fire. An alert rule consists of one or more queries and expressions, a condition, the frequency of evaluation, and optionally, the duration over which the condition is met.
+## Explore
 
-   Grafana managed alerts support multi-dimensional alerting, which means that each alert rule can create multiple alert instances. This is exceptionally powerful if you are observing multiple series in a single expression.
-
-   Once an alert rule has been created, they go through various states and transitions. The state and health of alert rules help you understand several key status indicators about your alerts.
-
-1. Labels
-
-   Match an alert rule and its instances to notification policies and silences. They can also be used to group your alerts by severity.
-
-1. Notification policies
-
-   Set where, when, and how the alerts get routed. Each notification policy specifies a set of label matchers to indicate which alerts they are responsible for. A notification policy has a contact point assigned to it that consists of one or more notifiers.
-
-1. Contact points
-
-   Define how your contacts are notified when an alert fires. We support a multitude of ChatOps tools to ensure the alerts come to your team.
-
-## Features
-
-**One page for all alerts**
-
-A single Grafana Alerting page consolidates both Grafana-managed alerts and alerts that reside in your Prometheus-compatible data source in one single place.
-
-**Multi-dimensional alerts**
-
-Alert rules can create multiple individual alert instances per alert rule, known as multi-dimensional alerts, giving you the power and flexibility to gain visibility into your entire system with just a single alert.
-
-**Routing alerts**
-
-Route each alert instance to a specific contact point based on labels you define. Notification policies are the set of rules for where, when, and how the alerts are routed to contact points.
-
-**Silencing alerts**
-
-Silences allow you to stop receiving persistent notifications from one or more alerting rules. You can also partially pause an alert based on certain criteria. Silences have their own dedicated section for better organization and visibility, so that you can scan your paused alert rules without cluttering the main alerting view.
-
-**Mute timings**
-
-With mute timings, you can specify a time interval when you don’t want new notifications to be generated or sent. You can also freeze alert notifications for recurring periods of time, such as during a maintenance period.
-
-## Useful links
-
-- [Fundamental concepts]({{< relref "fundamentals/" >}}) of Grafana Alerting.
-
-- [Role-based access control]({{< relref "../administration/roles-and-permissions/access-control/" >}}) in Grafana Enterprise.
-
-- [Alertmanager]({{< relref "fundamentals/alertmanager/" >}})
-
-- [High availability](https://grafana.com/docs/grafana/next/alerting/fundamentals/high-availability/)
+{{< card-grid key="cards" type="simple" >}}

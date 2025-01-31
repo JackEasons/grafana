@@ -1,22 +1,21 @@
 import { css, cx } from '@emotion/css';
-import React, { FC, FormEvent, MouseEvent, useState } from 'react';
+import { useDialog } from '@react-aria/dialog';
+import { FocusScope } from '@react-aria/focus';
+import { useOverlay } from '@react-aria/overlays';
+import { createRef, FormEvent, MouseEvent, useState } from 'react';
 
-import { dateMath, dateTime, getDefaultTimeRange, GrafanaTheme2, TimeRange, TimeZone } from '@grafana/data';
+import { dateTime, getDefaultTimeRange, GrafanaTheme2, TimeRange, TimeZone } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 
-import { stylesFactory } from '../../themes';
-import { useTheme2 } from '../../themes/ThemeContext';
-import { ClickOutsideWrapper } from '../ClickOutsideWrapper/ClickOutsideWrapper';
+import { useStyles2 } from '../../themes/ThemeContext';
 import { Icon } from '../Icon/Icon';
 import { getInputStyles } from '../Input/Input';
 
-import { TimePickerButtonLabel } from './TimeRangePicker';
 import { TimePickerContent } from './TimeRangePicker/TimePickerContent';
+import { TimeRangeLabel } from './TimeRangePicker/TimeRangeLabel';
+import { WeekStart } from './WeekStartPicker';
 import { quickOptions } from './options';
-
-const isValidTimeRange = (range: TimeRange) => {
-  return dateMath.isValid(range.from) && dateMath.isValid(range.to);
-};
+import { isValidTimeRange } from './utils';
 
 export interface TimeRangeInputProps {
   value: TimeRange;
@@ -31,25 +30,29 @@ export interface TimeRangeInputProps {
   /** Controls visibility of the preset time ranges (e.g. **Last 5 minutes**) in the picker menu */
   hideQuickRanges?: boolean;
   disabled?: boolean;
+  showIcon?: boolean;
+  /** Which day of the week the calendar should start on. Possible values: "saturday", "sunday" or "monday" */
+  weekStart?: WeekStart;
 }
 
 const noop = () => {};
 
-export const TimeRangeInput: FC<TimeRangeInputProps> = ({
+export const TimeRangeInput = ({
   value,
   onChange,
   onChangeTimeZone = noop,
   clearable,
+  weekStart,
   hideTimeZone = true,
   timeZone = 'browser',
   placeholder = 'Select time range',
   isReversed = true,
   hideQuickRanges = false,
   disabled = false,
-}) => {
+  showIcon = false,
+}: TimeRangeInputProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const theme = useTheme2();
-  const styles = getStyles(theme, disabled);
+  const styles = useStyles2(getStyles, disabled);
 
   const onOpen = (event: FormEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -69,26 +72,41 @@ export const TimeRangeInput: FC<TimeRangeInputProps> = ({
     onChange(timeRange);
   };
 
-  const onRangeClear = (event: MouseEvent<HTMLDivElement>) => {
+  const onRangeClear = (event: MouseEvent<SVGElement>) => {
     event.stopPropagation();
     const from = dateTime(null);
     const to = dateTime(null);
     onChange({ from, to, raw: { from, to } });
   };
 
+  const overlayRef = createRef<HTMLElement>();
+  const buttonRef = createRef<HTMLButtonElement>();
+
+  const { dialogProps } = useDialog({}, overlayRef);
+
+  const { overlayProps } = useOverlay(
+    {
+      onClose,
+      isDismissable: true,
+      isOpen,
+      shouldCloseOnInteractOutside: (element) => {
+        return !buttonRef.current?.contains(element);
+      },
+    },
+    overlayRef
+  );
   return (
     <div className={styles.container}>
       <button
         type="button"
         className={styles.pickerInput}
-        aria-label={selectors.components.TimePicker.openButton}
+        data-testid={selectors.components.TimePicker.openButton}
         onClick={onOpen}
+        ref={buttonRef}
       >
-        {isValidTimeRange(value) ? (
-          <TimePickerButtonLabel value={value} timeZone={timeZone} />
-        ) : (
-          <span className={styles.placeholder}>{placeholder}</span>
-        )}
+        {showIcon && <Icon name="clock-nine" size={'sm'} className={styles.icon} />}
+
+        <TimeRangeLabel value={value} timeZone={timeZone} placeholder={placeholder} />
 
         {!disabled && (
           <span className={styles.caretIcon}>
@@ -100,64 +118,73 @@ export const TimeRangeInput: FC<TimeRangeInputProps> = ({
         )}
       </button>
       {isOpen && (
-        <ClickOutsideWrapper includeButtonPress={false} onClick={onClose}>
-          <TimePickerContent
-            timeZone={timeZone}
-            value={isValidTimeRange(value) ? value : getDefaultTimeRange()}
-            onChange={onRangeChange}
-            quickOptions={quickOptions}
-            onChangeTimeZone={onChangeTimeZone}
-            className={styles.content}
-            hideTimeZone={hideTimeZone}
-            isReversed={isReversed}
-            hideQuickRanges={hideQuickRanges}
-          />
-        </ClickOutsideWrapper>
+        <FocusScope contain autoFocus restoreFocus>
+          <section className={styles.content} ref={overlayRef} {...overlayProps} {...dialogProps}>
+            <TimePickerContent
+              timeZone={timeZone}
+              value={isValidTimeRange(value) ? value : getDefaultTimeRange()}
+              onChange={onRangeChange}
+              quickOptions={quickOptions}
+              onChangeTimeZone={onChangeTimeZone}
+              className={styles.content}
+              hideTimeZone={hideTimeZone}
+              isReversed={isReversed}
+              hideQuickRanges={hideQuickRanges}
+              weekStart={weekStart}
+            />
+          </section>
+        </FocusScope>
       )}
     </div>
   );
 };
 
-const getStyles = stylesFactory((theme: GrafanaTheme2, disabled = false) => {
+const getStyles = (theme: GrafanaTheme2, disabled = false) => {
   const inputStyles = getInputStyles({ theme, invalid: false });
   return {
-    container: css`
-      display: flex;
-      position: relative;
-    `,
-    content: css`
-      margin-left: 0;
-    `,
+    container: css({
+      display: 'flex',
+      position: 'relative',
+    }),
+    content: css({
+      marginLeft: 0,
+      position: 'absolute',
+      top: '116%',
+      zIndex: theme.zIndex.dropdown,
+    }),
     pickerInput: cx(
       inputStyles.input,
       disabled && inputStyles.inputDisabled,
       inputStyles.wrapper,
-      css`
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        cursor: pointer;
-        padding-right: 0;
-        line-height: ${theme.spacing.gridSize * 4 - 2}px;
-      `
+      css({
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        cursor: 'pointer',
+        paddingRight: 0,
+        lineHeight: `${theme.spacing.gridSize * 4 - 2}px`,
+      })
     ),
     caretIcon: cx(
       inputStyles.suffix,
-      css`
-        position: relative;
-        top: -1px;
-        margin-left: ${theme.spacing(0.5)};
-      `
+      css({
+        position: 'relative',
+        top: '-1px',
+        marginLeft: theme.spacing(0.5),
+      })
     ),
-    clearIcon: css`
-      margin-right: ${theme.spacing(0.5)};
-      &:hover {
-        color: ${theme.colors.text.maxContrast};
-      }
-    `,
-    placeholder: css`
-      color: ${theme.colors.text.disabled};
-      opacity: 1;
-    `,
+    clearIcon: css({
+      marginRight: theme.spacing(0.5),
+      '&:hover': {
+        color: theme.colors.text.maxContrast,
+      },
+    }),
+    placeholder: css({
+      color: theme.colors.text.disabled,
+      opacity: 1,
+    }),
+    icon: css({
+      marginRight: theme.spacing(0.5),
+    }),
   };
-});
+};

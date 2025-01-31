@@ -1,12 +1,12 @@
 import { map } from 'rxjs/operators';
 
-import { DataTransformerInfo } from '../../types';
-import { ArrayVector } from '../../vector/ArrayVector';
+import { DataTransformerInfo } from '../../types/transformations';
 
 import { DataTransformerID } from './ids';
+import { transformationsVariableSupport } from './utils';
 
 export interface LimitTransformerOptions {
-  limitField?: number;
+  limitField?: number | string;
 }
 
 const DEFAULT_LIMIT_FIELD = 10;
@@ -19,22 +19,34 @@ export const limitTransformer: DataTransformerInfo<LimitTransformerOptions> = {
     limitField: DEFAULT_LIMIT_FIELD,
   },
 
-  operator: (options) => (source) =>
+  operator: (options, ctx) => (source) =>
     source.pipe(
       map((data) => {
-        const limitFieldMatch = options.limitField || DEFAULT_LIMIT_FIELD;
+        let limit = DEFAULT_LIMIT_FIELD;
+        if (options.limitField !== undefined) {
+          if (typeof options.limitField === 'string') {
+            if (transformationsVariableSupport()) {
+              limit = parseInt(ctx.interpolate(options.limitField), 10);
+            } else {
+              limit = parseInt(options.limitField, 10);
+            }
+          } else {
+            limit = options.limitField;
+          }
+        }
+
         return data.map((frame) => {
-          if (frame.length > limitFieldMatch) {
+          if (frame.length > limit) {
             return {
               ...frame,
               fields: frame.fields.map((f) => {
-                const vals = f.values.toArray();
                 return {
                   ...f,
-                  values: new ArrayVector(vals.slice(0, limitFieldMatch)),
+                  values:
+                    limit >= 0 ? f.values.slice(0, limit) : f.values.slice(f.values.length + limit, f.values.length),
                 };
               }),
-              length: limitFieldMatch,
+              length: Math.abs(limit),
             };
           }
 

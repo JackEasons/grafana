@@ -1,9 +1,12 @@
 ---
 aliases:
+  - ../project/cla/
   - /docs/contributing/cla.html/
-  - /docs/grafana/latest/developers/cla/
-  - /docs/grafana/latest/project/cla/
 description: Contributor License Agreement (CLA)
+labels:
+  products:
+    - enterprise
+    - oss
 title: Contributor License Agreement (CLA)
 weight: 400
 ---

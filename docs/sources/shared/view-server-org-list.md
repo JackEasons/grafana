@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/view-server-org-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: View user list
 ---
 

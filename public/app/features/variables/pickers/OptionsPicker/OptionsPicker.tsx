@@ -1,18 +1,20 @@
-import React, { ComponentType, PureComponent } from 'react';
+import { css } from '@emotion/css';
+import { ComponentType, PureComponent } from 'react';
 import { connect, ConnectedProps } from 'react-redux';
 import { bindActionCreators } from 'redux';
 
-import { LoadingState } from '@grafana/data';
+import { LoadingState, VariableOption, VariableWithMultiSupport, VariableWithOptions } from '@grafana/data';
+import { selectors } from '@grafana/e2e-selectors';
 import { ClickOutsideWrapper } from '@grafana/ui';
 import { StoreState, ThunkDispatch } from 'app/types';
 
+import { VARIABLE_PREFIX } from '../../constants';
 import { isMulti } from '../../guard';
 import { getVariableQueryRunner } from '../../query/VariableQueryRunner';
 import { formatVariableLabel } from '../../shared/formatVariable';
 import { toKeyedAction } from '../../state/keyedVariablesReducer';
 import { getVariablesState } from '../../state/selectors';
 import { KeyedVariableIdentifier } from '../../state/types';
-import { VariableOption, VariableWithMultiSupport, VariableWithOptions } from '../../types';
 import { toKeyedVariableIdentifier } from '../../utils';
 import { VariableInput } from '../shared/VariableInput';
 import { VariableLink } from '../shared/VariableLink';
@@ -111,9 +113,10 @@ export const optionPickerFactory = <Model extends VariableWithOptions | Variable
     render() {
       const { variable, picker } = this.props;
       const showOptions = picker.id === variable.id;
+      const styles = getStyles();
 
       return (
-        <div className="variable-link-wrapper">
+        <div className={styles.variableLinkWrapper} data-testid={selectors.components.Variables.variableLinkWrapper}>
           {showOptions ? this.renderOptions(picker) : this.renderLink(variable)}
         </div>
       );
@@ -125,7 +128,7 @@ export const optionPickerFactory = <Model extends VariableWithOptions | Variable
 
       return (
         <VariableLink
-          id={`var-${variable.id}`}
+          id={VARIABLE_PREFIX + variable.id}
           text={linkText}
           onClick={this.onShowOptions}
           loading={loading}
@@ -144,7 +147,7 @@ export const optionPickerFactory = <Model extends VariableWithOptions | Variable
       return (
         <ClickOutsideWrapper onClick={this.onHideOptions}>
           <VariableInput
-            id={`var-${id}`}
+            id={VARIABLE_PREFIX + id}
             value={picker.queryValue}
             onChange={this.onFilterOrSearchOptions}
             onNavigate={this.onNavigate}
@@ -170,3 +173,10 @@ export const optionPickerFactory = <Model extends VariableWithOptions | Variable
 
   return OptionsPicker;
 };
+
+const getStyles = () => ({
+  variableLinkWrapper: css({
+    display: 'inline-block',
+    position: 'relative',
+  }),
+});

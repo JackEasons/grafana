@@ -1,14 +1,15 @@
 import { FieldColorModeId, FieldConfigProperty, PanelPlugin } from '@grafana/data';
 import { commonOptionsBuilder } from '@grafana/ui';
+import { optsWithHideZeros } from '@grafana/ui/src/options/builder/tooltip';
 
 import { addStandardDataReduceOptions } from '../stat/common';
 
 import { PieChartPanel } from './PieChartPanel';
 import { PieChartPanelChangedHandler } from './migrations';
-import { PanelOptions, PanelFieldConfig, PieChartType, PieChartLabels, PieChartLegendValues } from './models.gen';
+import { Options, FieldConfig, PieChartType, PieChartLabels, PieChartLegendValues } from './panelcfg.gen';
 import { PieChartSuggestionsSupplier } from './suggestions';
 
-export const plugin = new PanelPlugin<PanelOptions, PanelFieldConfig>(PieChartPanel)
+export const plugin = new PanelPlugin<Options, FieldConfig>(PieChartPanel)
   .setPanelChangeHandler(PieChartPanelChangedHandler)
   .useFieldConfig({
     disableStandardOptions: [FieldConfigProperty.Thresholds],
@@ -56,7 +57,7 @@ export const plugin = new PanelPlugin<PanelOptions, PanelFieldConfig>(PieChartPa
         },
       });
 
-    commonOptionsBuilder.addTooltipOptions(builder);
+    commonOptionsBuilder.addTooltipOptions(builder, false, false, optsWithHideZeros);
     commonOptionsBuilder.addLegendOptions(builder, false);
 
     builder.addMultiSelect({

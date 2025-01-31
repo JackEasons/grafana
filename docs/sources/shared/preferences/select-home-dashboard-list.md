@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/preferences/select-home-dashboard-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Select home dashboard list
 ---
 

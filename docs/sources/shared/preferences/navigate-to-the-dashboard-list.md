@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/preferences/navigate-to-the-dashboard-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Navigate to the dashboard list
 ---
 

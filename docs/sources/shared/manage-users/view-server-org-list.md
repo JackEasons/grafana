@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/manage-users/view-server-org-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: View org list as server admin
 ---
 

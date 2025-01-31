@@ -1,8 +1,7 @@
 ---
 aliases:
-  - /docs/grafana/latest/basics/intro-histograms/
-  - /docs/grafana/latest/getting-started/intro-histograms/
-  - /docs/grafana/latest/fundamentals/intro-histograms/
+  - ../basics/intro-histograms/
+  - ../getting-started/intro-histograms/
 description: An introduction to histograms and heatmaps
 keywords:
   - grafana
@@ -10,8 +9,25 @@ keywords:
   - panel
   - documentation
   - histogram
-title: Histograms and heatmaps
-weight: 700
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+menuTitle: Histograms and heatmaps
+title: Introduction to histograms and heatmaps
+weight: 650
+refs:
+  heatmap:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/heatmap/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/heatmap/
+  histogram:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/histogram/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/histogram/
 ---
 
 # Introduction to histograms and heatmaps
@@ -27,13 +43,13 @@ and the bar height represents the frequency (such as count) of values that fell 
 This _histogram_ shows the value distribution of a couple of time series. You can easily see that
 most values land between 240-300 with a peak between 260-280.
 
-![](/static/img/docs/v43/heatmap_histogram.png)
+![Histogram example](/static/img/docs/v43/heatmap_histogram.png)
 
 Here is an example showing height distribution of people.
 
 {{< figure src="/static/img/docs/histogram-panel/histogram-example-v8-0.png" max-width="625px" caption="Bar chart example" >}}
 
-For more information about histogram visualization options, refer to [Histogram]({{< relref "../../panels-visualizations/visualizations/histogram/" >}}).
+For more information about histogram visualization options, refer to [Histogram](ref:histogram).
 
 Histograms only look at _value distributions_ over a specific time range. The problem with histograms is that you cannot see any trends or changes in the distribution over time. This is where heatmaps become useful.
 
@@ -43,9 +59,9 @@ A _heatmap_ is like a histogram, but over time, where each time slice represents
 
 In this example, you can clearly see what values are more common and how they trend over time.
 
-![](/static/img/docs/v43/heatmap_histogram_over_time.png)
+![Heatmap example](/static/img/docs/v43/heatmap_histogram_over_time.png)
 
-For more information about heatmap visualization options, refer to [Heatmap]({{< relref "../../panels-visualizations/visualizations/heatmap/" >}}).
+For more information about heatmap visualization options, refer to [Heatmap](ref:heatmap).
 
 ## Pre-bucketed data
 

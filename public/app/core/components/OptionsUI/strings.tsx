@@ -1,11 +1,11 @@
 import { css } from '@emotion/css';
-import React from 'react';
+import * as React from 'react';
 
-import { FieldConfigEditorProps, StringFieldConfigSettings, GrafanaTheme2 } from '@grafana/data';
+import { StandardEditorProps, StringFieldConfigSettings, GrafanaTheme2 } from '@grafana/data';
 import { config } from '@grafana/runtime';
 import { stylesFactory, Button, Icon, Input } from '@grafana/ui';
 
-type Props = FieldConfigEditorProps<string[], StringFieldConfigSettings>;
+type Props = StandardEditorProps<string[], StringFieldConfigSettings>;
 interface State {
   showAdd: boolean;
 }
@@ -22,20 +22,19 @@ export class StringArrayEditor extends React.PureComponent<Props, State> {
     onChange(copy);
   };
 
-  onValueChange = (e: React.SyntheticEvent, idx: number) => {
-    const evt = e as React.KeyboardEvent<HTMLInputElement>;
-    if (e.hasOwnProperty('key')) {
-      if (evt.key !== 'Enter') {
+  onValueChange = (e: React.KeyboardEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>, idx: number) => {
+    if ('key' in e) {
+      if (e.key !== 'Enter') {
         return;
       }
     }
     const { value, onChange } = this.props;
 
     // Form event, or Enter
-    const v = evt.currentTarget.value.trim();
+    const v = e.currentTarget.value.trim();
     if (idx < 0) {
       if (v) {
-        evt.currentTarget.value = ''; // reset last value
+        e.currentTarget.value = ''; // reset last value
         onChange([...value, v]);
       }
       this.setState({ showAdd: false });
@@ -93,19 +92,19 @@ export class StringArrayEditor extends React.PureComponent<Props, State> {
 
 const getStyles = stylesFactory((theme: GrafanaTheme2) => {
   return {
-    textInput: css`
-      margin-bottom: 5px;
-      &:hover {
-        border: 1px solid ${theme.components.input.borderHover};
-      }
-    `,
-    trashIcon: css`
-      color: ${theme.colors.text.secondary};
-      cursor: pointer;
+    textInput: css({
+      marginBottom: '5px',
+      '&:hover': {
+        border: `1px solid ${theme.components.input.borderHover}`,
+      },
+    }),
+    trashIcon: css({
+      color: theme.colors.text.secondary,
+      cursor: 'pointer',
 
-      &:hover {
-        color: ${theme.colors.text};
-      }
-    `,
+      '&:hover': {
+        color: theme.colors.text.primary,
+      },
+    }),
   };
 });

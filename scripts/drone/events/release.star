@@ -1,520 +1,335 @@
-load(
-    'scripts/drone/steps/lib.star',
-    'disable_tests',
-    'clone_enterprise_step',
-    'download_grabpl_step',
-    'yarn_install_step',
-    'wire_install_step',
-    'init_enterprise_step',
-    'lint_drone_step',
-    'build_image',
-    'identify_runner_step',
-    'publish_image',
-    'lint_backend_step',
-    'lint_frontend_step',
-    'test_backend_step',
-    'test_backend_integration_step',
-    'test_frontend_step',
-    'build_backend_step',
-    'build_frontend_step',
-    'build_frontend_package_step',
-    'build_plugins_step',
-    'package_step',
-    'grafana_server_step',
-    'e2e_tests_step',
-    'e2e_tests_artifacts',
-    'build_storybook_step',
-    'copy_packages_for_docker_step',
-    'build_docker_images_step',
-    'postgres_integration_tests_step',
-    'mysql_integration_tests_step',
-    'redis_integration_tests_step',
-    'memcached_integration_tests_step',
-    'get_windows_steps',
-    'benchmark_ldap_step',
-    'store_storybook_step',
-    'upload_packages_step',
-    'publish_grafanacom_step',
-    'upload_cdn_step',
-    'verify_gen_cue_step',
-    'verify_gen_jsonnet_step',
-    'publish_images_step',
-    'publish_linux_packages_step',
-    'trigger_oss',
-    'artifacts_page_step',
-    'fetch_images_step',
-    'compile_build_cmd',
-)
+"""
+This module returns all the pipelines used in the event of a release along with supporting functions.
+"""
 
 load(
-    'scripts/drone/services/services.star',
-    'integration_test_services',
-    'integration_test_services_volumes',
-    'ldap_service',
+    "scripts/drone/services/services.star",
+    "integration_test_services",
+    "integration_test_services_volumes",
 )
-
 load(
-    'scripts/drone/utils/utils.star',
-    'pipeline',
-    'notify_pipeline',
-    'failure_template',
-    'drone_change_template',
+    "scripts/drone/steps/github.star",
+    "github_app_generate_token_step",
+    "github_app_pipeline_volumes",
+    "github_app_step_volumes",
 )
-
 load(
-    'scripts/drone/pipelines/test_frontend.star',
-    'test_frontend',
+    "scripts/drone/steps/lib.star",
+    "compile_build_cmd",
+    "download_grabpl_step",
+    "identify_runner_step",
+    "memcached_integration_tests_steps",
+    "mysql_integration_tests_steps",
+    "postgres_integration_tests_steps",
+    "publish_grafanacom_step",
+    "publish_linux_packages_step",
+    "redis_integration_tests_steps",
+    "remote_alertmanager_integration_tests_steps",
+    "verify_gen_cue_step",
+    "verify_gen_jsonnet_step",
+    "verify_grafanacom_step",
+    "wire_install_step",
+    "yarn_install_step",
 )
-
 load(
-    'scripts/drone/pipelines/test_backend.star',
-    'test_backend',
+    "scripts/drone/utils/images.star",
+    "images",
+)
+load(
+    "scripts/drone/utils/utils.star",
+    "pipeline",
+)
+load(
+    "scripts/drone/vault.star",
+    "from_secret",
+    "gcp_grafanauploads_base64",
+    "npm_token",
+    "prerelease_bucket",
+    "rgm_gcp_key_base64",
 )
 
-load('scripts/drone/vault.star', 'from_secret', 'github_token', 'pull_secret', 'drone_token', 'prerelease_bucket')
-
-ver_mode='release'
-release_trigger = {
-    'event': {
-        'exclude': [
-            'promote'
-        ]
-    },
-    'ref': ['refs/tags/v*',],
-}
-
-def store_npm_packages_step():
-    return {
-        'name': 'store-npm-packages',
-        'image': build_image,
-        'depends_on': [
-            'build-frontend-packages',
-        ],
-        'environment': {
-            'GCP_KEY': from_secret('gcp_key'),
-            'PRERELEASE_BUCKET': from_secret(prerelease_bucket)
-        },
-        'commands': [
-            './bin/grabpl artifacts npm store --tag ${DRONE_TAG}'
-        ],
-    }
+ver_mode = "release"
+semver_regex = r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
 
 def retrieve_npm_packages_step():
     return {
-        'name': 'retrieve-npm-packages',
-        'image': publish_image,
-        'depends_on': [
-            'yarn-install',
+        "name": "retrieve-npm-packages",
+        "image": images["publish"],
+        "depends_on": [
+            "compile-build-cmd",
+            "yarn-install",
         ],
-        'failure': 'ignore',
-        'environment': {
-            'GCP_KEY': from_secret('gcp_key'),
-            'PRERELEASE_BUCKET': from_secret(prerelease_bucket)
+        "failure": "ignore",
+        "environment": {
+            "GCP_KEY": from_secret(gcp_grafanauploads_base64),
+            "PRERELEASE_BUCKET": from_secret(prerelease_bucket),
         },
-        'commands': [
-            './bin/grabpl artifacts npm retrieve --tag ${DRONE_TAG}'
+        "commands": ["./bin/build artifacts npm retrieve --tag ${DRONE_TAG}"],
+    }
+
+def release_pr_step(depends_on = []):
+    return {
+        "name": "create-release-pr",
+        "image": images["curl"],
+        "depends_on": depends_on,
+        "environment": {
+            "GH_CLI_URL": "https://github.com/cli/cli/releases/download/v2.50.0/gh_2.50.0_linux_amd64.tar.gz",
+        },
+        "commands": [
+            "export GITHUB_TOKEN=$(cat /github-app/token)",
+            "apk add perl",
+            "v_target=`echo $${{TAG}} | perl -pe 's/{}/v\\1.\\2.x/'`".format(semver_regex),
+            # Install gh CLI
+            "curl -L $${GH_CLI_URL} | tar -xz --strip-components=1 -C /usr",
+            # Run the release-pr workflow
+            "gh workflow run " +
+            "-f dry_run=$${DRY_RUN} " +
+            "-f version=$${TAG} " +
+            # If the submitter has set a target branch, then use that, otherwise use the default
+            "-f target=$${v_target} " +
+            "-f latest=$${LATEST} " +
+            "--repo=grafana/grafana release-pr.yml",
         ],
+        "volumes": github_app_step_volumes(),
     }
 
 def release_npm_packages_step():
     return {
-        'name': 'release-npm-packages',
-        'image': build_image,
-        'depends_on': [
-            'retrieve-npm-packages',
+        "name": "release-npm-packages",
+        "image": images["node"],
+        "depends_on": [
+            "compile-build-cmd",
+            "retrieve-npm-packages",
         ],
-        'failure': 'ignore',
-        'environment': {
-            'NPM_TOKEN': from_secret('npm_token'),
+        "failure": "ignore",
+        "environment": {
+            "NPM_TOKEN": from_secret(npm_token),
         },
-        'commands': [
-            './bin/grabpl artifacts npm release --tag ${DRONE_TAG}'
-        ],
+        "commands": ["./bin/build artifacts npm release --tag ${DRONE_TAG}"],
     }
 
-def oss_pipelines(ver_mode=ver_mode, trigger=release_trigger):
-    environment = {'EDITION': 'oss'}
-    edition = 'oss'
-    services = integration_test_services(edition=edition)
-    volumes = integration_test_services_volumes()
-    package_steps = []
-    publish_steps = []
-    should_publish = ver_mode == 'release'
-    should_upload = should_publish or ver_mode in ('release-branch',)
-    init_steps = [
-        identify_runner_step(),
-        download_grabpl_step(),
-        verify_gen_cue_step(edition),
-        wire_install_step(),
-        yarn_install_step(),
-        compile_build_cmd(),
-    ]
-
-    build_steps = [
-        build_backend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_package_step(edition=edition, ver_mode=ver_mode),
-        build_plugins_step(edition=edition, ver_mode=ver_mode),
-    ]
-
-    integration_test_steps = [
-        postgres_integration_tests_step(edition=edition, ver_mode=ver_mode),
-        mysql_integration_tests_step(edition=edition, ver_mode=ver_mode),
-    ]
-
-    # Insert remaining steps
-    build_steps.extend([
-        package_step(edition=edition, ver_mode=ver_mode),
-        copy_packages_for_docker_step(),
-        build_docker_images_step(edition=edition, ver_mode=ver_mode, publish=True),
-        build_docker_images_step(edition=edition, ver_mode=ver_mode, ubuntu=True, publish=True),
-        grafana_server_step(edition=edition),
-    ])
-
-    if not disable_tests:
-        build_steps.extend([
-            e2e_tests_step('dashboards-suite', edition=edition, tries=3),
-            e2e_tests_step('smoke-tests-suite', edition=edition, tries=3),
-            e2e_tests_step('panels-suite', edition=edition, tries=3),
-            e2e_tests_step('various-suite', edition=edition, tries=3),
-            e2e_tests_artifacts(edition=edition),
-        ])
-
-    build_storybook = build_storybook_step(edition=edition, ver_mode=ver_mode)
-    if build_storybook:
-        build_steps.append(build_storybook)
-
-    if should_upload:
-        publish_steps.append(upload_cdn_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss))
-        publish_steps.append(upload_packages_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss))
-    if should_publish:
-        publish_step = store_storybook_step(edition=edition, ver_mode=ver_mode)
-        store_npm_step = store_npm_packages_step()
-        if publish_step:
-            publish_steps.append(publish_step)
-        if store_npm_step:
-            publish_steps.append(store_npm_step)
-    windows_package_steps = get_windows_steps(edition=edition, ver_mode=ver_mode)
-
-    windows_pipeline = pipeline(
-        name='{}-oss-windows'.format(ver_mode), edition=edition, trigger=trigger,
-        steps=[identify_runner_step('windows')] + windows_package_steps,
-        platform='windows', depends_on=[
-            'oss-build{}-publish-{}'.format(get_e2e_suffix(), ver_mode),
-        ], environment=environment,
-    )
-    pipelines = [
-        pipeline(
-            name='{}-oss-build{}-publish'.format(ver_mode, get_e2e_suffix()), edition=edition, trigger=trigger, services=[],
-            steps=init_steps + build_steps + package_steps + publish_steps,
-            environment=environment, volumes=volumes,
-        ),
-    ]
-    if not disable_tests:
-        pipelines.extend([
-            test_frontend(trigger, ver_mode),
-            test_backend(trigger, ver_mode),
-            pipeline(
-                name='{}-oss-integration-tests'.format(ver_mode), edition=edition, trigger=trigger, services=services,
-                steps=[download_grabpl_step(), identify_runner_step(), verify_gen_cue_step(edition), verify_gen_jsonnet_step(edition), wire_install_step(), ] + integration_test_steps,
-                environment=environment, volumes=volumes,
-            )
-        ])
-        deps = {
-            'depends_on': [
-                '{}-oss-build{}-publish'.format(ver_mode, get_e2e_suffix()),
-                '{}-oss-test-frontend'.format(ver_mode),
-                '{}-oss-test-backend'.format(ver_mode),
-                '{}-oss-integration-tests'.format(ver_mode)
-            ]
-        }
-        windows_pipeline.update(deps)
-
-    pipelines.extend([windows_pipeline])
-    return pipelines
-
-def enterprise_pipelines(ver_mode=ver_mode, trigger=release_trigger):
-    environment = {'EDITION': 'enterprise'}
-    edition = 'enterprise'
-    services = integration_test_services(edition=edition)
-    volumes = integration_test_services_volumes()
-    package_steps = []
-    publish_steps = []
-    should_publish = ver_mode == 'release'
-    should_upload = should_publish or ver_mode in ('release-branch',)
-    include_enterprise = edition == 'enterprise'
-    edition2 = 'enterprise2'
-    init_steps = [
-        download_grabpl_step(),
-        identify_runner_step(),
-        clone_enterprise_step(ver_mode),
-        init_enterprise_step(ver_mode),
-        compile_build_cmd(edition),
-    ]
-
-    build_steps = [
-        build_backend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_package_step(edition=edition, ver_mode=ver_mode),
-        build_plugins_step(edition=edition, ver_mode=ver_mode),
-    ]
-
-    integration_test_steps = [
-        postgres_integration_tests_step(edition=edition, ver_mode=ver_mode),
-        mysql_integration_tests_step(edition=edition, ver_mode=ver_mode),
-    ]
-
-    if include_enterprise:
-        build_steps.extend([
-            build_backend_step(edition=edition2, ver_mode=ver_mode, variants=['linux-amd64']),
-        ])
-
-    # Insert remaining steps
-    build_steps.extend([
-        package_step(edition=edition, ver_mode=ver_mode, include_enterprise2=include_enterprise),
-        copy_packages_for_docker_step(),
-        build_docker_images_step(edition=edition, ver_mode=ver_mode, publish=True),
-        build_docker_images_step(edition=edition, ver_mode=ver_mode, ubuntu=True, publish=True),
-        grafana_server_step(edition=edition),
-    ])
-
-    if not disable_tests:
-        build_steps.extend([
-            e2e_tests_step('dashboards-suite', edition=edition, tries=3),
-            e2e_tests_step('smoke-tests-suite', edition=edition, tries=3),
-            e2e_tests_step('panels-suite', edition=edition, tries=3),
-            e2e_tests_step('various-suite', edition=edition, tries=3),
-            e2e_tests_artifacts(edition=edition),
-        ])
-
-    build_storybook = build_storybook_step(edition=edition, ver_mode=ver_mode)
-    if build_storybook:
-        build_steps.append(build_storybook)
-
-    if should_upload:
-        publish_steps.extend([
-            upload_cdn_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss),
-            upload_packages_step(edition=edition, ver_mode=ver_mode, trigger=trigger_oss),
-            package_step(edition=edition2, ver_mode=ver_mode, include_enterprise2=include_enterprise, variants=['linux-amd64']),
-            upload_cdn_step(edition=edition2, ver_mode=ver_mode),
-        ])
-    if should_publish:
-        publish_step = store_storybook_step(edition=edition, ver_mode=ver_mode)
-        if publish_step:
-            publish_steps.append(publish_step)
-    windows_package_steps = get_windows_steps(edition=edition, ver_mode=ver_mode)
-
-    if should_upload:
-        step = upload_packages_step(edition=edition2, ver_mode=ver_mode)
-        if step:
-            publish_steps.append(step)
-
-    deps_on_clone_enterprise_step = {
-        'depends_on': [
-            'init-enterprise',
-        ]
-    }
-
-    for step in [wire_install_step(), yarn_install_step(edition), verify_gen_cue_step(edition), verify_gen_jsonnet_step(edition)]:
-        step.update(deps_on_clone_enterprise_step)
-        init_steps.extend([step])
-
-    windows_pipeline = pipeline(
-        name='{}-enterprise-windows'.format(ver_mode), edition=edition, trigger=trigger,
-        steps=[identify_runner_step('windows')] + windows_package_steps,
-        platform='windows', depends_on=[
-            'enterprise-build{}-publish-{}'.format(get_e2e_suffix(), ver_mode),
-        ], environment=environment,
-    )
-    pipelines = [
-        pipeline(
-            name='{}-enterprise-build{}-publish'.format(ver_mode, get_e2e_suffix()), edition=edition, trigger=trigger, services=[],
-            steps=init_steps + build_steps + package_steps + publish_steps, environment=environment,
-            volumes=volumes,
-        ),
-    ]
-    if not disable_tests:
-        pipelines.extend([
-            test_frontend(trigger, ver_mode, edition),
-            test_backend(trigger, ver_mode, edition),
-            pipeline(
-                name='{}-enterprise-integration-tests'.format(ver_mode), edition=edition, trigger=trigger, services=services,
-                steps=[download_grabpl_step(), identify_runner_step(), clone_enterprise_step(ver_mode), init_enterprise_step(ver_mode), verify_gen_cue_step(edition), verify_gen_jsonnet_step(edition), wire_install_step()] + integration_test_steps + [redis_integration_tests_step(), memcached_integration_tests_step()],
-                environment=environment, volumes=volumes,
-            ),
-        ])
-        deps = {
-            'depends_on': [
-                '{}-enterprise-build{}-publish'.format(ver_mode, get_e2e_suffix()),
-                '{}-enterprise-test-frontend'.format(ver_mode),
-                '{}-enterprise-test-backend'.format(ver_mode),
-                '{}-enterprise-integration-tests'.format(ver_mode)
-            ]
-        }
-        windows_pipeline.update(deps)
-
-    pipelines.extend([windows_pipeline])
-
-    return pipelines
-
-def enterprise2_pipelines(prefix='', ver_mode=ver_mode, trigger=release_trigger):
-    environment = {
-        'EDITION': 'enterprise2',
-    }
-    edition = 'enterprise'
-    services = integration_test_services(edition=edition)
-    volumes = integration_test_services_volumes()
-    package_steps = []
-    publish_steps = []
-    should_publish = ver_mode == 'release'
-    should_upload = should_publish or ver_mode in ('release-branch',)
-    include_enterprise = edition == 'enterprise'
-    edition2 = 'enterprise2'
-    init_steps = [
-        download_grabpl_step(),
-        identify_runner_step(),
-        clone_enterprise_step(ver_mode),
-        init_enterprise_step(ver_mode),
-        compile_build_cmd(edition),
-    ]
-
-    build_steps = [
-        build_frontend_step(edition=edition, ver_mode=ver_mode),
-        build_frontend_package_step(edition=edition, ver_mode=ver_mode),
-        build_plugins_step(edition=edition, ver_mode=ver_mode),
-    ]
-
-    if include_enterprise:
-        build_steps.extend([
-            build_backend_step(edition=edition2, ver_mode=ver_mode, variants=['linux-amd64']),
-        ])
-
-    fetch_images = fetch_images_step(edition2)
-    fetch_images.update({'depends_on': ['build-docker-images', 'build-docker-images-ubuntu']})
-    upload_cdn = upload_cdn_step(edition=edition2, ver_mode=ver_mode)
-    upload_cdn['environment'].update({'ENTERPRISE2_CDN_PATH': from_secret('enterprise2-cdn-path')})
-
-    build_steps.extend([
-        package_step(edition=edition2, ver_mode=ver_mode, include_enterprise2=include_enterprise, variants=['linux-amd64']),
-        upload_cdn,
-        copy_packages_for_docker_step(edition=edition2),
-        build_docker_images_step(edition=edition2, ver_mode=ver_mode, publish=True),
-        build_docker_images_step(edition=edition2, ver_mode=ver_mode, ubuntu=True, publish=True),
-        fetch_images,
-        publish_images_step(edition2, 'release', mode=edition2, docker_repo='${{DOCKER_ENTERPRISE2_REPO}}'),
-    ])
-
-    if should_upload:
-        step = upload_packages_step(edition=edition2, ver_mode=ver_mode)
-        if step:
-            publish_steps.append(step)
-
-    deps_on_clone_enterprise_step = {
-        'depends_on': [
-            'init-enterprise',
-        ]
-    }
-
-    for step in [wire_install_step(), yarn_install_step(), verify_gen_cue_step(edition)]:
-        step.update(deps_on_clone_enterprise_step)
-        init_steps.extend([step])
-
-    pipelines = [
-        pipeline(
-            name='{}{}-enterprise2-build{}-publish'.format(prefix, ver_mode, get_e2e_suffix()), edition=edition, trigger=trigger, services=[],
-            steps=init_steps + build_steps + package_steps + publish_steps,
-            volumes=volumes, environment=environment,
-        ),
-    ]
-
-    return pipelines
-
-def publish_artifacts_step(mode):
-    security = ''
-    if mode == 'security':
-        security = '--security '
+def publish_artifacts_step():
     return {
-        'name': 'publish-artifacts',
-        'image': publish_image,
-        'environment': {
-            'GCP_KEY': from_secret('gcp_key'),
-            'PRERELEASE_BUCKET': from_secret('prerelease_bucket'),
+        "name": "publish-artifacts",
+        "image": images["publish"],
+        "environment": {
+            "GCP_KEY": from_secret(gcp_grafanauploads_base64),
+            "PRERELEASE_BUCKET": from_secret("prerelease_bucket"),
         },
-        'commands': ['./bin/grabpl artifacts publish {}--tag $${{DRONE_TAG}} --src-bucket $${{PRERELEASE_BUCKET}}'.format(security)],
-        'depends_on': ['grabpl'],
+        "commands": [
+            "./bin/build artifacts packages --artifacts-editions=oss --tag $${DRONE_TAG} --src-bucket $${PRERELEASE_BUCKET}",
+        ],
+        "depends_on": ["compile-build-cmd"],
+    }
+
+def publish_storybook_step():
+    return {
+        "name": "publish-storybook",
+        "image": images["publish"],
+        "environment": {
+            "GCP_KEY": from_secret(gcp_grafanauploads_base64),
+            "PRERELEASE_BUCKET": from_secret("prerelease_bucket"),
+        },
+        "commands": [
+            "./bin/build artifacts storybook --tag ${DRONE_TAG}",
+        ],
+        "depends_on": ["compile-build-cmd"],
     }
 
 def publish_artifacts_pipelines(mode):
+    """Published artifacts after they've been stored and tested in prerelease buckets.
+
+    Args:
+      mode: public or security.
+        Defaults to ''.
+
+    Returns:
+      List of Drone pipelines.
+    """
     trigger = {
-        'event': ['promote'],
-        'target': [mode],
+        "event": ["promote"],
+        "target": [mode],
     }
     steps = [
-        download_grabpl_step(),
-        publish_artifacts_step(mode),
+        compile_build_cmd(),
+        publish_artifacts_step(),
+        publish_storybook_step(),
+        github_app_generate_token_step(),
+        release_pr_step(depends_on = ["publish-artifacts", github_app_generate_token_step()["name"]]),
     ]
 
-    return [pipeline(
-        name='publish-artifacts-{}'.format(mode), trigger=trigger, steps=steps, edition="all", environment = {'EDITION': 'all'}
-    )]
+    return [
+        pipeline(
+            name = "create-release-pr",
+            trigger = {
+                "event": ["promote"],
+                "target": "release-pr",
+            },
+            steps = [
+                release_pr_step(),
+            ],
+            volumes = github_app_pipeline_volumes(),
+        ),
+        pipeline(
+            name = "publish-artifacts-{}".format(mode),
+            trigger = trigger,
+            steps = steps,
+            environment = {"EDITION": "oss"},
+            volumes = github_app_pipeline_volumes(),
+        ),
+    ]
 
 def publish_packages_pipeline():
+    """Generates pipelines used for publishing packages for OSS.
+
+    Returns:
+      List of Drone pipelines. One for each of OSS and enterprise packages.
+    """
+
     trigger = {
-        'event': ['promote'],
-        'target': ['public'],
+        "event": ["promote"],
+        "target": ["public"],
     }
     oss_steps = [
-        download_grabpl_step(),
         compile_build_cmd(),
-        publish_linux_packages_step(edition='oss', package_manager='deb'),
-        publish_linux_packages_step(edition='oss', package_manager='rpm'),
-        publish_grafanacom_step(edition='oss', ver_mode='release'),
+        publish_linux_packages_step(package_manager = "deb"),
+        publish_linux_packages_step(package_manager = "rpm"),
+        publish_grafanacom_step(ver_mode = "release"),
+        verify_grafanacom_step(),
     ]
 
-    enterprise_steps = [
-        download_grabpl_step(),
-        compile_build_cmd(),
-        publish_linux_packages_step(edition='enterprise', package_manager='deb'),
-        publish_linux_packages_step(edition='enterprise', package_manager='rpm'),
-        publish_grafanacom_step(edition='enterprise', ver_mode='release'),
-    ]
     deps = [
-        'publish-artifacts-public',
-        'publish-docker-oss-public',
-        'publish-docker-enterprise-public'
+        "publish-artifacts-public",
+        "publish-docker-public",
     ]
 
-    return [pipeline(
-        name='publish-packages-oss', trigger=trigger, steps=oss_steps, edition="all", depends_on=deps, environment = {'EDITION': 'oss'},
-    ), pipeline(
-        name='publish-packages-enterprise', trigger=trigger, steps=enterprise_steps, edition="all", depends_on=deps, environment = {'EDITION': 'enterprise'}
-    )]
+    return [
+        pipeline(
+            name = "verify-grafanacom-artifacts",
+            trigger = {
+                "event": ["promote"],
+                "target": "verify-grafanacom-artifacts",
+            },
+            steps = [
+                verify_grafanacom_step(depends_on = []),
+            ],
+        ),
+        pipeline(
+            name = "publish-packages",
+            trigger = trigger,
+            steps = oss_steps,
+            depends_on = deps,
+            environment = {"EDITION": "oss"},
+        ),
+        pipeline(
+            name = "publish-grafanacom",
+            trigger = {
+                "event": ["promote"],
+                "target": "publish-grafanacom",
+            },
+            steps = [
+                compile_build_cmd(),
+                publish_grafanacom_step(ver_mode = "release", depends_on = ["compile-build-cmd"]),
+            ],
+        ),
+    ]
 
-def publish_npm_pipelines(mode):
+def publish_npm_pipelines():
     trigger = {
-        'event': ['promote'],
-        'target': [mode],
+        "event": ["promote"],
+        "target": ["public"],
     }
     steps = [
-        download_grabpl_step(),
+        compile_build_cmd(),
         yarn_install_step(),
         retrieve_npm_packages_step(),
-        release_npm_packages_step()
+        release_npm_packages_step(),
     ]
 
-    return [pipeline(
-        name='publish-npm-packages-{}'.format(mode), trigger=trigger, steps = steps, edition="all", environment = {'EDITION': 'all'},
-    )]
+    return [
+        pipeline(
+            name = "publish-npm-packages-public",
+            trigger = trigger,
+            steps = steps,
+            environment = {"EDITION": "oss"},
+        ),
+    ]
 
-def artifacts_page_pipeline():
+def integration_test_pipelines():
+    """
+    Trigger integration tests on release builds
+
+    These pipelines should be triggered when we have a release that does a lot of
+    cherry-picking and we still want to have all the integration tests run on that
+    particular build.
+
+    Returns:
+      List of Drone pipelines
+    """
     trigger = {
-        'event': ['promote'],
-        'target': 'security',
+        "event": ["promote"],
+        "target": "integration-tests",
     }
-    return [pipeline(name='publish-artifacts-page', trigger=trigger, steps = [download_grabpl_step(), artifacts_page_step()], edition="all", environment = {'EDITION': 'all'}
-    )]
+    pipelines = []
+    volumes = integration_test_services_volumes()
+    integration_test_steps = postgres_integration_tests_steps() + \
+                             mysql_integration_tests_steps("mysql80", "8.0") + \
+                             redis_integration_tests_steps() + \
+                             memcached_integration_tests_steps() + \
+                             remote_alertmanager_integration_tests_steps()
 
-def get_e2e_suffix():
-    if not disable_tests:
-        return '-e2e'
-    return ''
+    pipelines.append(pipeline(
+        name = "integration-tests",
+        trigger = trigger,
+        services = integration_test_services(),
+        steps = [
+                    download_grabpl_step(),
+                    identify_runner_step(),
+                    verify_gen_cue_step(),
+                    verify_gen_jsonnet_step(),
+                    wire_install_step(),
+                ] +
+                integration_test_steps,
+        environment = {"EDITION": "oss"},
+        volumes = volumes,
+    ))
+
+    return pipelines
+
+def verify_release_pipeline(
+        name = "verify-prerelease-assets",
+        bucket = from_secret(prerelease_bucket),
+        gcp_key = from_secret(rgm_gcp_key_base64),
+        version = "${DRONE_TAG}",
+        trigger = {},
+        depends_on = [
+            "release-build-e2e-publish",
+        ]):
+    """
+    Runs a script that 'gsutil stat's every artifact that should have been produced by the pre-release process.
+
+    Returns:
+      A single Drone pipeline that runs the script.
+    """
+    step = {
+        "name": "gsutil-stat",
+        "depends_on": ["clone"],
+        "image": images["cloudsdk"],
+        "environment": {
+            "BUCKET": bucket,
+            "GCP_KEY": gcp_key,
+        },
+        "commands": [
+            "apt-get update && apt-get install -yq gettext",
+            "printenv GCP_KEY | base64 -d > /tmp/key.json",
+            "gcloud auth activate-service-account --key-file=/tmp/key.json",
+            "./scripts/list-release-artifacts.sh {} | xargs -n1 gsutil stat >> /tmp/stat.log".format(version),
+            "! cat /tmp/stat.log | grep \"No URLs matched\"",
+        ],
+    }
+    return pipeline(
+        depends_on = depends_on,
+        name = name,
+        trigger = trigger,
+        steps = [step],
+    )

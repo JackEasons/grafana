@@ -3,14 +3,17 @@ package migrations
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
-	"github.com/grafana/grafana/pkg/components/simplejson"
-	"github.com/grafana/grafana/pkg/services/datasources"
-	"github.com/grafana/grafana/pkg/services/sqlstore/migrations/ualert"
-	"github.com/grafana/grafana/pkg/services/sqlstore/migrator"
-	"github.com/grafana/grafana/pkg/util"
 	"xorm.io/xorm"
+
+	"github.com/grafana/grafana/pkg/components/simplejson"
+	"github.com/grafana/grafana/pkg/infra/log"
+	"github.com/grafana/grafana/pkg/services/datasources"
+	"github.com/grafana/grafana/pkg/services/sqlstore/migrator"
+	"github.com/grafana/grafana/pkg/setting"
+	"github.com/grafana/grafana/pkg/util"
 )
 
 func AddExternalAlertmanagerToDatasourceMigration(mg *migrator.Migrator) {
@@ -54,16 +57,16 @@ func (e externalAlertmanagerToDatasources) Exec(sess *xorm.Session, mg *migrator
 				return err
 			}
 			ds := &datasources.DataSource{
-				OrgId:   result.OrgID,
+				OrgID:   result.OrgID,
 				Name:    fmt.Sprintf("alertmanager-%s", uid),
 				Type:    "alertmanager",
 				Access:  "proxy",
-				Url:     uri,
+				URL:     uri,
 				Created: time.Unix(result.CreatedAt, 0),
 				Updated: time.Unix(result.UpdatedAt, 0),
-				Uid:     uid,
+				UID:     uid,
 				Version: 1,
-				JsonData: simplejson.NewFromAny(map[string]interface{}{
+				JsonData: simplejson.NewFromAny(map[string]any{
 					"handleGrafanaManagedAlerts": true,
 					"implementation":             "prometheus",
 				}),
@@ -74,9 +77,9 @@ func (e externalAlertmanagerToDatasources) Exec(sess *xorm.Session, mg *migrator
 				ds.BasicAuth = true
 				ds.BasicAuthUser = u.User.Username()
 				if password, ok := u.User.Password(); ok {
-					ds.SecureJsonData = ualert.GetEncryptedJsonData(map[string]string{
+					ds.SecureJsonData = getEncryptedJsonData(mg.Cfg, map[string]string{
 						"basicAuthPassword": password,
-					})
+					}, log.New("securejsondata"))
 				}
 			}
 
@@ -94,9 +97,8 @@ func (e externalAlertmanagerToDatasources) Exec(sess *xorm.Session, mg *migrator
 }
 
 func removeDuplicates(strs []string) []string {
-	var res []string
-	found := map[string]bool{}
-
+	found := make(map[string]bool, len(strs))
+	res := make([]string, 0, len(strs))
 	for _, str := range strs {
 		if found[str] {
 			continue
@@ -122,4 +124,23 @@ func generateNewDatasourceUid(sess *xorm.Session, orgId int64) (string, error) {
 	}
 
 	return "", datasources.ErrDataSourceFailedGenerateUniqueUid
+}
+
+// SecureJsonData is used to store encrypted data (for example in data_source table). Only values are separately
+// encrypted.
+type secureJsonData map[string][]byte
+
+// getEncryptedJsonData returns map where all keys are encrypted.
+func getEncryptedJsonData(cfg *setting.Cfg, sjd map[string]string, log log.Logger) secureJsonData {
+	encrypted := make(secureJsonData)
+	for key, data := range sjd {
+		encryptedData, err := util.Encrypt([]byte(data), cfg.SecretKey)
+		if err != nil {
+			log.Error(err.Error())
+			os.Exit(1)
+		}
+
+		encrypted[key] = encryptedData
+	}
+	return encrypted
 }

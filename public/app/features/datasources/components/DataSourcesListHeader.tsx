@@ -1,42 +1,58 @@
-import React, { useCallback } from 'react';
-import { AnyAction } from 'redux';
+import { debounce } from 'lodash';
+import { useCallback, useMemo } from 'react';
 
+import { SelectableValue } from '@grafana/data';
 import PageActionBar from 'app/core/components/PageActionBar/PageActionBar';
-import { contextSrv } from 'app/core/core';
-import { AccessControlAction, StoreState, useSelector, useDispatch } from 'app/types';
+import { StoreState, useSelector, useDispatch } from 'app/types';
 
-import { getDataSourcesSearchQuery, setDataSourcesSearchQuery, useDataSourcesRoutes } from '../state';
+import { getDataSourcesSearchQuery, getDataSourcesSort, setDataSourcesSearchQuery, setIsSortAscending } from '../state';
+import { trackDsSearched } from '../tracking';
+
+const ascendingSortValue = 'alpha-asc';
+const descendingSortValue = 'alpha-desc';
+
+const sortOptions = [
+  // We use this unicode 'en dash' character (U+2013), because it looks nicer
+  // than simple dash in this context. This is also used in the response of
+  // the `sorting` endpoint, which is used in the search dashboard page.
+  { label: 'Sort by A–Z', value: ascendingSortValue },
+  { label: 'Sort by Z–A', value: descendingSortValue },
+];
 
 export function DataSourcesListHeader() {
   const dispatch = useDispatch();
-  const setSearchQuery = useCallback((q: string) => dispatch(setDataSourcesSearchQuery(q)), [dispatch]);
-  const searchQuery = useSelector(({ dataSources }: StoreState) => getDataSourcesSearchQuery(dataSources));
-  const canCreateDataSource = contextSrv.hasPermission(AccessControlAction.DataSourcesCreate);
-
-  return (
-    <DataSourcesListHeaderView
-      searchQuery={searchQuery}
-      setSearchQuery={setSearchQuery}
-      canCreateDataSource={canCreateDataSource}
-    />
+  const debouncedTrackSearch = useMemo(
+    () =>
+      debounce((q) => {
+        trackDsSearched({ query: q });
+      }, 300),
+    []
   );
-}
 
-export type ViewProps = {
-  searchQuery: string;
-  setSearchQuery: (q: string) => AnyAction;
-  canCreateDataSource: boolean;
-};
+  const setSearchQuery = useCallback(
+    (q: string) => {
+      dispatch(setDataSourcesSearchQuery(q));
+      if (q) {
+        debouncedTrackSearch(q);
+      }
+    },
+    [dispatch, debouncedTrackSearch]
+  );
+  const searchQuery = useSelector(({ dataSources }: StoreState) => getDataSourcesSearchQuery(dataSources));
 
-export function DataSourcesListHeaderView({ searchQuery, setSearchQuery, canCreateDataSource }: ViewProps) {
-  const dataSourcesRoutes = useDataSourcesRoutes();
-  const linkButton = {
-    href: dataSourcesRoutes.New,
-    title: 'Add data source',
-    disabled: !canCreateDataSource,
+  const setSort = useCallback(
+    (sort: SelectableValue) => dispatch(setIsSortAscending(sort.value === ascendingSortValue)),
+    [dispatch]
+  );
+  const isSortAscending = useSelector(({ dataSources }: StoreState) => getDataSourcesSort(dataSources));
+
+  const sortPicker = {
+    onChange: setSort,
+    value: isSortAscending ? ascendingSortValue : descendingSortValue,
+    getSortOptions: () => Promise.resolve(sortOptions),
   };
 
   return (
-    <PageActionBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} linkButton={linkButton} key="action-bar" />
+    <PageActionBar searchQuery={searchQuery} setSearchQuery={setSearchQuery} key="action-bar" sortPicker={sortPicker} />
   );
 }

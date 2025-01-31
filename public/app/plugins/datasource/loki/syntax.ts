@@ -181,9 +181,18 @@ export const RANGE_VEC_FUNCTIONS = [
   },
 ];
 
-export const FUNCTIONS = [...AGGREGATION_OPERATORS, ...RANGE_VEC_FUNCTIONS];
-export const LOKI_KEYWORDS = [...FUNCTIONS, ...PIPE_OPERATORS, ...PIPE_PARSERS].map((keyword) => keyword.label);
+export const BUILT_IN_FUNCTIONS = [
+  {
+    insertText: 'vector',
+    label: 'vector',
+    detail: 'vector(scalar)',
+    documentation: 'Returns the scalar as a vector with no labels.',
+  },
+];
 
+export const FUNCTIONS = [...AGGREGATION_OPERATORS, ...RANGE_VEC_FUNCTIONS, ...BUILT_IN_FUNCTIONS];
+
+// Loki grammar is used for query highlight in query previews outside of code editor
 export const lokiGrammar: Grammar = {
   comment: {
     pattern: /#.*/,

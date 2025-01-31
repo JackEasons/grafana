@@ -1,5 +1,7 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/
 headless: true
+labels:
+  products:
+    - enterprise
+    - oss
 ---

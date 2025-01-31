@@ -1,18 +1,12 @@
 jest.mock('app/core/core', () => ({}));
 jest.mock('app/core/config', () => {
   return {
-    ...(jest.requireActual('app/core/config') as unknown as object),
-    bootData: {
-      user: {},
-    },
+    ...jest.requireActual('app/core/config'),
     panels: {
       test: {
         id: 'test',
         name: 'test',
       },
-    },
-    config: {
-      appSubUrl: 'test',
     },
   };
 });

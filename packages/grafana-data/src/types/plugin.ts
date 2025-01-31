@@ -43,12 +43,26 @@ export enum PluginErrorCode {
   missingSignature = 'signatureMissing',
   invalidSignature = 'signatureInvalid',
   modifiedSignature = 'signatureModified',
+  failedBackendStart = 'failedBackendStart',
+  angular = 'angular',
 }
 
 /** Describes error returned from Grafana plugins API call */
 export interface PluginError {
   errorCode: PluginErrorCode;
   pluginId: string;
+  pluginType?: PluginType;
+}
+
+export interface AngularMeta {
+  detected: boolean;
+  hideDeprecation: boolean;
+}
+
+// Signals to SystemJS how to load frontend js assets.
+export enum PluginLoadingStrategy {
+  fetch = 'fetch',
+  script = 'script',
 }
 
 export interface PluginMeta<T extends KeyValue = {}> {
@@ -58,6 +72,7 @@ export interface PluginMeta<T extends KeyValue = {}> {
   info: PluginMetaInfo;
   includes?: PluginInclude[];
   state?: PluginState;
+  aliasIDs?: string[];
 
   // System.load & relative URLS
   module: string;
@@ -71,6 +86,7 @@ export interface PluginMeta<T extends KeyValue = {}> {
   secureJsonData?: KeyValue;
   secureJsonFields?: KeyValue<boolean>;
   enabled?: boolean;
+  autoEnabled?: boolean;
   defaultNavUrl?: string;
   hasUpdate?: boolean;
   enterprise?: boolean;
@@ -80,6 +96,11 @@ export interface PluginMeta<T extends KeyValue = {}> {
   signatureType?: PluginSignatureType;
   signatureOrg?: string;
   live?: boolean;
+  angular?: AngularMeta;
+  angularDetected?: boolean;
+  loadingStrategy?: PluginLoadingStrategy;
+  extensions?: PluginExtensions;
+  moduleHash?: string;
 }
 
 interface PluginDependencyInfo {
@@ -93,6 +114,38 @@ export interface PluginDependencies {
   grafanaDependency?: string;
   grafanaVersion: string;
   plugins: PluginDependencyInfo[];
+  extensions: {
+    // A list of exposed component IDs
+    exposedComponents: string[];
+  };
+}
+
+export type ExtensionInfo = {
+  targets: string | string[];
+  title: string;
+  description?: string;
+};
+
+export interface PluginExtensions {
+  // The component extensions that the plugin registers
+  addedComponents: ExtensionInfo[];
+
+  // The link extensions that the plugin registers
+  addedLinks: ExtensionInfo[];
+
+  // The React components that the plugin exposes
+  exposedComponents: Array<{
+    id: string;
+    title: string;
+    description?: string;
+  }>;
+
+  // The extension points that the plugin provides
+  extensionPoints: Array<{
+    id: string;
+    title: string;
+    description?: string;
+  }>;
 }
 
 export enum PluginIncludeType {
@@ -113,6 +166,10 @@ export interface PluginInclude {
   // "Admin", "Editor" or "Viewer". If set then the include will only show up in the navigation if the user has the required roles.
   role?: string;
 
+  // if action is set then the include will only show up in the navigation if the user has the required permission.
+  // The action will take precedence over the role.
+  action?: string;
+
   // Adds the "page" or "dashboard" type includes to the navigation if set to `true`.
   addToNav?: boolean;
 
@@ -123,6 +180,7 @@ export interface PluginInclude {
 interface PluginMetaInfoLink {
   name: string;
   url: string;
+  target?: '_blank' | '_self' | '_parent' | '_top';
 }
 
 export interface PluginBuildInfo {
@@ -194,7 +252,7 @@ export class GrafanaPlugin<T extends PluginMeta = PluginMeta> {
   /**
    * @deprecated -- this is no longer necessary and will be removed
    */
-  setChannelSupport(support: any) {
+  setChannelSupport() {
     console.warn('[deprecation] plugin is using ignored option: setChannelSupport', this.meta);
     return this;
   }

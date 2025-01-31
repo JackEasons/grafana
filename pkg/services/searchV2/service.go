@@ -9,8 +9,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-
-	"github.com/grafana/grafana/pkg/services/querylibrary"
+	"go.opentelemetry.io/otel"
 
 	"github.com/grafana/grafana/pkg/infra/db"
 	"github.com/grafana/grafana/pkg/infra/log"
@@ -18,6 +17,7 @@ import (
 	"github.com/grafana/grafana/pkg/registry"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
+	"github.com/grafana/grafana/pkg/services/folder"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/store"
 	"github.com/grafana/grafana/pkg/services/user"
@@ -59,6 +59,7 @@ var (
 			Namespace: namespace,
 			Subsystem: subsystem,
 		})
+	tracer = otel.Tracer("github.com/grafana/grafana/pkg/services/searchv2")
 )
 
 type StandardSearchService struct {
@@ -75,7 +76,6 @@ type StandardSearchService struct {
 	dashboardIndex *searchIndex
 	extender       DashboardIndexExtender
 	reIndexCh      chan struct{}
-	queries        querylibrary.Service
 	features       featuremgmt.FeatureToggles
 }
 
@@ -85,44 +85,44 @@ func (s *StandardSearchService) IsReady(ctx context.Context, orgId int64) IsSear
 
 func ProvideService(cfg *setting.Cfg, sql db.DB, entityEventStore store.EntityEventsService,
 	ac accesscontrol.Service, tracer tracing.Tracer, features featuremgmt.FeatureToggles, orgService org.Service,
-	userService user.Service, queries querylibrary.Service) SearchService {
+	userService user.Service, folderService folder.Service) SearchService {
 	extender := &NoopExtender{}
+	logger := log.New("searchV2")
 	s := &StandardSearchService{
 		cfg: cfg,
 		sql: sql,
 		ac:  ac,
-		auth: &simpleSQLAuthService{
-			sql: sql,
-			ac:  ac,
+		auth: &simpleAuthService{
+			sql:           sql,
+			ac:            ac,
+			folderService: folderService,
+			logger:        logger,
 		},
 		dashboardIndex: newSearchIndex(
 			newSQLDashboardLoader(sql, tracer, cfg.Search),
 			entityEventStore,
 			extender.GetDocumentExtender(),
-			newFolderIDLookup(sql),
 			tracer,
 			features,
 			cfg.Search,
 		),
-		logger:      log.New("searchV2"),
+		logger:      logger,
 		extender:    extender,
 		reIndexCh:   make(chan struct{}, 1),
 		orgService:  orgService,
 		userService: userService,
-		queries:     queries,
 		features:    features,
 	}
 	return s
 }
 
 func (s *StandardSearchService) IsDisabled() bool {
-	if s.cfg == nil {
-		return true
-	}
-	return !s.cfg.IsFeatureToggleEnabled(featuremgmt.FlagPanelTitleSearch)
+	return !s.features.IsEnabledGlobally(featuremgmt.FlagPanelTitleSearch)
 }
 
 func (s *StandardSearchService) Run(ctx context.Context) error {
+	ctx, span := tracer.Start(ctx, "searchv2.Run")
+	defer span.End()
 	orgQuery := &org.SearchOrgsQuery{}
 	result, err := s.orgService.Search(ctx, orgQuery)
 	if err != nil {
@@ -149,21 +149,23 @@ func (s *StandardSearchService) RegisterDashboardIndexExtender(ext DashboardInde
 }
 
 func (s *StandardSearchService) getUser(ctx context.Context, backendUser *backend.User, orgId int64) (*user.SignedInUser, error) {
+	ctx, span := tracer.Start(ctx, "searchv2.getUser")
+	defer span.End()
 	// TODO: get user & user's permissions from the request context
 
 	var usr *user.SignedInUser
-	if s.cfg.AnonymousEnabled && backendUser.Email == "" && backendUser.Login == "" {
-		getOrg := org.GetOrgByNameQuery{Name: s.cfg.AnonymousOrgName}
+	if s.cfg.Anonymous.Enabled && backendUser.Email == "" && backendUser.Login == "" {
+		getOrg := org.GetOrgByNameQuery{Name: s.cfg.Anonymous.OrgName}
 		orga, err := s.orgService.GetByName(ctx, &getOrg)
 		if err != nil {
-			s.logger.Error("Anonymous access organization error.", "org_name", s.cfg.AnonymousOrgName, "error", err)
+			s.logger.Error("Anonymous access organization error.", "org_name", s.cfg.Anonymous.OrgName, "error", err)
 			return nil, err
 		}
 
 		usr = &user.SignedInUser{
 			OrgID:       orga.ID,
 			OrgName:     orga.Name,
-			OrgRole:     org.RoleType(s.cfg.AnonymousOrgRole),
+			OrgRole:     org.RoleType(s.cfg.Anonymous.OrgRole),
 			IsAnonymous: true,
 		}
 	} else {
@@ -185,10 +187,6 @@ func (s *StandardSearchService) getUser(ctx context.Context, backendUser *backen
 		}
 	}
 
-	if s.ac.IsDisabled() {
-		return usr, nil
-	}
-
 	if usr.Permissions == nil {
 		usr.Permissions = make(map[int64]map[string][]string)
 	}
@@ -202,15 +200,17 @@ func (s *StandardSearchService) getUser(ctx context.Context, backendUser *backen
 	permissions, err := s.ac.GetUserPermissions(ctx, usr,
 		accesscontrol.Options{ReloadCache: false})
 	if err != nil {
-		s.logger.Error("failed to retrieve user permissions", "error", err, "email", backendUser.Email)
+		s.logger.Error("Failed to retrieve user permissions", "error", err, "email", backendUser.Email)
 		return nil, errors.New("auth error")
 	}
 
-	usr.Permissions[orgId] = accesscontrol.GroupScopesByAction(permissions)
+	usr.Permissions[orgId] = accesscontrol.GroupScopesByActionContext(ctx, permissions)
 	return usr, nil
 }
 
 func (s *StandardSearchService) DoDashboardQuery(ctx context.Context, user *backend.User, orgID int64, q DashboardQuery) *backend.DataResponse {
+	ctx, span := tracer.Start(ctx, "searchv2.DoDashboardQuery")
+	defer span.End()
 	start := time.Now()
 
 	signedInUser, err := s.getUser(ctx, user, orgID)
@@ -239,13 +239,11 @@ func (s *StandardSearchService) DoDashboardQuery(ctx context.Context, user *back
 }
 
 func (s *StandardSearchService) doDashboardQuery(ctx context.Context, signedInUser *user.SignedInUser, orgID int64, q DashboardQuery) *backend.DataResponse {
-	if !s.queries.IsDisabled() && len(q.Kind) == 1 && q.Kind[0] == string(entityKindQuery) {
-		return s.searchQueries(ctx, signedInUser, q)
-	}
-
+	ctx, span := tracer.Start(ctx, "searchv2.doDashboardQuery")
+	defer span.End()
 	rsp := &backend.DataResponse{}
 
-	filter, err := s.auth.GetDashboardReadFilter(signedInUser)
+	filter, err := s.auth.GetDashboardReadFilter(ctx, orgID, signedInUser)
 	if err != nil {
 		dashboardSearchFailureRequestsCounter.With(prometheus.Labels{
 			"reason": "get_dashboard_filter_error",
@@ -276,7 +274,7 @@ func (s *StandardSearchService) doDashboardQuery(ctx context.Context, signedInUs
 
 	if q.WithAllowedActions {
 		if err := s.addAllowedActionsField(ctx, orgID, signedInUser, response); err != nil {
-			s.logger.Error("error when adding the allowedActions field", "err", err)
+			s.logger.Error("Error when adding the allowedActions field", "err", err)
 		}
 	}
 

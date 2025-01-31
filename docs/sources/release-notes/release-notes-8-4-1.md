@@ -1,7 +1,10 @@
 ---
-aliases:
-  - /docs/grafana/latest/release-notes/release-notes-8-4-1/
 hide_menu: true
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: Release notes for Grafana 8.4.1
 ---
 

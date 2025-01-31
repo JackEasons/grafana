@@ -1,5 +1,5 @@
 import { css, cx } from '@emotion/css';
-import React from 'react';
+import { forwardRef } from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
@@ -10,7 +10,7 @@ import { Icon } from '../Icon/Icon';
 import { Counter } from './Counter';
 import { TabProps } from './Tab';
 
-export const VerticalTab = React.forwardRef<HTMLAnchorElement, TabProps>(
+export const VerticalTab = forwardRef<HTMLAnchorElement, TabProps>(
   ({ label, active, icon, counter, className, suffix: Suffix, onChangeTab, href, ...otherProps }, ref) => {
     const tabsStyles = useStyles2(getTabStyles);
     const content = () => (
@@ -45,44 +45,42 @@ VerticalTab.displayName = 'Tab';
 
 const getTabStyles = (theme: GrafanaTheme2) => {
   return {
-    link: css`
-      padding: 6px 12px;
-      display: block;
-      height: 100%;
-      cursor: pointer;
-      position: relative;
+    link: css({
+      padding: '6px 12px',
+      display: 'block',
+      height: '100%',
+      cursor: 'pointer',
+      position: 'relative',
 
-      color: ${theme.colors.text.primary};
+      color: theme.colors.text.primary,
 
-      svg {
-        margin-right: ${theme.spacing(1)};
-      }
+      svg: {
+        marginRight: theme.spacing(1),
+      },
 
-      &:hover,
-      &:focus {
-        text-decoration: underline;
-      }
-    `,
-    activeStyle: css`
-      label: activeTabStyle;
-      color: ${theme.colors.text.maxContrast};
-      font-weight: 500;
-      overflow: hidden;
+      '&:hover, &:focus': {
+        textDecoration: 'underline',
+      },
+    }),
+    activeStyle: css({
+      label: 'activeTabStyle',
+      color: theme.colors.text.maxContrast,
+      overflow: 'hidden',
 
-      &::before {
-        display: block;
-        content: ' ';
-        position: absolute;
-        left: 0;
-        width: 4px;
-        bottom: 2px;
-        top: 2px;
-        border-radius: 2px;
-        background-image: linear-gradient(0deg, #f05a28 30%, #fbca0a 99%);
-      }
-    `,
-    suffix: css`
-      margin-left: ${theme.spacing(1)};
-    `,
+      '&::before': {
+        display: 'block',
+        content: '" "',
+        position: 'absolute',
+        left: 0,
+        width: '4px',
+        bottom: '2px',
+        top: '2px',
+        borderRadius: theme.shape.radius.default,
+        backgroundImage: 'linear-gradient(0deg, #f05a28 30%, #fbca0a 99%)',
+      },
+    }),
+    suffix: css({
+      marginLeft: theme.spacing(1),
+    }),
   };
 };

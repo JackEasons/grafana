@@ -1,7 +1,8 @@
 import { css, cx } from '@emotion/css';
 import classnames from 'classnames';
 import { debounce } from 'lodash';
-import React, { Context, PureComponent } from 'react';
+import { PureComponent } from 'react';
+import * as React from 'react';
 import { Value } from 'slate';
 import Plain from 'slate-plain-serializer';
 import { Editor, EventHook, Plugin } from 'slate-react';
@@ -9,15 +10,6 @@ import { Editor, EventHook, Plugin } from 'slate-react';
 import { GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 
-import {
-  makeValue,
-  SCHEMA,
-  CompletionItemGroup,
-  TypeaheadOutput,
-  TypeaheadInput,
-  SuggestionsState,
-  Themeable2,
-} from '../..';
 import {
   ClearPlugin,
   NewlinePlugin,
@@ -29,6 +21,9 @@ import {
 } from '../../slate-plugins';
 import { withTheme2 } from '../../themes';
 import { getFocusStyles } from '../../themes/mixins';
+import { CompletionItemGroup, SuggestionsState, TypeaheadInput, TypeaheadOutput } from '../../types/completion';
+import { Themeable2 } from '../../types/theme';
+import { makeValue, SCHEMA } from '../../utils/slate';
 
 export interface QueryFieldProps extends Themeable2 {
   additionalPlugins?: Plugin[];
@@ -73,8 +68,14 @@ export class UnThemedQueryField extends PureComponent<QueryFieldProps, QueryFiel
   mounted = false;
   editor: Editor | null = null;
 
-  constructor(props: QueryFieldProps, context: Context<any>) {
-    super(props, context);
+  // By default QueryField calls onChange if onBlur is not defined, this will trigger a rerender
+  // And slate will claim the focus, making it impossible to leave the field.
+  static defaultProps = {
+    onBlur: () => {},
+  };
+
+  constructor(props: QueryFieldProps) {
+    super(props);
 
     this.runOnChangeDebounced = debounce(this.runOnChange, 500);
 
@@ -113,7 +114,6 @@ export class UnThemedQueryField extends PureComponent<QueryFieldProps, QueryFiel
 
   componentDidUpdate(prevProps: QueryFieldProps, prevState: QueryFieldState) {
     const { query, syntax, syntaxLoaded } = this.props;
-
     if (!prevProps.syntaxLoaded && syntaxLoaded && this.editor) {
       // Need a bogus edit to re-render the editor after syntax has fully loaded
       const editor = this.editor.insertText(' ').deleteBackward(1);
@@ -217,7 +217,7 @@ export class UnThemedQueryField extends PureComponent<QueryFieldProps, QueryFiel
 
     return (
       <div className={cx(wrapperClassName, styles.wrapper)}>
-        <div className="slate-query-field" aria-label={selectors.components.QueryField.container}>
+        <div className="slate-query-field" data-testid={selectors.components.QueryField.container}>
           <Editor
             ref={(editor) => (this.editor = editor!)}
             schema={SCHEMA}
@@ -245,10 +245,8 @@ export const QueryField = withTheme2(UnThemedQueryField);
 const getStyles = (theme: GrafanaTheme2) => {
   const focusStyles = getFocusStyles(theme);
   return {
-    wrapper: css`
-      &:focus-within {
-        ${focusStyles}
-      }
-    `,
+    wrapper: css({
+      '&:focus-within': focusStyles,
+    }),
   };
 };

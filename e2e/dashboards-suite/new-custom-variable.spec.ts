@@ -1,10 +1,11 @@
-import { e2e } from '@grafana/e2e';
+import { e2e } from '../utils';
 
 const PAGE_UNDER_TEST = 'kVi2Gex7z/test-variable-output';
+const DASHBOARD_NAME = 'Test variable output';
 
 function fillInCustomVariable(name: string, label: string, value: string) {
   e2e.pages.Dashboard.Settings.Variables.Edit.General.generalTypeSelectV2().within(() => {
-    e2e().get('input').type('Custom{enter}');
+    cy.get('input').type('Custom{enter}');
   });
   e2e.pages.Dashboard.Settings.Variables.Edit.General.generalNameInputV2().clear().type(name).blur();
   e2e.pages.Dashboard.Settings.Variables.Edit.General.generalLabelInputV2().type(label).blur();
@@ -19,9 +20,13 @@ function assertPreviewValues(expectedValues: string[]) {
 }
 
 describe('Variables - Custom', () => {
+  beforeEach(() => {
+    e2e.flows.login(Cypress.env('USERNAME'), Cypress.env('PASSWORD'));
+  });
+
   it('can add a custom template variable', () => {
-    e2e.flows.login('admin', 'admin');
-    e2e.flows.openDashboard({ uid: `${PAGE_UNDER_TEST}?orgId=1&editview=templating` });
+    e2e.flows.openDashboard({ uid: `${PAGE_UNDER_TEST}?orgId=1&editview=variables` });
+    cy.contains(DASHBOARD_NAME).should('be.visible');
 
     // Create a new "Custom" variable
     e2e.components.CallToActionCard.buttonV2('Add variable').click();
@@ -29,23 +34,22 @@ describe('Variables - Custom', () => {
     assertPreviewValues(['one', 'two', 'three']);
 
     // Navigate back to the homepage and change the selected variable value
-    e2e.pages.Dashboard.Settings.Variables.Edit.General.submitButton().click();
-    e2e.components.BackButton.backArrow().should('be.visible').click({ force: true });
+    e2e.pages.Dashboard.Settings.Variables.Edit.General.applyButton().click();
+    e2e.components.NavToolbar.editDashboard.backToDashboardButton().click();
     e2e.pages.Dashboard.SubMenu.submenuItemValueDropDownValueLinkTexts('one').click();
-    e2e.pages.Dashboard.SubMenu.submenuItemValueDropDownOptionTexts('two').click();
-
+    e2e.components.Select.option().contains('two').click();
     // Assert it was rendered
-    e2e().get('.markdown-html').should('include.text', 'VariableUnderTest: two');
+    cy.get('.markdown-html').should('include.text', 'VariableUnderTest: two');
   });
 
   it('can add a custom template variable with labels', () => {
-    e2e.flows.login('admin', 'admin');
-    e2e.flows.openDashboard({ uid: `${PAGE_UNDER_TEST}?orgId=1&editview=templating` });
+    e2e.flows.openDashboard({ uid: `${PAGE_UNDER_TEST}?orgId=1&editview=variables` });
+    cy.contains(DASHBOARD_NAME).should('be.visible');
 
     // Create a new "Custom" variable
     e2e.components.CallToActionCard.buttonV2('Add variable').click();
     e2e.pages.Dashboard.Settings.Variables.Edit.General.generalTypeSelectV2().within(() => {
-      e2e().get('input').type('Custom{enter}');
+      cy.get('input').type('Custom{enter}');
     });
 
     // Set its name, label, and content
@@ -53,12 +57,12 @@ describe('Variables - Custom', () => {
     assertPreviewValues(['One', 'Two', 'Three']);
 
     // Navigate back to the homepage and change the selected variable value
-    e2e.pages.Dashboard.Settings.Variables.Edit.General.submitButton().click();
-    e2e.components.BackButton.backArrow().click({ force: true });
-    e2e.pages.Dashboard.SubMenu.submenuItemValueDropDownValueLinkTexts('One').click();
-    e2e.pages.Dashboard.SubMenu.submenuItemValueDropDownOptionTexts('Two').click();
+    e2e.pages.Dashboard.Settings.Variables.Edit.General.applyButton().click();
+    e2e.components.NavToolbar.editDashboard.backToDashboardButton().click();
+    e2e.pages.Dashboard.SubMenu.submenuItemValueDropDownValueLinkTexts('1').click();
+    e2e.components.Select.option().contains('Two').click();
 
     // Assert it was rendered
-    e2e().get('.markdown-html').should('include.text', 'VariableUnderTest: 2');
+    cy.get('.markdown-html').should('include.text', 'VariableUnderTest: 2');
   });
 });

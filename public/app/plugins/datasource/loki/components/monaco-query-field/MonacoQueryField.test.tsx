@@ -1,23 +1,29 @@
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 
-import LokiLanguageProvider from '../../LanguageProvider';
-import { createLokiDatasource } from '../../mocks';
+import { selectors } from '@grafana/e2e-selectors';
+
+import { createLokiDatasource } from '../../__mocks__/datasource';
 
 import MonacoQueryField from './MonacoQueryField';
 import { Props } from './MonacoQueryFieldProps';
 
-function renderComponent({ initialValue = '', onRunQuery = jest.fn(), onBlur = jest.fn() }: Partial<Props> = {}) {
+function renderComponent({
+  initialValue = '',
+  onRunQuery = jest.fn(),
+  onBlur = jest.fn(),
+  onChange = jest.fn(),
+}: Partial<Props> = {}) {
   const datasource = createLokiDatasource();
-  const languageProvider = new LokiLanguageProvider(datasource);
 
   render(
     <MonacoQueryField
-      languageProvider={languageProvider}
+      datasource={datasource}
       initialValue={initialValue}
       history={[]}
       onRunQuery={onRunQuery}
       onBlur={onBlur}
+      onChange={onChange}
+      placeholder="Enter a Loki query (run with Shift+Enter)"
     />
   );
 }
@@ -26,6 +32,7 @@ describe('MonacoQueryField', () => {
   test('Renders with no errors', async () => {
     renderComponent();
 
-    expect(await screen.findByText('Loading...')).toBeInTheDocument();
+    const monacoEditor = await screen.findByTestId(selectors.components.ReactMonacoEditor.editorLazy);
+    expect(monacoEditor).toBeInTheDocument();
   });
 });

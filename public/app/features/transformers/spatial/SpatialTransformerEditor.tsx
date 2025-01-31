@@ -1,19 +1,21 @@
 import { css } from '@emotion/css';
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 
 import {
   DataTransformerID,
-  FrameGeometrySource,
-  FrameGeometrySourceMode,
   GrafanaTheme2,
   PanelOptionsEditorBuilder,
   PluginState,
   StandardEditorContext,
   TransformerRegistryItem,
   TransformerUIProps,
+  TransformerCategory,
 } from '@grafana/data';
+import { FrameGeometrySourceMode } from '@grafana/schema';
 import { useTheme2 } from '@grafana/ui';
 import { addLocationFields } from 'app/features/geo/editor/locationEditor';
+
+import { getTransformationContent } from '../docs/getTransformationContent';
 
 import { SpatialCalculation, SpatialOperation, SpatialAction, SpatialTransformOptions } from './models.gen';
 import { getDefaultOptions, getTransformerOptionPane } from './optionsHelper';
@@ -90,10 +92,9 @@ const supplier = (
       category: ['Source'],
       path: 'source',
       build: (b, c) => {
-        const loc = (options.source ?? {}) as FrameGeometrySource;
-        if (!loc.mode) {
-          loc.mode = FrameGeometrySourceMode.Auto;
-        }
+        const loc = options.source ?? {
+          mode: FrameGeometrySourceMode.Auto,
+        };
         addLocationFields('Point', '', b, loc);
       },
     });
@@ -102,10 +103,9 @@ const supplier = (
       category: ['Target'],
       path: 'modify',
       build: (b, c) => {
-        const loc = (options.modify?.target ?? {}) as FrameGeometrySource;
-        if (!loc.mode) {
-          loc.mode = FrameGeometrySourceMode.Auto;
-        }
+        const loc = options.modify?.target ?? {
+          mode: FrameGeometrySourceMode.Auto,
+        };
         addLocationFields('Point', 'target.', b, loc);
       },
     });
@@ -114,7 +114,9 @@ const supplier = (
   }
 };
 
-export const SetGeometryTransformerEditor: React.FC<TransformerUIProps<SpatialTransformOptions>> = (props) => {
+type Props = TransformerUIProps<SpatialTransformOptions>;
+
+export const SetGeometryTransformerEditor = (props: Props) => {
   // a new component is created with every change :(
   useEffect(() => {
     if (!props.options.source?.mode) {
@@ -147,13 +149,13 @@ export const SetGeometryTransformerEditor: React.FC<TransformerUIProps<SpatialTr
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
-    wrap: css`
-      margin-bottom: 20px;
-    `,
-    item: css`
-      border-left: 4px solid ${theme.colors.border.strong};
-      padding-left: 10px;
-    `,
+    wrap: css({
+      marginBottom: '20px',
+    }),
+    item: css({
+      borderLeft: `4px solid ${theme.colors.border.strong}`,
+      paddingLeft: '10px',
+    }),
   };
 };
 
@@ -164,4 +166,6 @@ export const spatialTransformRegistryItem: TransformerRegistryItem<SpatialTransf
   name: spatialTransformer.name,
   description: spatialTransformer.description,
   state: PluginState.alpha,
+  categories: new Set([TransformerCategory.PerformSpatialOperations]),
+  help: getTransformationContent(DataTransformerID.spatial).helperDocs,
 };

@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/test/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Shared Content
 ---
 

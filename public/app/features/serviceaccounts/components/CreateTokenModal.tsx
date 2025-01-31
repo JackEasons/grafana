@@ -1,5 +1,5 @@
 import { css } from '@emotion/css';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { GrafanaTheme2 } from '@grafana/data';
@@ -38,8 +38,10 @@ export const CreateTokenModal = ({ isOpen, token, serviceAccountLogin, onCreateT
   tomorrow.setDate(tomorrow.getDate() + 1);
 
   const maxExpirationDate = new Date();
-  if (config.tokenExpirationDayLimit !== undefined) {
+  if (config.tokenExpirationDayLimit !== undefined && config.tokenExpirationDayLimit > -1) {
     maxExpirationDate.setDate(maxExpirationDate.getDate() + config.tokenExpirationDayLimit + 1);
+  } else {
+    maxExpirationDate.setDate(8640000000000000);
   }
   const defaultExpirationDate = config.tokenExpirationDayLimit !== undefined && config.tokenExpirationDayLimit > 0;
 
@@ -82,13 +84,7 @@ export const CreateTokenModal = ({ isOpen, token, serviceAccountLogin, onCreateT
   const modalTitle = !token ? 'Add service account token' : 'Service account token created';
 
   return (
-    <Modal
-      isOpen={isOpen}
-      title={modalTitle}
-      onDismiss={onCloseInternal}
-      className={styles.modal}
-      contentClassName={styles.modalContent}
-    >
+    <Modal isOpen={isOpen} title={modalTitle} onDismiss={onCloseInternal} className={styles.modal}>
       {!token ? (
         <div>
           <Field
@@ -107,16 +103,14 @@ export const CreateTokenModal = ({ isOpen, token, serviceAccountLogin, onCreateT
               }}
             />
           </Field>
-          {!isWithExpirationDate && (
-            <Field label="Expiration">
-              <RadioButtonGroup
-                options={EXPIRATION_OPTIONS}
-                value={isWithExpirationDate}
-                onChange={setIsWithExpirationDate}
-                size="md"
-              />
-            </Field>
-          )}
+          <Field label="Expiration">
+            <RadioButtonGroup
+              options={EXPIRATION_OPTIONS}
+              value={isWithExpirationDate}
+              onChange={setIsWithExpirationDate}
+              size="md"
+            />
+          </Field>
           {isWithExpirationDate && (
             <Field label="Expiration date">
               <DatePickerWithInput
@@ -138,7 +132,7 @@ export const CreateTokenModal = ({ isOpen, token, serviceAccountLogin, onCreateT
         <>
           <Field
             label="Token"
-            description="Copy the token now as you will not be able to see it again. Loosing a token requires creating a new one."
+            description="Copy the token now as you will not be able to see it again. Losing a token requires creating a new one."
           >
             <div className={styles.modalTokenRow}>
               <Input name="tokenValue" value={token} readOnly />
@@ -176,17 +170,14 @@ const getSecondsToLive = (date: Date | string) => {
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
-    modal: css`
-      width: 550px;
-    `,
-    modalContent: css`
-      overflow: visible;
-    `,
-    modalTokenRow: css`
-      display: flex;
-    `,
-    modalCopyToClipboardButton: css`
-      margin-left: ${theme.spacing(0.5)};
-    `,
+    modal: css({
+      width: '550px',
+    }),
+    modalTokenRow: css({
+      display: 'flex',
+    }),
+    modalCopyToClipboardButton: css({
+      marginLeft: theme.spacing(0.5),
+    }),
   };
 };

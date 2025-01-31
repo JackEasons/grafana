@@ -1,7 +1,9 @@
 ---
-aliases:
-  - /docs/grafana/latest/setup-grafana/sign-in-to-grafana/
 description: Learn how to sign in to Grafana
+labels:
+  products:
+    - enterprise
+    - oss
 title: Sign in to Grafana
 weight: 400
 ---
@@ -18,9 +20,9 @@ This topic describes how to sign in to Grafana.
 
 To sign in to Grafana for the first time, follow these steps:
 
-1. Open your web browser and go to http://localhost:3000/.
+1. Open your web browser and go to root URL specified in [Grafana configuration file]({{< relref "./configure-grafana" >}}).
 
-   Unless you have configured a different port, Grafana listens to port `3000` by default.
+   Unless you have configured Grafana differently, it is set to use `http://localhost:3000` by default.
 
 1. On the signin page, enter `admin` for username and password.
 1. Click **Sign in**.

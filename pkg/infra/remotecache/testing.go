@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/infra/db"
+	"github.com/grafana/grafana/pkg/infra/usagestats"
+	"github.com/grafana/grafana/pkg/services/secrets/fakes"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
@@ -13,7 +15,7 @@ import (
 func NewFakeStore(t *testing.T) *RemoteCache {
 	t.Helper()
 
-	opts := &setting.RemoteCacheOptions{
+	opts := &setting.RemoteCacheSettings{
 		Name:    "database",
 		ConnStr: "",
 	}
@@ -22,7 +24,7 @@ func NewFakeStore(t *testing.T) *RemoteCache {
 
 	dc, err := ProvideService(&setting.Cfg{
 		RemoteCacheOptions: opts,
-	}, sqlStore)
+	}, sqlStore, &usagestats.UsageStatsMock{}, fakes.NewFakeSecretsService())
 	require.NoError(t, err, "Failed to init remote cache for test")
 
 	return dc

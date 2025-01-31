@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import React from 'react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import configureMockStore from 'redux-mock-store';
+import { render } from 'test/test-utils';
 
 import {
   FieldConfigSource,
@@ -10,13 +10,15 @@ import {
   PanelData,
   standardEditorsRegistry,
   standardFieldConfigEditorRegistry,
+  TimeRange,
   toDataFrame,
 } from '@grafana/data';
+import { getPanelPlugin } from '@grafana/data/test/__mocks__/pluginMocks';
 import { selectors } from '@grafana/e2e-selectors';
 import { getAllOptionEditors, getAllStandardFieldConfigs } from 'app/core/components/OptionsUI/registry';
-import { getPanelPlugin } from 'app/features/plugins/__mocks__/pluginMocks';
 
-import { DashboardModel, PanelModel } from '../../state';
+import { PanelModel } from '../../state/PanelModel';
+import { createDashboardModelFixture } from '../../state/__fixtures__/dashboardFixtures';
 
 import { OptionsPaneOptions } from './OptionsPaneOptions';
 import { dataOverrideTooltipDescription, overrideRuleTooltipDescription } from './state/getOptionOverrides';
@@ -26,12 +28,6 @@ standardFieldConfigEditorRegistry.setInit(getAllStandardFieldConfigs);
 
 const mockStore = configureMockStore();
 const OptionsPaneSelector = selectors.components.PanelEditor.OptionsPane;
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useLocation: () => ({
-    pathname: 'localhost:3000/example/path',
-  }),
-}));
 
 class OptionsPaneOptionsTestScenario {
   onFieldConfigsChange = jest.fn();
@@ -41,7 +37,7 @@ class OptionsPaneOptionsTestScenario {
   panelData: PanelData = {
     series: [],
     state: LoadingState.Done,
-    timeRange: {} as any,
+    timeRange: {} as TimeRange,
   };
 
   plugin = getPanelPlugin({
@@ -88,7 +84,7 @@ class OptionsPaneOptionsTestScenario {
     options: {},
   });
 
-  dashboard = new DashboardModel({});
+  dashboard = createDashboardModelFixture();
   store = mockStore({
     dashboard: { panels: [] },
     templating: {
@@ -242,7 +238,7 @@ describe('OptionsPaneOptions', () => {
 
     scenario.render();
 
-    const thresholdsSection = screen.getByLabelText(selectors.components.OptionsGroup.group('Thresholds'));
+    const thresholdsSection = screen.getByTestId(selectors.components.OptionsGroup.group('Thresholds'));
     expect(
       within(thresholdsSection).getByLabelText(OptionsPaneSelector.fieldLabel('Thresholds CustomThresholdOption'))
     ).toBeInTheDocument();

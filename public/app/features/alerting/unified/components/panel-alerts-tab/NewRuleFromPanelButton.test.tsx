@@ -1,11 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
+import { render } from 'test/test-utils';
 
-import { logInfo } from '@grafana/runtime';
-import { DashboardModel, PanelModel } from 'app/features/dashboard/state';
+import { PanelModel } from 'app/features/dashboard/state/PanelModel';
+import { createDashboardModelFixture } from 'app/features/dashboard/state/__fixtures__/dashboardFixtures';
 
-import { LogMessages } from '../../Analytics';
+import * as analytics from '../../Analytics';
 
 import { NewRuleFromPanelButton } from './NewRuleFromPanelButton';
 
@@ -17,21 +17,10 @@ jest.mock('app/types', () => {
   };
 });
 
-jest.mock('react-router-dom', () => ({
-  useLocation: () => ({
-    pathname: 'localhost:3000/example/path',
-  }),
-}));
-
-jest.mock('@grafana/runtime', () => {
-  const original = jest.requireActual('@grafana/runtime');
-  return {
-    ...original,
-    logInfo: jest.fn(),
-  };
-});
+jest.spyOn(analytics, 'logInfo');
 
 jest.mock('react-use', () => ({
+  ...jest.requireActual('react-use'),
   useAsync: () => ({ loading: false, value: {} }),
 }));
 
@@ -40,17 +29,17 @@ describe('Analytics', () => {
     const panel = new PanelModel({
       id: 123,
     });
-    const dashboard = new DashboardModel({
+    const dashboard = createDashboardModelFixture({
       id: 1,
     });
     render(<NewRuleFromPanelButton panel={panel} dashboard={dashboard} />);
 
-    const button = screen.getByText('Create alert rule from this panel');
+    const button = screen.getByText('New alert rule');
 
     button.addEventListener('click', (event) => event.preventDefault(), false);
 
     await userEvent.click(button);
 
-    expect(logInfo).toHaveBeenCalledWith(LogMessages.alertRuleFromPanel);
+    expect(analytics.logInfo).toHaveBeenCalledWith(analytics.LogMessages.alertRuleFromPanel);
   });
 });

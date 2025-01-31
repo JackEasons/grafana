@@ -1,4 +1,5 @@
 import { LoadingState } from './data';
+import { MetricFindValue } from './datasource';
 import { DataSourceRef } from './query';
 
 export type VariableType = TypedVariableModel['type'];
@@ -13,6 +14,7 @@ export interface VariableModel {
 export type TypedVariableModel =
   | QueryVariableModel
   | AdHocVariableModel
+  | GroupByVariableModel
   | ConstantVariableModel
   | DataSourceVariableModel
   | IntervalVariableModel
@@ -20,7 +22,8 @@ export type TypedVariableModel =
   | CustomVariableModel
   | UserVariableModel
   | OrgVariableModel
-  | DashboardVariableModel;
+  | DashboardVariableModel
+  | SnapshotVariableModel;
 
 export enum VariableRefresh {
   never, // removed from the UI
@@ -36,6 +39,8 @@ export enum VariableSort {
   numericalDesc,
   alphabeticalCaseInsensitiveAsc,
   alphabeticalCaseInsensitiveDesc,
+  naturalAsc,
+  naturalDesc,
 }
 
 export enum VariableHide {
@@ -48,13 +53,31 @@ export interface AdHocVariableFilter {
   key: string;
   operator: string;
   value: string;
-  condition: string;
+  values?: string[];
+  /** @deprecated  */
+  condition?: string;
 }
 
 export interface AdHocVariableModel extends BaseVariableModel {
   type: 'adhoc';
   datasource: DataSourceRef | null;
   filters: AdHocVariableFilter[];
+  /**
+   * Filters that are always applied to the lookup of keys. Not shown in the AdhocFilterBuilder UI.
+   */
+  baseFilters?: AdHocVariableFilter[];
+  /**
+   * Static keys that override any dynamic keys from the datasource.
+   */
+  defaultKeys?: MetricFindValue[];
+  allowCustomValue?: boolean;
+}
+
+export interface GroupByVariableModel extends VariableWithOptions {
+  type: 'groupby';
+  datasource: DataSourceRef | null;
+  multi: true;
+  allowCustomValue?: boolean;
 }
 
 export interface VariableOption {
@@ -106,10 +129,11 @@ export interface VariableWithMultiSupport extends VariableWithOptions {
   multi: boolean;
   includeAll: boolean;
   allValue?: string | null;
+  allowCustomValue?: boolean;
 }
 
 export interface VariableWithOptions extends BaseVariableModel {
-  current: VariableOption;
+  current: VariableOption | Record<string, never>;
   options: VariableOption[];
   query: string;
 }
@@ -144,10 +168,11 @@ export interface SystemVariable<TProps extends { toString: () => string }> exten
   current: { value: TProps };
 }
 
-export interface BaseVariableModel extends VariableModel {
+export interface BaseVariableModel {
   name: string;
   label?: string;
   id: string;
+  type: VariableType;
   rootStateKey: string | null;
   global: boolean;
   hide: VariableHide;
@@ -156,4 +181,10 @@ export interface BaseVariableModel extends VariableModel {
   state: LoadingState;
   error: any | null;
   description: string | null;
+  usedInRepeat?: boolean;
+}
+
+export interface SnapshotVariableModel extends VariableWithOptions {
+  type: 'snapshot';
+  query: string;
 }

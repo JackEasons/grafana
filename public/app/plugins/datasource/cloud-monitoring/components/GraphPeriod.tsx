@@ -1,7 +1,5 @@
-import React, { FunctionComponent } from 'react';
-
 import { SelectableValue } from '@grafana/data';
-import { EditorField, EditorRow } from '@grafana/experimental';
+import { EditorField, EditorRow } from '@grafana/plugin-ui';
 import { HorizontalGroup, Switch } from '@grafana/ui';
 
 import { GRAPH_PERIODS } from '../constants';
@@ -15,7 +13,7 @@ export interface Props {
   graphPeriod?: string;
 }
 
-export const GraphPeriod: FunctionComponent<Props> = ({ refId, onChange, graphPeriod, variableOptionGroup }) => {
+export const GraphPeriod = ({ refId, onChange, graphPeriod, variableOptionGroup }: Props) => {
   return (
     <EditorRow>
       <EditorField

@@ -43,17 +43,15 @@ export function compareDataFrameStructures(a: DataFrame, b: DataFrame, skipConfi
       return false;
     }
 
-    const cfgA = fA.config as any;
-    const cfgB = fB.config as any;
+    const cfgA = fA.config;
+    const cfgB = fB.config;
 
-    let aKeys = Object.keys(cfgA);
-    let bKeys = Object.keys(cfgB);
-
-    if (aKeys.length !== bKeys.length) {
+    if (Object.keys(cfgA).length !== Object.keys(cfgB).length) {
       return false;
     }
 
-    for (const key of aKeys) {
+    let key: keyof typeof cfgA;
+    for (key in cfgA) {
       if (!(key in cfgB)) {
         return false;
       }
@@ -106,15 +104,12 @@ export function shallowCompare<T extends {}>(a: T, b: T, cmp: Cmp = defaultCmp) 
     return true;
   }
 
-  const aKeys = Object.keys(a);
-  const bKeys = Object.keys(b);
-
-  if (aKeys.length !== bKeys.length) {
+  if (Object.keys(a).length !== Object.keys(b).length) {
     return false;
   }
 
-  for (let key of aKeys) {
-    //@ts-ignore
+  let key: keyof typeof a;
+  for (key in a) {
     if (!cmp(a[key], b[key])) {
       return false;
     }

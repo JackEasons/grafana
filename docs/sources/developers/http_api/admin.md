@@ -1,7 +1,7 @@
 ---
 aliases:
-  - /docs/grafana/latest/developers/http_api/admin/
-  - /docs/grafana/latest/http_api/admin/
+  - ../../http_api/admin/
+canonical: /docs/grafana/latest/developers/http_api/admin/
 description: Grafana Admin HTTP API
 keywords:
   - grafana
@@ -9,14 +9,24 @@ keywords:
   - documentation
   - api
   - admin
+labels:
+  products:
+    - enterprise
+    - oss
 title: 'Admin HTTP API '
 ---
 
 # Admin API
 
-The Admin HTTP API does not currently work with an API Token. API Tokens are currently only linked to an organization and an organization role. They cannot be given
-the permission of server admin, only users can be given that permission. So in order to use these API calls you will have to use Basic Auth and the Grafana user
-must have the Grafana Admin permission. (The default admin user is called `admin` and has permission to use this API.)
+{{< admonition type="caution" >}}
+You can't authenticate to the Admin HTTP API with service account tokens.
+Service accounts are limited to an organization and an organization role.
+They can't be granted [Grafana server administrator permissions](/docs/grafana/<GRAFANA_VERSION>/administration/roles-and-permissions/#grafana-server-administrators).
+
+To use these API endpoints you have to use Basic authentication and the Grafana user must have the Grafana server administrator permission.
+
+The `admin` user that Grafana is provisioned with by default has permissions to use these API endpoints.
+{{< /admonition >}}
 
 > If you are running Grafana Enterprise, for some endpoints you'll need to have specific permissions. Refer to [Role-based access control permissions]({{< relref "../../administration/roles-and-permissions/access-control/custom-role-actions-scopes/" >}}) for more information.
 
@@ -148,6 +158,7 @@ Content-Type: application/json
   "server":{
     "cert_file":"",
     "cert_key":"",
+    "certs_watch_interval": "0s",
     "domain":"mygraf.com",
     "enable_gzip":"false",
     "enforce_domain":"false",
@@ -192,7 +203,9 @@ Content-Type: application/json
 
 `PUT /api/admin/settings`
 
-> **Note:** Available in Grafana Enterprise v8.0+.
+{{% admonition type="note" %}}
+Available in Grafana Enterprise v8.0+.
+{{% /admonition %}}
 
 Updates / removes and reloads database settings. You must provide either `updates`, `removals` or both.
 
@@ -467,43 +480,6 @@ Content-Type: application/json
 {"message": "User deleted"}
 ```
 
-## Pause all alerts
-
-`POST /api/admin/pause-all-alerts`
-
-> **Note:** This API is relevant for the [legacy dashboard alerts](https://grafana.com/docs/grafana/v8.5/alerting/old-alerting/) only. For default alerting, use silences to stop alerts from being delivered.
-
-Only works with Basic Authentication (username and password). See [introduction](http://docs.grafana.org/http_api/admin/#admin-api) for an explanation.
-
-**Example Request**:
-
-```http
-POST /api/admin/pause-all-alerts HTTP/1.1
-Accept: application/json
-Content-Type: application/json
-
-{
-  "paused": true
-}
-```
-
-JSON Body schema:
-
-- **paused** – If true then all alerts are to be paused, false unpauses all alerts.
-
-**Example Response**:
-
-```http
-HTTP/1.1 200
-Content-Type: application/json
-
-{
-  "state":   "Paused",
-  "message": "alert paused",
-  "alertsAffected": 1
-}
-```
-
 ## Auth tokens for User
 
 `GET /api/admin/users/:id/auth-tokens`
@@ -646,8 +622,6 @@ Content-Type: application/json
 
 `POST /api/admin/provisioning/plugins/reload`
 
-`POST /api/admin/provisioning/notifications/reload`
-
 `POST /api/admin/provisioning/access-control/reload`
 
 `POST /api/admin/provisioning/alerting/reload`
@@ -668,7 +642,6 @@ See note in the [introduction]({{< ref "#admin-api" >}}) for an explanation.
 | provisioning:reload | provisioners:dashboards    | dashboards       |
 | provisioning:reload | provisioners:datasources   | datasources      |
 | provisioning:reload | provisioners:plugins       | plugins          |
-| provisioning:reload | provisioners:notifications | notifications    |
 | provisioning:reload | provisioners:alerting      | alerting         |
 
 **Example Request**:

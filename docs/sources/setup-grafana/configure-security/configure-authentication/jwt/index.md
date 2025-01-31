@@ -1,10 +1,14 @@
 ---
 aliases:
-  - /docs/grafana/latest/auth/jwt/
-  - /docs/grafana/latest/setup-grafana/configure-security/configure-authentication/jwt/
+  - ../../../auth/jwt/
 description: Grafana JWT Authentication
-title: Configure JWT Authentication
-weight: 500
+labels:
+  products:
+    - enterprise
+    - oss
+menuTitle: JWT
+title: Configure JWT authentication
+weight: 1600
 ---
 
 # Configure JWT authentication
@@ -19,11 +23,15 @@ This method of authentication is useful for integrating with other systems that
 use JWKS but can't directly integrate with Grafana or if you want to use pass-through
 authentication in an app embedding Grafana.
 
+{{% admonition type="note" %}}
+Grafana does not currently support refresh tokens.
+{{% /admonition %}}
+
 ## Enable JWT
 
 To use JWT authentication:
 
-1. Enable JWT in the [main config file]({{< relref "../../../configure-grafana/" >}}).
+1. Enable JWT in the [main config file]({{< relref "../../../configure-grafana" >}}).
 1. Specify the header name that contains a token.
 
 ```ini
@@ -37,7 +45,7 @@ header_name = X-JWT-Assertion
 
 ## Configure login claim
 
-To identify the user, some of the claims needs to be selected as a login info. You could specify a claim that contains either a username or an email of the Grafana user.
+To identify the user, some of the claims needs to be selected as a login info. The subject claim called `"sub"` is mandatory and needs to identify the principal that is the subject of the JWT.
 
 Typically, the subject claim called `"sub"` would be used as a login but it might also be set to some application specific claim.
 
@@ -57,19 +65,49 @@ email_claim = sub
 
 If `auto_sign_up` is enabled, then the `sub` claim is used as the "external Auth ID". The `name` claim is used as the user's full name if it is present.
 
+Additionally, if the login username or the email claims are nested inside the JWT structure, you can specify the path to the attributes using the `username_attribute_path` and `email_attribute_path` configuration options using the JMESPath syntax.
+
+JWT structure example.
+
+```json
+{
+  "user": {
+    "UID": "1234567890",
+    "name": "John Doe",
+    "username": "johndoe",
+    "emails": ["personal@email.com", "professional@email.com"]
+  }
+}
+```
+
+```ini
+# [auth.jwt]
+# ...
+
+# Specify a nested attribute to use as a username to sign in.
+username_attribute_path = user.username # user's login is johndoe
+
+# Specify a nested attribute to use as an email to sign in.
+email_attribute_path = user.emails[1] # user's email is professional@email.com
+```
+
 ## Iframe Embedding
 
-If you want to embed Grafana in an iframe while maintaning user identity and role checks,
+If you want to embed Grafana in an iframe while maintaining user identity and role checks,
 you can use JWT authentication to authenticate the iframe.
 
-> **Note**: For Grafana Cloud, or scenarios where verifying viewer identity is not required,
-> embed [public dashboards]({{< relref "../../../../dashboards/dashboard-public" >}}).
+{{% admonition type="note" %}}
+For Grafana Cloud, or scenarios where verifying viewer identity is not required,
+embed [shared dashboards](https://grafana.com/docs/grafana/<GRAFANA_VERSION>/dashboards/share-dashboards-panels/shared-dashboards/).
+{{% /admonition %}}
 
 In this scenario, you will need to configure Grafana to accept a JWT
 provided in the HTTP header and a reverse proxy should rewrite requests to the
 Grafana instance to include the JWT in the request's headers.
 
-> **Note**: For embedding to work, you must enable `allow_embedding` in the [security section]({{< relref "../../../configure-grafana#allow_embedding" >}}). This setting is not available in Grafana Cloud.
+{{% admonition type="note" %}}
+For embedding to work, you must enable `allow_embedding` in the [security section]({{< relref "../../../configure-grafana#allow_embedding" >}}). This setting is not available in Grafana Cloud.
+{{% /admonition %}}
 
 In a scenario where it is not possible to rewrite the request headers you
 can use URL login instead.
@@ -81,8 +119,10 @@ can use URL login instead.
 
 **Note**: You need to have enabled JWT before setting this setting see section Enabled JWT
 
-> **Warning**: this can lead to JWTs being exposed in logs and possible session hijacking if the server is not
-> using HTTP over TLS.
+{{% admonition type="warning" %}}
+this can lead to JWTs being exposed in logs and possible session hijacking if the server is not
+using HTTP over TLS.
+{{% /admonition %}}
 
 ```ini
 # [auth.jwt]
@@ -119,6 +159,8 @@ jwk_set_url = https://your-auth-provider.example.com/.well-known/jwks.json
 cache_ttl = 60m
 ```
 
+> **Note**: If the JWKS endpoint includes cache control headers and the value is less than the configured `cache_ttl`, then the cache control header value is used instead. If the cache_ttl is not set, no caching is performed. `no-store` and `no-cache` cache control headers are ignored.
+
 ### Verify token using a JSON Web Key Set loaded from JSON file
 
 Key set in the same format as in JWKS endpoint but located on disk.
@@ -135,11 +177,18 @@ PEM-encoded key file in PKIX, PKCS #1, PKCS #8 or SEC 1 format.
 key_file = /path/to/key.pem
 ```
 
+If the JWT token's header specifies a `kid` (Key ID), then the Key ID must be set using the `key_id` configuration option.
+
+```ini
+key_id = my-key-id
+```
+
 ## Validate claims
 
 By default, only `"exp"`, `"nbf"` and `"iat"` claims are validated.
 
-You might also want to validate that other claims are really what you expect them to be.
+Consider validating that other claims match your expectations by using the `expect_claims` configuration option.
+Token claims must match exactly the values set here.
 
 ```ini
 # This can be seen as a required "subset" of a JWT Claims Set.
@@ -148,9 +197,10 @@ expect_claims = {"iss": "https://your-token-issuer", "your-custom-claim": "foo"}
 
 ## Roles
 
-Grafana checks for the presence of a role using the [JMESPath](http://jmespath.org/examples.html) specified via the `role_attribute_path` configuration option. The JMESPath is applied to JWT token claims. The result after evaluation of the `role_attribute_path` JMESPath expression should be a valid Grafana role, for example, `Viewer`, `Editor` or `Admin`.
+Grafana checks for the presence of a role using the [JMESPath](http://jmespath.org/examples.html) specified via the `role_attribute_path` configuration option. The JMESPath is applied to JWT token claims. The result after evaluation of the `role_attribute_path` JMESPath expression should be a valid Grafana role, for example, `None`, `Viewer`, `Editor` or `Admin`.
 
-The organization that the role is assigned to can be configured using the `X-Grafana-Org-Id` header.
+To assign the role to a specific organization include the `X-Grafana-Org-Id` header along with your JWT when making API requests to Grafana.
+To learn more about the header, please refer to the [documentation]({{< relref "../../../../developers/http_api#x-grafana-org-id-header" >}}).
 
 ### JMESPath examples
 
@@ -162,7 +212,7 @@ If the `role_attribute_path` property does not return a role, then the user is a
 
 **Basic example:**
 
-In the following example user will get `Editor` as role when authenticating. The value of the property `role` will be the resulting role if the role is a proper Grafana role, i.e. `Viewer`, `Editor` or `Admin`.
+In the following example user will get `Editor` as role when authenticating. The value of the property `role` will be the resulting role if the role is a proper Grafana role, i.e. `None`, `Viewer`, `Editor` or `Admin`.
 
 Payload:
 
@@ -210,3 +260,14 @@ role_attribute_path = contains(info.roles[*], 'admin') && 'Admin' || contains(in
 ### Grafana Admin Role
 
 If the `role_attribute_path` property returns a `GrafanaAdmin` role, Grafana Admin is not assigned by default, instead the `Admin` role is assigned. To allow `Grafana Admin` role to be assigned set `allow_assign_grafana_admin = true`.
+
+### Skip organization role mapping
+
+To skip the assignment of roles and permissions upon login via JWT and handle them via other mechanisms like the user interface, we can skip the organization role synchronization with the following configuration.
+
+```ini
+[auth.jwt]
+# ...
+
+skip_org_role_sync = true
+```

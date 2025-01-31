@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/preferences/some-tasks-require-permissions/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Some tasks require permissions
 ---
 

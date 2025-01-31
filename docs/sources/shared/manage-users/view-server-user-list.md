@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/manage-users/view-server-user-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: View user list as server admin
 ---
 

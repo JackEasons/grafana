@@ -42,7 +42,7 @@ func (c *defaultMuteTimesProvisioner) Provision(ctx context.Context,
 					cache[muteTiming.OrgID][interval.Name] = interval
 				}
 			}
-			muteTiming.MuteTime.Provenance = models.ProvenanceFile
+			muteTiming.MuteTime.Provenance = definitions.Provenance(models.ProvenanceFile)
 			if _, exists := cache[muteTiming.OrgID][muteTiming.MuteTime.Name]; exists {
 				_, err := c.muteTimingService.UpdateMuteTiming(ctx, muteTiming.MuteTime, muteTiming.OrgID)
 				if err != nil {
@@ -63,7 +63,7 @@ func (c *defaultMuteTimesProvisioner) Unprovision(ctx context.Context,
 	files []*AlertingFile) error {
 	for _, file := range files {
 		for _, deleteMuteTime := range file.DeleteMuteTimes {
-			err := c.muteTimingService.DeleteMuteTiming(ctx, deleteMuteTime.Name, deleteMuteTime.OrgID)
+			err := c.muteTimingService.DeleteMuteTiming(ctx, deleteMuteTime.Name, deleteMuteTime.OrgID, definitions.Provenance(models.ProvenanceFile), "")
 			if err != nil {
 				return err
 			}

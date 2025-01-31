@@ -1,18 +1,14 @@
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
-
-import { ValuePicker } from '@grafana/ui';
+import { Meta, StoryFn } from '@storybook/react';
 
 import { getAvailableIcons } from '../../types';
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
 import { generateOptions } from '../Select/mockOptions';
 
+import { ValuePicker } from './ValuePicker';
 import mdx from './ValuePicker.mdx';
 
-const meta: ComponentMeta<typeof ValuePicker> = {
+const meta: Meta<typeof ValuePicker> = {
   title: 'Pickers and Editors/ValuePicker',
   component: ValuePicker,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -44,7 +40,7 @@ const meta: ComponentMeta<typeof ValuePicker> = {
 };
 const options = generateOptions();
 
-export const Simple: ComponentStory<typeof ValuePicker> = (args) => {
+export const Simple: StoryFn<typeof ValuePicker> = (args) => {
   return (
     <div style={{ width: '200px' }}>
       <ValuePicker {...args} options={options} onChange={(v) => console.log(v)} />

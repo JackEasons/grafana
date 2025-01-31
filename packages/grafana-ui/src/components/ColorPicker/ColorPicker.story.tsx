@@ -1,21 +1,17 @@
 import { action } from '@storybook/addon-actions';
-import { useArgs } from '@storybook/client-api';
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
+import { useArgs } from '@storybook/preview-api';
+import { Meta, StoryFn } from '@storybook/react';
 
-import { SeriesColorPicker, ColorPicker } from '@grafana/ui';
+import { useStyles2 } from '../../themes/ThemeContext';
+import { clearButtonStyles } from '../Button';
 
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
-import { renderComponentWithTheme } from '../../utils/storybook/withTheme';
-
+import { ColorPicker, SeriesColorPicker } from './ColorPicker';
 import mdx from './ColorPicker.mdx';
 import { ColorPickerInput } from './ColorPickerInput';
 
-const meta: ComponentMeta<typeof ColorPicker> = {
+const meta: Meta<typeof ColorPicker> = {
   title: 'Pickers and Editors/ColorPicker',
   component: ColorPicker,
-  subcomponents: { SeriesColorPicker, ColorPickerInput },
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -30,50 +26,81 @@ const meta: ComponentMeta<typeof ColorPicker> = {
   },
 };
 
-export const Basic: ComponentStory<typeof ColorPicker> = ({ color, enableNamedColors }) => {
+export const Basic: StoryFn<typeof ColorPicker> = ({ color, enableNamedColors }) => {
   const [, updateArgs] = useArgs();
-  return renderComponentWithTheme(ColorPicker, {
-    enableNamedColors,
-    color,
-    onChange: (color: string) => {
-      action('Color changed')(color);
-      updateArgs({ color });
-    },
-  });
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+      <ColorPicker
+        enableNamedColors={enableNamedColors}
+        color={color}
+        onChange={(color: string) => {
+          action('Color changed')(color);
+          updateArgs({ color });
+        }}
+      />
+    </div>
+  );
 };
 
-export const SeriesPicker: ComponentStory<typeof SeriesColorPicker> = ({ color, enableNamedColors }) => {
+export const SeriesPicker: StoryFn<typeof SeriesColorPicker> = ({ color, enableNamedColors }) => {
   const [, updateArgs] = useArgs();
   return (
-    <SeriesColorPicker
+    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+      <SeriesColorPicker
+        enableNamedColors={enableNamedColors}
+        yaxis={1}
+        onToggleAxis={() => {}}
+        color={color}
+        onChange={(color) => {
+          action('Color changed')(color);
+          updateArgs({ color });
+        }}
+      />
+    </div>
+  );
+};
+
+export const CustomTrigger: StoryFn<typeof ColorPicker> = ({ color, enableNamedColors }) => {
+  const [, updateArgs] = useArgs();
+  const clearButton = useStyles2(clearButtonStyles);
+  return (
+    <ColorPicker
       enableNamedColors={enableNamedColors}
-      yaxis={1}
-      onToggleAxis={() => {}}
       color={color}
-      onChange={(color) => {
+      onChange={(color: string) => {
         action('Color changed')(color);
         updateArgs({ color });
       }}
     >
       {({ ref, showColorPicker, hideColorPicker }) => (
-        <div ref={ref} onMouseLeave={hideColorPicker} onClick={showColorPicker} style={{ color, cursor: 'pointer' }}>
+        <button
+          type="button"
+          ref={ref}
+          onMouseLeave={hideColorPicker}
+          onClick={showColorPicker}
+          style={{ color }}
+          className={clearButton}
+        >
           Open color picker
-        </div>
+        </button>
       )}
-    </SeriesColorPicker>
+    </ColorPicker>
   );
 };
 
-export const Input: ComponentStory<typeof ColorPickerInput> = ({ color }) => {
+export const Input: StoryFn<typeof ColorPickerInput> = ({ color }) => {
   const [, updateArgs] = useArgs();
   return (
-    <ColorPickerInput
-      value={color}
-      onChange={(color) => {
-        action('Color changed')(color);
-        updateArgs({ color });
-      }}
-    />
+    <div style={{ minHeight: '100dvh', display: 'grid', placeContent: 'center' }}>
+      <ColorPickerInput
+        value={color}
+        onChange={(color) => {
+          action('Color changed')(color);
+          updateArgs({ color });
+        }}
+      />
+    </div>
   );
 };
 

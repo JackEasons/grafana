@@ -1,9 +1,9 @@
-import { systemDateFormats } from '../datetime';
-import { createTheme } from '../themes';
-import { FieldConfig, FieldType, ThresholdsMode } from '../types';
+import { systemDateFormats } from '../datetime/formats';
+import { createTheme } from '../themes/createTheme';
+import { FieldConfig, FieldType } from '../types/dataFrame';
 import { DisplayProcessor, DisplayValue } from '../types/displayValue';
+import { ThresholdsMode } from '../types/thresholds';
 import { MappingType, ValueMapping } from '../types/valueMapping';
-import { ArrayVector } from '../vector';
 
 import { getDisplayProcessor, getRawDisplayProcessor } from './displayProcessor';
 
@@ -17,11 +17,12 @@ function getDisplayProcessorFromConfig(config: FieldConfig, fieldType: FieldType
   });
 }
 
-function assertSame(input: any, processors: DisplayProcessor[], match: DisplayValue) {
+function assertSame(input: unknown, processors: DisplayProcessor[], match: DisplayValue) {
   processors.forEach((processor) => {
     const value = processor(input);
-    for (const key of Object.keys(match)) {
-      expect((value as any)[key]).toEqual((match as any)[key]);
+    let key: keyof typeof match;
+    for (key in match) {
+      expect(value[key]).toEqual(match[key]);
     }
   });
 }
@@ -545,7 +546,7 @@ describe('Date display options', () => {
       field: {
         type: FieldType.time,
         config: {},
-        values: new ArrayVector([Date.parse('2020-08-01T08:48:43.783337Z'), Date.parse('2020-08-01T08:49:15.123456Z')]),
+        values: [Date.parse('2020-08-01T08:48:43.783337Z'), Date.parse('2020-08-01T08:49:15.123456Z')],
       },
       theme: createTheme(),
     });
@@ -559,7 +560,7 @@ describe('Date display options', () => {
       field: {
         type: FieldType.time,
         config: {},
-        values: new ArrayVector([Date.parse('2020-08-01T08:49:15.123456Z'), Date.parse('2020-08-01T08:43:43.783337Z')]),
+        values: [Date.parse('2020-08-01T08:49:15.123456Z'), Date.parse('2020-08-01T08:43:43.783337Z')],
       },
       theme: createTheme(),
     });
@@ -575,7 +576,7 @@ describe('Date display options', () => {
         config: {
           unit: 'time:YYYY-MM-DD HH:mm',
         },
-        values: new ArrayVector([Date.parse('2020-08-01T08:48:43.783337Z'), Date.parse('2020-08-01T08:49:15.123456Z')]),
+        values: [Date.parse('2020-08-01T08:48:43.783337Z'), Date.parse('2020-08-01T08:49:15.123456Z')],
       },
       theme: createTheme(),
     });

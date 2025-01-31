@@ -1,218 +1,140 @@
-import { css } from '@emotion/css';
-import React, { FC, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
 
-import { GrafanaTheme2, urlUtil } from '@grafana/data';
-import { config } from '@grafana/runtime';
-import {
-  Button,
-  ClipboardButton,
-  ConfirmModal,
-  HorizontalGroup,
-  LinkButton,
-  Tooltip,
-  useStyles2,
-  useTheme2,
-} from '@grafana/ui';
-import { useAppNotification } from 'app/core/copy/appNotification';
-import { useMediaQueryChange } from 'app/core/hooks/useMediaQueryChange';
+import { LinkButton, Stack } from '@grafana/ui';
+import { Trans } from 'app/core/internationalization';
+import AlertRuleMenu from 'app/features/alerting/unified/components/rule-viewer/AlertRuleMenu';
+import { useDeleteModal } from 'app/features/alerting/unified/components/rule-viewer/DeleteModal';
+import { INSTANCES_DISPLAY_LIMIT } from 'app/features/alerting/unified/components/rules/RuleDetails';
+import SilenceGrafanaRuleDrawer from 'app/features/alerting/unified/components/silences/SilenceGrafanaRuleDrawer';
+import { useRulesFilter } from 'app/features/alerting/unified/hooks/useFilteredRules';
 import { useDispatch } from 'app/types';
-import { CombinedRule, RulesSource } from 'app/types/unified-alerting';
+import { CombinedRule, RuleIdentifier, RulesSource } from 'app/types/unified-alerting';
 
-import { useIsRuleEditable } from '../../hooks/useIsRuleEditable';
-import { deleteRuleAction } from '../../state/actions';
-import { getRulesSourceName, isCloudRulesSource } from '../../utils/datasource';
+import { AlertRuleAction, useAlertRuleAbility } from '../../hooks/useAbilities';
+import { fetchPromAndRulerRulesAction } from '../../state/actions';
+import { GRAFANA_RULES_SOURCE_NAME, getRulesSourceName } from '../../utils/datasource';
+import { groupIdentifier } from '../../utils/groupIdentifier';
 import { createViewLink } from '../../utils/misc';
 import * as ruleId from '../../utils/rule-id';
-import { isFederatedRuleGroup, isGrafanaRulerRule } from '../../utils/rules';
+import { isGrafanaAlertingRule, isGrafanaRulerRule } from '../../utils/rules';
+import { createRelativeUrl } from '../../utils/url';
+
+import { RedirectToCloneRule } from './CloneRule';
 
 export const matchesWidth = (width: number) => window.matchMedia(`(max-width: ${width}px)`).matches;
 
 interface Props {
   rule: CombinedRule;
   rulesSource: RulesSource;
-}
-function DontShowIfSmallDevice({ children }: { children: JSX.Element | string }) {
-  const theme = useTheme2();
-  const smBreakpoint = theme.breakpoints.values.xxl;
-  const [isSmallScreen, setIsSmallScreen] = useState(matchesWidth(smBreakpoint));
-  const style = useStyles2(getStyles);
-
-  useMediaQueryChange({
-    breakpoint: smBreakpoint,
-    onChange: (e) => {
-      setIsSmallScreen(e.matches);
-    },
-  });
-
-  if (isSmallScreen) {
-    return null;
-  } else {
-    return <div className={style.buttonText}>{children}</div>;
-  }
+  /**
+   * Should we show the buttons in a "compact" state?
+   * i.e. without text and using smaller button sizes
+   */
+  compact?: boolean;
+  showViewButton?: boolean;
 }
 
-export const RuleActionsButtons: FC<Props> = ({ rule, rulesSource }) => {
+/**
+ * **Action** buttons to show for an alert rule - e.g. "View", "Edit", "More..."
+ */
+export const RuleActionsButtons = ({ compact, showViewButton, rule, rulesSource }: Props) => {
   const dispatch = useDispatch();
-  const location = useLocation();
-  const notifyApp = useAppNotification();
-  const style = useStyles2(getStyles);
-  const { namespace, group, rulerRule } = rule;
-  const [ruleToDelete, setRuleToDelete] = useState<CombinedRule>();
 
-  const rulesSourceName = getRulesSourceName(rulesSource);
+  const redirectToListView = compact ? false : true;
+  const [deleteModal, showDeleteModal] = useDeleteModal(redirectToListView);
+
+  const [showSilenceDrawer, setShowSilenceDrawer] = useState<boolean>(false);
+
+  const [redirectToClone, setRedirectToClone] = useState<
+    { identifier: RuleIdentifier; isProvisioned: boolean } | undefined
+  >(undefined);
+
+  const { namespace, group, rulerRule } = rule;
+  const { hasActiveFilters } = useRulesFilter();
 
   const isProvisioned = isGrafanaRulerRule(rule.rulerRule) && Boolean(rule.rulerRule.grafana_alert.provenance);
 
+  const [editRuleSupported, editRuleAllowed] = useAlertRuleAbility(rule, AlertRuleAction.Update);
+
+  const canEditRule = editRuleSupported && editRuleAllowed;
+
   const buttons: JSX.Element[] = [];
+  const buttonSize = compact ? 'sm' : 'md';
 
-  const isFederated = isFederatedRuleGroup(group);
-  const { isEditable, isRemovable } = useIsRuleEditable(rulesSourceName, rulerRule);
-  const returnTo = location.pathname + location.search;
-  const isViewMode = inViewMode(location.pathname);
+  const sourceName = getRulesSourceName(rulesSource);
 
-  const deleteRule = () => {
-    if (ruleToDelete && ruleToDelete.rulerRule) {
-      const identifier = ruleId.fromRulerRule(
-        getRulesSourceName(ruleToDelete.namespace.rulesSource),
-        ruleToDelete.namespace.name,
-        ruleToDelete.group.name,
-        ruleToDelete.rulerRule
-      );
+  const identifier = ruleId.fromCombinedRule(sourceName, rule);
+  const groupId = groupIdentifier.fromCombinedRule(rule);
 
-      dispatch(deleteRuleAction(identifier, { navigateTo: isViewMode ? '/alerting/list' : undefined }));
-      setRuleToDelete(undefined);
-    }
-  };
-
-  const buildShareUrl = () => {
-    if (isCloudRulesSource(rulesSource)) {
-      const { appUrl, appSubUrl } = config;
-      const baseUrl = appSubUrl !== '' ? `${appUrl}${appSubUrl}/` : config.appUrl;
-      const ruleUrl = `${encodeURIComponent(rulesSource.name)}/${encodeURIComponent(rule.name)}`;
-      return `${baseUrl}alerting/${ruleUrl}/find`;
-    }
-
-    return window.location.href.split('?')[0];
-  };
-
-  if (!isViewMode) {
+  if (showViewButton) {
     buttons.push(
-      <Tooltip placement="top" content={'View'}>
-        <LinkButton
-          className={style.button}
-          size="xs"
-          key="view"
-          variant="secondary"
-          icon="eye"
-          href={createViewLink(rulesSource, rule, returnTo)}
-        >
-          <DontShowIfSmallDevice>View</DontShowIfSmallDevice>
-        </LinkButton>
-      </Tooltip>
+      <LinkButton
+        title="View"
+        size={buttonSize}
+        key="view"
+        variant="secondary"
+        icon="eye"
+        href={createViewLink(rulesSource, rule)}
+      >
+        <Trans i18nKey="common.view">View</Trans>
+      </LinkButton>
     );
   }
 
-  if (isEditable && rulerRule && !isFederated && !isProvisioned) {
-    const sourceName = getRulesSourceName(rulesSource);
+  if (rulerRule && canEditRule) {
     const identifier = ruleId.fromRulerRule(sourceName, namespace.name, group.name, rulerRule);
 
-    const editURL = urlUtil.renderUrl(
-      `${config.appSubUrl}/alerting/${encodeURIComponent(ruleId.stringifyIdentifier(identifier))}/edit`,
-      {
-        returnTo,
-      }
-    );
-
-    if (isViewMode) {
-      buttons.push(
-        <ClipboardButton
-          key="copy"
-          icon="copy"
-          onClipboardError={(copiedText) => {
-            notifyApp.error('Error while copying URL', copiedText);
-          }}
-          className={style.button}
-          size="sm"
-          getText={buildShareUrl}
-        >
-          Copy link to rule
-        </ClipboardButton>
-      );
-    }
+    const editURL = createRelativeUrl(`/alerting/${encodeURIComponent(ruleId.stringifyIdentifier(identifier))}/edit`);
 
     buttons.push(
-      <Tooltip placement="top" content={'Edit'}>
-        <LinkButton className={style.button} size="xs" key="edit" variant="secondary" icon="pen" href={editURL}>
-          <DontShowIfSmallDevice>Edit</DontShowIfSmallDevice>
-        </LinkButton>
-      </Tooltip>
+      <LinkButton title="Edit" size={buttonSize} key="edit" variant="secondary" icon="pen" href={editURL}>
+        <Trans i18nKey="common.edit">Edit</Trans>
+      </LinkButton>
     );
   }
 
-  if (isRemovable && rulerRule && !isFederated && !isProvisioned) {
-    buttons.push(
-      <Tooltip placement="top" content={'Delete'}>
-        <Button
-          className={style.button}
-          size="xs"
-          type="button"
-          key="delete"
-          variant="secondary"
-          icon="trash-alt"
-          onClick={() => setRuleToDelete(rule)}
-        >
-          <DontShowIfSmallDevice>Delete</DontShowIfSmallDevice>
-        </Button>
-      </Tooltip>
-    );
+  if (!rule.promRule) {
+    return null;
   }
 
-  if (buttons.length) {
-    return (
-      <>
-        <div className={style.wrapper}>
-          <HorizontalGroup width="auto">
-            {buttons.length ? buttons.map((button, index) => <div key={index}>{button}</div>) : <div />}
-          </HorizontalGroup>
-        </div>
-        {!!ruleToDelete && (
-          <ConfirmModal
-            isOpen={true}
-            title="Delete rule"
-            body="Deleting this rule will permanently remove it from your alert rule list. Are you sure you want to delete this rule?"
-            confirmText="Yes, delete"
-            icon="exclamation-triangle"
-            onConfirm={deleteRule}
-            onDismiss={() => setRuleToDelete(undefined)}
-          />
-        )}
-      </>
-    );
-  }
-
-  return null;
+  return (
+    <Stack gap={1} alignItems="center" wrap="nowrap">
+      {buttons}
+      <AlertRuleMenu
+        rulerRule={rule.rulerRule}
+        promRule={rule.promRule}
+        identifier={identifier}
+        groupIdentifier={groupId}
+        handleDelete={() => {
+          if (rule.rulerRule) {
+            const editableRuleIdentifier = ruleId.fromRulerRuleAndGroupIdentifierV2(groupId, rule.rulerRule);
+            showDeleteModal(editableRuleIdentifier, groupId);
+          }
+        }}
+        handleSilence={() => setShowSilenceDrawer(true)}
+        handleDuplicateRule={() => setRedirectToClone({ identifier, isProvisioned })}
+        onPauseChange={() => {
+          // Uses INSTANCES_DISPLAY_LIMIT + 1 here as exporting LIMIT_ALERTS from RuleList has the side effect
+          // of breaking some unrelated tests in Policy.test.tsx due to mocking approach
+          const limitAlerts = hasActiveFilters ? undefined : INSTANCES_DISPLAY_LIMIT + 1;
+          // Trigger a re-fetch of the rules table
+          // TODO: Migrate rules table functionality to RTK Query, so we instead rely
+          // on tag invalidation (or optimistic cache updates) for this
+          dispatch(fetchPromAndRulerRulesAction({ rulesSourceName: GRAFANA_RULES_SOURCE_NAME, limitAlerts }));
+        }}
+        buttonSize={buttonSize}
+      />
+      {deleteModal}
+      {isGrafanaAlertingRule(rule.rulerRule) && showSilenceDrawer && (
+        <SilenceGrafanaRuleDrawer rulerRule={rule.rulerRule} onClose={() => setShowSilenceDrawer(false)} />
+      )}
+      {redirectToClone?.identifier && (
+        <RedirectToCloneRule
+          identifier={redirectToClone.identifier}
+          isProvisioned={redirectToClone.isProvisioned}
+          onDismiss={() => setRedirectToClone(undefined)}
+        />
+      )}
+    </Stack>
+  );
 };
-
-function inViewMode(pathname: string): boolean {
-  return pathname.endsWith('/view');
-}
-
-export const getStyles = (theme: GrafanaTheme2) => ({
-  wrapper: css`
-    display: flex;
-    flex-direction: row;
-    justify-content: space-between;
-    flex-wrap: wrap;
-  `,
-  button: css`
-    height: 24px;
-    font-size: ${theme.typography.size.sm};
-    svg {
-      margin-right: 0;
-    }
-  `,
-  buttonText: css`
-    margin-left: 8px;
-  `,
-});

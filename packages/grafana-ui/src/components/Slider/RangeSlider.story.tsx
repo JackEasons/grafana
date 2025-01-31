@@ -1,9 +1,8 @@
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
+import { Meta, StoryFn } from '@storybook/react';
 
-import { RangeSlider } from '@grafana/ui';
+import { RangeSlider } from './RangeSlider';
 
-const meta: ComponentMeta<typeof RangeSlider> = {
+const meta: Meta<typeof RangeSlider> = {
   title: 'Forms/Slider/Range',
   component: RangeSlider,
   parameters: {
@@ -24,7 +23,7 @@ const meta: ComponentMeta<typeof RangeSlider> = {
   },
 };
 
-export const Basic: ComponentStory<typeof RangeSlider> = (args) => {
+export const Basic: StoryFn<typeof RangeSlider> = (args) => {
   return (
     <div style={{ width: '200px', height: '200px' }}>
       <RangeSlider {...args} value={[10, 62]} />
@@ -32,7 +31,7 @@ export const Basic: ComponentStory<typeof RangeSlider> = (args) => {
   );
 };
 
-export const Vertical: ComponentStory<typeof RangeSlider> = (args) => {
+export const Vertical: StoryFn<typeof RangeSlider> = (args) => {
   return (
     <div style={{ width: '200px', height: '200px' }}>
       <RangeSlider {...args} value={[10, 62]} orientation="vertical" />

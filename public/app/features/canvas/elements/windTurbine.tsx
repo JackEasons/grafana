@@ -1,25 +1,24 @@
 import { css } from '@emotion/css';
-import React, { FC } from 'react';
 
-import { GrafanaTheme2 } from '@grafana/data';
+import { GrafanaTheme2, LinkModel, OneClickMode } from '@grafana/data';
+import { ScalarDimensionConfig } from '@grafana/schema';
 import { useStyles2 } from '@grafana/ui';
-import { DimensionContext, ScalarDimensionConfig } from 'app/features/dimensions';
+import { DimensionContext } from 'app/features/dimensions';
 import { ScalarDimensionEditor } from 'app/features/dimensions/editors';
 
-import { CanvasElementItem, CanvasElementProps, defaultBgColor } from '../element';
+import { CanvasElementItem, CanvasElementOptions, CanvasElementProps, defaultBgColor } from '../element';
 
 interface WindTurbineData {
   rpm?: number;
+  links?: LinkModel[];
 }
 
 interface WindTurbineConfig {
   rpm?: ScalarDimensionConfig;
 }
 
-const WindTurbineDisplay: FC<CanvasElementProps<WindTurbineConfig, WindTurbineData>> = (props) => {
+const WindTurbineDisplay = ({ data }: CanvasElementProps<WindTurbineConfig, WindTurbineData>) => {
   const styles = useStyles2(getStyles);
-
-  const { data } = props;
 
   const windTurbineAnimation = `spin ${data?.rpm ? 60 / Math.abs(data.rpm) : 0}s linear infinite`;
 
@@ -65,7 +64,7 @@ const WindTurbineDisplay: FC<CanvasElementProps<WindTurbineConfig, WindTurbineDa
   );
 };
 
-export const windTurbineItem: CanvasElementItem<any, any> = {
+export const windTurbineItem: CanvasElementItem = {
   id: 'windTurbine',
   name: 'Wind Turbine',
   description: 'Spinny spinny',
@@ -89,13 +88,18 @@ export const windTurbineItem: CanvasElementItem<any, any> = {
       height: options?.placement?.height ?? 155,
       top: options?.placement?.top,
       left: options?.placement?.left,
+      rotation: options?.placement?.rotation ?? 0,
     },
+    oneClickMode: options?.oneClickMode ?? OneClickMode.Off,
+    links: options?.links ?? [],
   }),
 
   // Called when data changes
-  prepareData: (ctx: DimensionContext, cfg: WindTurbineConfig) => {
+  prepareData: (dimensionContext: DimensionContext, elementOptions: CanvasElementOptions<WindTurbineConfig>) => {
+    const windTurbineConfig = elementOptions.config;
+
     const data: WindTurbineData = {
-      rpm: cfg?.rpm ? ctx.getScalar(cfg.rpm).value() : 0,
+      rpm: windTurbineConfig?.rpm ? dimensionContext.getScalar(windTurbineConfig.rpm).value() : 0,
     };
 
     return data;
@@ -114,17 +118,16 @@ export const windTurbineItem: CanvasElementItem<any, any> = {
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  blade: css`
-    @keyframes spin {
-      from {
-        transform: rotate(0deg);
-      }
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    transform-origin: 94.663px 94.663px;
-    transform: rotate(15deg);
-  `,
+  blade: css({
+    transformOrigin: '94.663px 94.663px',
+    transform: 'rotate(15deg)',
+    '@keyframes spin': {
+      from: {
+        transform: 'rotate(0deg)',
+      },
+      to: {
+        transform: 'rotate(360deg)',
+      },
+    },
+  }),
 });

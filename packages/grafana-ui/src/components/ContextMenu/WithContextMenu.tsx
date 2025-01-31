@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import * as React from 'react';
 
 import { ContextMenu } from '../ContextMenu/ContextMenu';
 
@@ -11,7 +12,7 @@ export interface WithContextMenuProps {
   focusOnOpen?: boolean;
 }
 
-export const WithContextMenu: React.FC<WithContextMenuProps> = ({ children, renderMenuItems, focusOnOpen = true }) => {
+export const WithContextMenu = ({ children, renderMenuItems, focusOnOpen = true }: WithContextMenuProps) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   return (
@@ -21,7 +22,7 @@ export const WithContextMenu: React.FC<WithContextMenuProps> = ({ children, rend
           setIsMenuOpen(true);
           setMenuPosition({
             x: e.pageX,
-            y: e.pageY,
+            y: e.pageY - window.scrollY,
           });
         },
       })}

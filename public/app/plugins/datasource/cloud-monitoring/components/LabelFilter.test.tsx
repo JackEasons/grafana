@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
 import { openMenu, select } from 'react-select-event';
 
 import { LabelFilter } from './LabelFilter';
@@ -24,6 +23,13 @@ describe('LabelFilter', () => {
     render(<LabelFilter labels={{}} filters={filters} onChange={() => {}} variableOptionGroup={[]} />);
     expect(screen.getByText('key_1')).toBeInTheDocument();
     expect(screen.getByText('value_1')).toBeInTheDocument();
+  });
+
+  it('should render skip "protected" filters', () => {
+    const filters = ['metric.type', '=', 'value_1'];
+    render(<LabelFilter labels={{}} filters={filters} onChange={() => {}} variableOptionGroup={[]} />);
+    expect(screen.queryByText('metric.type')).not.toBeInTheDocument();
+    expect(screen.queryByText('value_1')).not.toBeInTheDocument();
   });
 
   it('can add filters', async () => {

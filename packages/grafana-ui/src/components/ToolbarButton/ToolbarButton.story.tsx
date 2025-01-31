@@ -1,19 +1,16 @@
-import { ComponentMeta, ComponentStory } from '@storybook/react';
-import React from 'react';
+import { Meta, StoryFn } from '@storybook/react';
 
 import { DashboardStoryCanvas } from '../../utils/storybook/DashboardStoryCanvas';
-import { withCenteredStory } from '../../utils/storybook/withCenteredStory';
 import { ButtonGroup } from '../Button';
-import { HorizontalGroup, VerticalGroup } from '../Layout/Layout';
+import { Stack } from '../Layout/Stack/Stack';
 
 import { ToolbarButton, ToolbarButtonVariant } from './ToolbarButton';
 import mdx from './ToolbarButton.mdx';
 import { ToolbarButtonRow } from './ToolbarButtonRow';
 
-const meta: ComponentMeta<typeof ToolbarButton> = {
+const meta: Meta<typeof ToolbarButton> = {
   title: 'Buttons/ToolbarButton',
   component: ToolbarButton,
-  decorators: [withCenteredStory],
   parameters: {
     docs: {
       page: mdx,
@@ -50,7 +47,7 @@ const meta: ComponentMeta<typeof ToolbarButton> = {
   },
 };
 
-export const BasicWithText: ComponentStory<typeof ToolbarButton> = (args) => {
+export const BasicWithText: StoryFn<typeof ToolbarButton> = (args) => {
   return (
     <ToolbarButton
       variant={args.variant}
@@ -72,7 +69,7 @@ BasicWithText.args = {
   iconOnly: false,
 };
 
-export const BasicWithIcon: ComponentStory<typeof ToolbarButton> = (args) => {
+export const BasicWithIcon: StoryFn<typeof ToolbarButton> = (args) => {
   return (
     <ToolbarButton
       variant={args.variant}
@@ -91,28 +88,30 @@ BasicWithIcon.args = {
   iconOnly: true,
 };
 
-export const Examples: ComponentStory<typeof ToolbarButton> = (args) => {
-  const variants: ToolbarButtonVariant[] = ['default', 'active', 'primary', 'destructive'];
+export const Examples: StoryFn<typeof ToolbarButton> = (args) => {
+  const variants: ToolbarButtonVariant[] = ['default', 'canvas', 'active', 'primary', 'destructive'];
 
   return (
     <DashboardStoryCanvas>
-      <VerticalGroup>
+      <Stack direction="column" gap={1.5}>
         Button states
         <ToolbarButtonRow>
-          <ToolbarButton>Just text</ToolbarButton>
-          <ToolbarButton icon="sync" tooltip="Sync" />
-          <ToolbarButton imgSrc="./grafana_icon.svg">With imgSrc</ToolbarButton>
-          <ToolbarButton icon="cloud" isOpen={true}>
+          <ToolbarButton variant="canvas">Just text</ToolbarButton>
+          <ToolbarButton variant="canvas" icon="sync" tooltip="Sync" />
+          <ToolbarButton variant="canvas" imgSrc="./grafana_icon.svg">
+            With imgSrc
+          </ToolbarButton>
+          <ToolbarButton variant="canvas" icon="cloud" isOpen={true}>
             isOpen
           </ToolbarButton>
-          <ToolbarButton icon="cloud" isOpen={false}>
+          <ToolbarButton variant="canvas" icon="cloud" isOpen={false}>
             isOpen = false
           </ToolbarButton>
         </ToolbarButtonRow>
         <br />
         disabled
         <ToolbarButtonRow>
-          <ToolbarButton icon="sync" disabled>
+          <ToolbarButton variant="canvas" icon="sync" disabled>
             Disabled
           </ToolbarButton>
         </ToolbarButtonRow>
@@ -128,19 +127,19 @@ export const Examples: ComponentStory<typeof ToolbarButton> = (args) => {
         <br />
         Wrapped in noSpacing ButtonGroup
         <ButtonGroup>
-          <ToolbarButton icon="clock-nine" tooltip="Time picker">
+          <ToolbarButton variant="active" icon="clock-nine" tooltip="Time picker">
             2020-10-02
           </ToolbarButton>
-          <ToolbarButton icon="search-minus" />
+          <ToolbarButton variant="active" icon="search-minus" />
         </ButtonGroup>
         <br />
         <ButtonGroup>
-          <ToolbarButton icon="sync" />
-          <ToolbarButton isOpen={false} narrow />
+          <ToolbarButton variant="canvas" icon="sync" />
+          <ToolbarButton variant="canvas" isOpen={false} narrow />
         </ButtonGroup>
         <br />
         Inside button group
-        <HorizontalGroup>
+        <Stack>
           <ButtonGroup>
             <ToolbarButton variant="primary" icon="sync">
               Run query
@@ -153,8 +152,8 @@ export const Examples: ComponentStory<typeof ToolbarButton> = (args) => {
             </ToolbarButton>
             <ToolbarButton isOpen={false} narrow variant="destructive" />
           </ButtonGroup>
-        </HorizontalGroup>
-      </VerticalGroup>
+        </Stack>
+      </Stack>
     </DashboardStoryCanvas>
   );
 };

@@ -1,13 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React from 'react';
-import { Provider } from 'react-redux';
+import { TestProvider } from 'test/helpers/TestProvider';
 
 import { selectors } from '@grafana/e2e-selectors';
 import { locationService } from '@grafana/runtime';
 
 import { backendSrv } from '../../core/services/backend_srv';
-import { configureStore } from '../../store/configureStore';
 
 import { PlaylistNewPage } from './PlaylistNewPage';
 import { Playlist } from './types';
@@ -24,30 +22,26 @@ jest.mock('app/core/components/TagFilter/TagFilter', () => ({
 }));
 
 function getTestContext({ name, interval, items }: Partial<Playlist> = {}) {
-  const store = configureStore();
   jest.clearAllMocks();
   const playlist = { name, items, interval } as unknown as Playlist;
-  const backendSrvMock = jest.spyOn(backendSrv, 'post');
+  const backendSrvMock = jest.spyOn(backendSrv, 'post').mockImplementation(() => Promise.resolve());
+  jest.spyOn(backendSrv, 'search').mockResolvedValue([]);
 
   const { rerender } = render(
-    <Provider store={store}>
+    <TestProvider>
       <PlaylistNewPage />
-    </Provider>
+    </TestProvider>
   );
 
   return { playlist, rerender, backendSrvMock };
 }
 
 describe('PlaylistNewPage', () => {
-  beforeEach(() => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
   describe('when mounted', () => {
-    it('then header should be correct', () => {
+    it('then header should be correct', async () => {
       getTestContext();
 
-      expect(screen.getByRole('heading', { name: /new playlist/i })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: /new playlist/i })).toBeInTheDocument();
     });
   });
 
@@ -62,6 +56,7 @@ describe('PlaylistNewPage', () => {
       await waitFor(() => expect(backendSrvMock).toHaveBeenCalledTimes(1));
       expect(backendSrvMock).toHaveBeenCalledWith('/api/playlists', {
         name: 'A new name',
+        uid: '',
         interval: '5m',
         items: [],
       });

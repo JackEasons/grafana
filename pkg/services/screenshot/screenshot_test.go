@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/services/dashboards"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/rendering"
@@ -24,10 +23,11 @@ func TestHeadlessScreenshotService(t *testing.T) {
 
 	d := dashboards.FakeDashboardService{}
 	r := rendering.NewMockService(c)
-	s := NewHeadlessScreenshotService(&d, r, prometheus.NewRegistry())
+	cfg := setting.NewCfg()
+	s := NewHeadlessScreenshotService(cfg, &d, r, prometheus.NewRegistry())
 
 	// a non-existent dashboard should return error
-	d.On("GetDashboard", mock.Anything, mock.AnythingOfType("*models.GetDashboardQuery")).Return(dashboards.ErrDashboardNotFound).Once()
+	d.On("GetDashboard", mock.Anything, mock.AnythingOfType("*dashboards.GetDashboardQuery")).Return(nil, dashboards.ErrDashboardNotFound).Once()
 	ctx := context.Background()
 	opts := ScreenshotOptions{}
 	screenshot, err := s.Take(ctx, opts)
@@ -35,28 +35,28 @@ func TestHeadlessScreenshotService(t *testing.T) {
 	assert.Nil(t, screenshot)
 
 	// should take a screenshot
-	d.On("GetDashboard", mock.Anything, mock.AnythingOfType("*models.GetDashboardQuery")).Run(func(args mock.Arguments) {
-		q := args.Get(1).(*models.GetDashboardQuery)
-		q.Result = &models.Dashboard{Id: 1, Uid: "foo", Slug: "bar", OrgId: 2}
-	}).Return(nil)
+	qResult := &dashboards.Dashboard{ID: 1, UID: "foo", Slug: "bar", OrgID: 2}
+	d.On("GetDashboard", mock.Anything, mock.AnythingOfType("*dashboards.GetDashboardQuery")).Return(qResult, nil)
 
 	renderOpts := rendering.Opts{
-		AuthOpts: rendering.AuthOpts{
-			OrgID:   2,
-			OrgRole: org.RoleAdmin,
+		CommonOpts: rendering.CommonOpts{
+			AuthOpts: rendering.AuthOpts{
+				OrgID:   2,
+				OrgRole: org.RoleAdmin,
+			},
+			TimeoutOpts: rendering.TimeoutOpts{
+				Timeout: DefaultTimeout,
+			},
+			Path:            "d-solo/foo/bar?from=now-6h&orgId=2&panelId=4&to=now-2h",
+			ConcurrentLimit: cfg.RendererConcurrentRequestLimit,
 		},
 		ErrorOpts: rendering.ErrorOpts{
 			ErrorConcurrentLimitReached: true,
 			ErrorRenderUnavailable:      true,
 		},
-		TimeoutOpts: rendering.TimeoutOpts{
-			Timeout: DefaultTimeout,
-		},
-		Width:           DefaultWidth,
-		Height:          DefaultHeight,
-		Theme:           DefaultTheme,
-		Path:            "d-solo/foo/bar?from=now-6h&orgId=2&panelId=4&to=now-2h",
-		ConcurrentLimit: setting.AlertingRenderLimit,
+		Width:  DefaultWidth,
+		Height: DefaultHeight,
+		Theme:  DefaultTheme,
 	}
 
 	opts.From = "now-6h"
@@ -64,7 +64,7 @@ func TestHeadlessScreenshotService(t *testing.T) {
 	opts.DashboardUID = "foo"
 	opts.PanelID = 4
 	r.EXPECT().
-		Render(ctx, renderOpts, nil).
+		Render(ctx, rendering.RenderPNG, renderOpts, nil).
 		Return(&rendering.RenderResult{FilePath: "panel.png"}, nil)
 	screenshot, err = s.Take(ctx, opts)
 	require.NoError(t, err)
@@ -72,7 +72,7 @@ func TestHeadlessScreenshotService(t *testing.T) {
 
 	// a timeout should return error
 	r.EXPECT().
-		Render(ctx, renderOpts, nil).
+		Render(ctx, rendering.RenderPNG, renderOpts, nil).
 		Return(nil, rendering.ErrTimeout)
 	screenshot, err = s.Take(ctx, opts)
 	assert.EqualError(t, err, fmt.Sprintf("failed to take screenshot: %s", rendering.ErrTimeout))

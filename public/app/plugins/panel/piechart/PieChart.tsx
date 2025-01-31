@@ -5,7 +5,8 @@ import { Group } from '@visx/group';
 import Pie, { PieArcDatum, ProvidedProps } from '@visx/shape/lib/shapes/Pie';
 import { useTooltip, useTooltipInPortal } from '@visx/tooltip';
 import { UseTooltipParams } from '@visx/tooltip/lib/hooks/useTooltip';
-import React, { FC, useCallback } from 'react';
+import { useCallback } from 'react';
+import * as React from 'react';
 import tinycolor from 'tinycolor2';
 
 import {
@@ -29,7 +30,7 @@ import {
 import { getTooltipContainerStyles } from '@grafana/ui/src/themes/mixins';
 import { useComponentInstanceId } from '@grafana/ui/src/utils/useComponetInstanceId';
 
-import { PieChartType, PieChartLabels } from './models.gen';
+import { PieChartType, PieChartLabels } from './panelcfg.gen';
 import { filterDisplayItems, sumDisplayItemsReducer } from './utils';
 
 /**
@@ -46,7 +47,7 @@ interface PieChartProps {
   tooltipOptions: VizTooltipOptions;
 }
 
-export const PieChart: FC<PieChartProps> = ({
+export const PieChart = ({
   fieldDisplayValues,
   pieType,
   width,
@@ -54,7 +55,7 @@ export const PieChart: FC<PieChartProps> = ({
   highlightedTitle,
   displayLabels = [],
   tooltipOptions,
-}) => {
+}: PieChartProps) => {
   const theme = useTheme2();
   const componentInstanceId = useComponentInstanceId('PieChart');
   const styles = useStyles2(getStyles);
@@ -84,7 +85,7 @@ export const PieChart: FC<PieChartProps> = ({
 
   return (
     <div className={styles.container}>
-      <svg width={layout.size} height={layout.size} ref={containerRef}>
+      <svg width={layout.size} height={layout.size} ref={containerRef} style={{ overflow: 'visible' }}>
         <Group top={layout.position} left={layout.position}>
           {colors.map((color) => {
             return (
@@ -199,7 +200,7 @@ function PieSlice({ arc, pie, highlightState, openMenu, fill, tooltip, tooltipOp
   const { eventBus } = usePanelContext();
 
   const onMouseOut = useCallback(
-    (event: any) => {
+    (event: React.MouseEvent<SVGGElement>) => {
       eventBus?.publish({
         type: DataHoverClearEvent.type,
         payload: {
@@ -215,7 +216,7 @@ function PieSlice({ arc, pie, highlightState, openMenu, fill, tooltip, tooltipOp
   );
 
   const onMouseMoveOverArc = useCallback(
-    (event: any) => {
+    (event: React.MouseEvent<SVGGElement>) => {
       eventBus?.publish({
         type: DataHoverEvent.type,
         payload: {
@@ -226,12 +227,16 @@ function PieSlice({ arc, pie, highlightState, openMenu, fill, tooltip, tooltipOp
         },
       });
 
-      const coords = localPoint(event.target.ownerSVGElement, event);
-      tooltip.showTooltip({
-        tooltipLeft: coords!.x,
-        tooltipTop: coords!.y,
-        tooltipData: getTooltipData(pie, arc, tooltipOptions),
-      });
+      const owner = event.currentTarget.ownerSVGElement;
+
+      if (owner) {
+        const coords = localPoint(owner, event);
+        tooltip.showTooltip({
+          tooltipLeft: coords!.x,
+          tooltipTop: coords!.y,
+          tooltipData: getTooltipData(pie, arc, tooltipOptions),
+        });
+      }
     },
     [eventBus, arc, tooltip, pie, tooltipOptions]
   );
@@ -245,7 +250,7 @@ function PieSlice({ arc, pie, highlightState, openMenu, fill, tooltip, tooltipOp
       onMouseMove={tooltipOptions.mode !== 'none' ? onMouseMoveOverArc : undefined}
       onMouseOut={onMouseOut}
       onClick={openMenu}
-      aria-label={selectors.components.Panels.Visualization.PieChart.svgSlice}
+      data-testid={selectors.components.Panels.Visualization.PieChart.svgSlice}
     >
       <path d={pie.path({ ...arc })!} fill={fill} stroke={theme.colors.background.primary} strokeWidth={1} />
     </g>
@@ -316,8 +321,12 @@ function getTooltipData(
   if (tooltipOptions.mode === 'multi') {
     return pie.arcs
       .filter((pa) => {
-        const field = pa.data.field;
-        return field && !field.custom?.hideFrom?.tooltip && !field.custom?.hideFrom?.viz;
+        if (tooltipOptions.hideZeros && pa.value === 0) {
+          return false;
+        }
+
+        const customConfig = pa.data.field.custom;
+        return !customConfig?.hideFrom?.tooltip && !customConfig?.hideFrom?.viz;
       })
       .map((pieArc) => {
         return {
@@ -418,28 +427,32 @@ function getSvgStyle(
 
 const getStyles = (theme: GrafanaTheme2) => {
   return {
-    container: css`
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    `,
+    container: css({
+      width: '100%',
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    }),
     svgArg: {
-      normal: css`
-        transition: all 200ms ease-in-out;
-      `,
-      highlighted: css`
-        transition: all 200ms ease-in-out;
-        transform: scale3d(1.03, 1.03, 1);
-      `,
-      deemphasized: css`
-        transition: all 200ms ease-in-out;
-        fill-opacity: 0.5;
-      `,
+      normal: css({
+        [theme.transitions.handleMotion('no-preference')]: {
+          transition: 'all 200ms ease-in-out',
+        },
+      }),
+      highlighted: css({
+        [theme.transitions.handleMotion('no-preference')]: {
+          transition: 'all 200ms ease-in-out',
+        },
+        transform: 'scale3d(1.03, 1.03, 1)',
+      }),
+      deemphasized: css({
+        [theme.transitions.handleMotion('no-preference')]: {
+          transition: 'all 200ms ease-in-out',
+        },
+        fillOpacity: 0.5,
+      }),
     },
-    tooltipPortal: css`
-      ${getTooltipContainerStyles(theme)}
-    `,
+    tooltipPortal: css(getTooltipContainerStyles(theme)),
   };
 };

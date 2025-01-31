@@ -1,7 +1,7 @@
-import { toDataFrame } from '../../dataframe';
-import { FieldType, DataTransformerConfig } from '../../types';
+import { toDataFrame } from '../../dataframe/processDataFrame';
+import { FieldType } from '../../types/dataFrame';
+import { DataTransformerConfig } from '../../types/transformations';
 import { mockTransformationsRegistry } from '../../utils/tests/mockTransformationsRegistry';
-import { ArrayVector } from '../../vector';
 import { transformDataFrame } from '../transformDataFrame';
 
 import { DataTransformerID } from './ids';
@@ -257,9 +257,9 @@ describe('JOIN Transformer', () => {
         },
       };
 
-      everySecondSeries.fields[0].values = new ArrayVector(everySecondSeries.fields[0].values.toArray().reverse());
-      everySecondSeries.fields[1].values = new ArrayVector(everySecondSeries.fields[1].values.toArray().reverse());
-      everySecondSeries.fields[2].values = new ArrayVector(everySecondSeries.fields[2].values.toArray().reverse());
+      everySecondSeries.fields[0].values = everySecondSeries.fields[0].values.reverse();
+      everySecondSeries.fields[1].values = everySecondSeries.fields[1].values.reverse();
+      everySecondSeries.fields[2].values = everySecondSeries.fields[2].values.reverse();
 
       await expect(transformDataFrame([cfg], [everySecondSeries, everyOtherSecondSeries])).toEmitValuesWith(
         (received) => {
@@ -742,93 +742,6 @@ describe('JOIN Transformer', () => {
               "values": [
                 3000,
                 5000,
-              ],
-            },
-            {
-              "config": {},
-              "labels": {
-                "name": "B",
-              },
-              "name": "humidity",
-              "state": {},
-              "type": "number",
-              "values": [
-                10000.3,
-                10000.5,
-              ],
-            },
-          ]
-        `);
-      });
-    });
-
-    it('inner joins by time field in reverse order', async () => {
-      const cfg: DataTransformerConfig<JoinByFieldOptions> = {
-        id: DataTransformerID.seriesToColumns,
-        options: {
-          byField: 'time',
-          mode: JoinMode.inner,
-        },
-      };
-
-      seriesA.fields[0].values = new ArrayVector(seriesA.fields[0].values.toArray().reverse());
-      seriesA.fields[1].values = new ArrayVector(seriesA.fields[1].values.toArray().reverse());
-      seriesA.fields[2].values = new ArrayVector(seriesA.fields[2].values.toArray().reverse());
-
-      await expect(transformDataFrame([cfg], [seriesA, seriesB])).toEmitValuesWith((received) => {
-        const data = received[0];
-        const filtered = data[0];
-        expect(filtered.fields).toMatchInlineSnapshot(`
-          [
-            {
-              "config": {},
-              "name": "time",
-              "state": {
-                "multipleFrames": true,
-              },
-              "type": "time",
-              "values": [
-                3000,
-                5000,
-              ],
-            },
-            {
-              "config": {},
-              "labels": {
-                "name": "A",
-              },
-              "name": "temperature",
-              "state": {},
-              "type": "number",
-              "values": [
-                10.3,
-                10.5,
-              ],
-            },
-            {
-              "config": {},
-              "labels": {
-                "name": "A",
-              },
-              "name": "humidity",
-              "state": {},
-              "type": "number",
-              "values": [
-                10000.3,
-                10000.5,
-              ],
-            },
-            {
-              "config": {},
-              "labels": {
-                "name": "B",
-              },
-              "name": "temperature",
-              "state": {},
-              "type": "number",
-              "values": [
-                10.3,
-                10.5,
               ],
             },
             {

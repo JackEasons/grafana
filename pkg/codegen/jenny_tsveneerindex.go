@@ -9,11 +9,10 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/errors"
 	"github.com/grafana/codejen"
+	"github.com/grafana/cuetsy"
 	"github.com/grafana/cuetsy/ts"
 	"github.com/grafana/cuetsy/ts/ast"
-	"github.com/grafana/grafana/pkg/kindsys"
-	"github.com/grafana/thema"
-	"github.com/grafana/thema/encoding/typescript"
+	"github.com/grafana/grafana/pkg/codegen/generators"
 )
 
 // TSVeneerIndexJenny generates an index.gen.ts file with references to all
@@ -39,24 +38,29 @@ func (gen *genTSVeneerIndex) JennyName() string {
 	return "TSVeneerIndexJenny"
 }
 
-func (gen *genTSVeneerIndex) Generate(decls ...*DeclForGen) (*codejen.File, error) {
+func (gen *genTSVeneerIndex) Generate(sfg ...SchemaForGen) (*codejen.File, error) {
 	tsf := new(ast.File)
-	for _, decl := range decls {
-		if decl.IsRaw() {
-			continue
-		}
-
-		sch := decl.Lineage().Latest()
-		f, err := typescript.GenerateTypes(sch, &typescript.TypeConfig{
-			RootName: decl.Meta.Common().Name,
-			Group:    decl.Meta.Common().LineageIsGroup,
+	for _, def := range sfg {
+		f, err := generators.GenerateTypesTS(def.CueFile, &generators.TSConfig{
+			CuetsyConfig: &cuetsy.Config{
+				ImportMapper: MapCUEImportToTS,
+			},
+			RootName: def.Name,
+			IsGroup:  def.IsGroup,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", decl.Meta.Common().Name, err)
+			return nil, fmt.Errorf("%s: %w", def.Name, err)
 		}
-		elems, err := gen.extractTSIndexVeneerElements(decl, f)
+		// The obvious approach would be calling renameSpecNode() here, same as in the ts resource jenny,
+		// to rename the "spec" field to the name of the kind. But that was causing extra
+		// default elements to generate that didn't actually exist. Instead,
+		// findDeclNode() is aware of "spec" and does the change on the fly. Preserving this
+		// as a reminder in case we want to switch back, though.
+		// renameSpecNode(def.Props().Common().Name, f)
+
+		elems, err := gen.extractTSIndexVeneerElements(def, f)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", decl.Meta.Common().Name, err)
+			return nil, fmt.Errorf("%s: %w", def.Name, err)
 		}
 		tsf.Nodes = append(tsf.Nodes, elems...)
 	}
@@ -64,12 +68,9 @@ func (gen *genTSVeneerIndex) Generate(decls ...*DeclForGen) (*codejen.File, erro
 	return codejen.NewFile(filepath.Join(gen.dir, "index.gen.ts"), []byte(tsf.String()), gen), nil
 }
 
-func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(decl *DeclForGen, tf *ast.File) ([]ast.Decl, error) {
-	lin := decl.Lineage()
-	comm := decl.Meta.Common()
-
+func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(def SchemaForGen, tf *ast.File) ([]ast.Decl, error) {
 	// Check the root, then walk the tree
-	rootv := lin.Latest().Underlying()
+	rootv := def.CueFile.LookupPath(cue.ParsePath("lineage.schemas[0].schema"))
 
 	var raw, custom, rawD, customD ast.Idents
 
@@ -79,23 +80,23 @@ func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(decl *DeclForGen, tf *
 		sels := p.Selectors()
 		switch len(sels) {
 		case 0:
-			name = strings.Title(lin.Name())
-			fallthrough
+			return true
+
 		case 1:
 			// Only deal with subpaths that are definitions, for now
 			// TODO incorporate smarts about grouped lineages here
 			if name == "" {
-				if !sels[0].IsDefinition() {
+				if !(sels[0].IsDefinition() || sels[0].String() == "spec") {
 					return false
 				}
-				// It might seem to make sense that we'd strip replaceout the leading # here for
+				// It might seem to make sense that we'd strip out the leading # here for
 				// definitions. However, cuetsy's tsast actually has the # still present in its
-				// Ident types, stripping it replaceout on the fly when stringifying.
+				// Ident types, stripping it out on the fly when stringifying.
 				name = sels[0].String()
 			}
 
-			// Search the generated TS AST for the type and default decl nodes
-			pair := findDeclNode(name, tf)
+			// Search the generated TS AST for the type and default def nodes
+			pair := findDeclNode(name, def.Name, tf)
 			if pair.T == nil {
 				// No generated type for this item, skip it
 				return false
@@ -110,12 +111,24 @@ func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(decl *DeclForGen, tf *
 				has = has || tgt.target == "type"
 			}
 			if has {
-				custom = append(custom, *pair.T)
+				// enums can't use 'export type'
+				if pair.isEnum {
+					customD = append(customD, *pair.T)
+				} else {
+					custom = append(custom, *pair.T)
+				}
+
 				if pair.D != nil {
 					customD = append(customD, *pair.D)
 				}
 			} else {
-				raw = append(raw, *pair.T)
+				// enums can't use 'export type'
+				if pair.isEnum {
+					rawD = append(rawD, *pair.T)
+				} else {
+					raw = append(raw, *pair.T)
+				}
+
 				if pair.D != nil {
 					rawD = append(rawD, *pair.D)
 				}
@@ -130,29 +143,32 @@ func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(decl *DeclForGen, tf *
 		return nil, terr
 	}
 
-	vpath := fmt.Sprintf("v%v", thema.LatestVersion(lin)[0])
-	if decl.Meta.Common().Maturity.Less(kindsys.MaturityStable) {
-		vpath = "x"
-	}
+	vpath := "x"
+	machineName := strings.ToLower(def.Name)
 
 	ret := make([]ast.Decl, 0)
 	if len(raw) > 0 {
 		ret = append(ret, ast.ExportSet{
-			CommentList: []ast.Comment{ts.CommentFromString(fmt.Sprintf("Raw generated types from %s kind.", comm.Name), 80, false)},
+			CommentList: []ast.Comment{ts.CommentFromString(fmt.Sprintf("Raw generated types from %s kind.", def.Name), 80, false)},
 			TypeOnly:    true,
 			Exports:     raw,
-			From:        ast.Str{Value: fmt.Sprintf("./raw/%s/%s/%s_types.gen", comm.MachineName, vpath, comm.MachineName)},
+			From:        ast.Str{Value: fmt.Sprintf("./raw/%s/%s/%s_types.gen", machineName, vpath, machineName)},
 		})
 	}
 	if len(rawD) > 0 {
 		ret = append(ret, ast.ExportSet{
-			CommentList: []ast.Comment{ts.CommentFromString(fmt.Sprintf("Raw generated default consts from %s kind.", lin.Name()), 80, false)},
+			CommentList: []ast.Comment{ts.CommentFromString(fmt.Sprintf("Raw generated enums and default consts from %s kind.", machineName), 80, false)},
 			TypeOnly:    false,
 			Exports:     rawD,
-			From:        ast.Str{Value: fmt.Sprintf("./raw/%s/%s/%s_types.gen", comm.MachineName, vpath, comm.MachineName)},
+			From:        ast.Str{Value: fmt.Sprintf("./raw/%s/%s/%s_types.gen", machineName, vpath, machineName)},
 		})
 	}
-	vtfile := fmt.Sprintf("./veneer/%s.types", lin.Name())
+	vtfile := fmt.Sprintf("./veneer/%s.types", machineName)
+	version, err := getVersion(def.CueFile)
+	if err != nil {
+		return nil, err
+	}
+
 	customstr := fmt.Sprintf(`// The following exported declarations correspond to types in the %s@%s kind's
 // schema with attribute @grafana(TSVeneer="type").
 //
@@ -162,7 +178,7 @@ func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(decl *DeclForGen, tf *
 // and exports all the symbols in the list.
 //
 // TODO generate code such that tsc enforces type compatibility between raw and veneer decls`,
-		lin.Name(), thema.LatestVersion(lin), filepath.ToSlash(filepath.Join(gen.dir, vtfile)))
+		machineName, strings.ReplaceAll(version, "-", "."), filepath.ToSlash(filepath.Join(gen.dir, vtfile)))
 
 	customComments := []ast.Comment{{Text: customstr}}
 	if len(custom) > 0 {
@@ -182,34 +198,47 @@ func (gen *genTSVeneerIndex) extractTSIndexVeneerElements(decl *DeclForGen, tf *
 		})
 	}
 
-	// TODO emit a decl in the index.gen.ts that ensures any custom veneer types are "compatible" with current version raw types
+	// TODO emit a def in the index.gen.ts that ensures any custom veneer types are "compatible" with current version raw types
 	return ret, nil
 }
 
 type declPair struct {
-	T, D *ast.Ident
+	T, D   *ast.Ident
+	isEnum bool
 }
 
 type tsVeneerAttr struct {
 	target string
 }
 
-func findDeclNode(name string, tf *ast.File) declPair {
+func findDeclNode(name, basename string, tf *ast.File) declPair {
 	var p declPair
-	for _, decl := range tf.Nodes {
+
+	if name == basename {
+		return declPair{}
+	}
+
+	for _, def := range tf.Nodes {
 		// Peer through export keywords
-		if ex, is := decl.(ast.ExportKeyword); is {
-			decl = ex.Decl
+		if ex, is := def.(ast.ExportKeyword); is {
+			def = ex.Decl
 		}
 
-		switch x := decl.(type) {
+		switch x := def.(type) {
 		case ast.TypeDecl:
 			if x.Name.Name == name {
 				p.T = &x.Name
+				_, p.isEnum = x.Type.(ast.EnumType)
+				if name == "spec" {
+					p.T.Name = basename
+				}
 			}
 		case ast.VarDecl:
 			if x.Names.Idents[0].Name == "default"+name {
 				p.D = &x.Names.Idents[0]
+				if name == "spec" {
+					p.D.Name = "default" + basename
+				}
 			}
 		}
 	}
@@ -315,7 +344,7 @@ func allowedTSVeneersString() string {
 	return strings.Join(list, "|")
 }
 
-func valError(v cue.Value, format string, args ...interface{}) error {
+func valError(v cue.Value, format string, args ...any) error {
 	s := v.Source()
 	if s == nil {
 		return fmt.Errorf(format, args...)

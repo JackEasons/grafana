@@ -1,15 +1,19 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { select } from 'react-select-event';
 
 import { SelectableValue } from '@grafana/data';
-
-import { selectOptionInTest } from '../../../../../public/test/helpers/selectOptionInTest';
+import { selectors } from '@grafana/e2e-selectors';
 
 import { SelectBase } from './SelectBase';
 
+// Used to select an option or options from a Select in unit tests
+const selectOptionInTest = async (input: HTMLElement, optionOrOptions: string | RegExp | Array<string | RegExp>) =>
+  await waitFor(() => select(input, optionOrOptions, { container: document.body }));
+
 describe('SelectBase', () => {
-  const onChangeHandler = () => jest.fn();
+  const onChangeHandler = jest.fn();
   const options: Array<SelectableValue<number>> = [
     {
       label: 'Option 1',
@@ -188,7 +192,7 @@ describe('SelectBase', () => {
     it('renders menu with provided options', async () => {
       render(<SelectBase options={options} onChange={onChangeHandler} />);
       await userEvent.click(screen.getByText(/choose/i));
-      const menuOptions = screen.getAllByLabelText('Select option');
+      const menuOptions = screen.getAllByTestId(selectors.components.Select.option);
       expect(menuOptions).toHaveLength(2);
     });
 
@@ -205,6 +209,149 @@ describe('SelectBase', () => {
         { label: 'Option 2', value: 2 },
         { action: 'select-option', name: undefined, option: undefined }
       );
+    });
+
+    it('hideSelectedOptions prop - when false does not hide selected', async () => {
+      render(<SelectBase onChange={jest.fn()} options={options} aria-label="My select" hideSelectedOptions={false} />);
+
+      const selectEl = screen.getByLabelText('My select');
+
+      await selectOptionInTest(selectEl, 'Option 2');
+      await userEvent.click(screen.getByText(/option 2/i));
+      const menuOptions = screen.getAllByTestId(selectors.components.Select.option);
+      expect(menuOptions).toHaveLength(2);
+    });
+  });
+
+  describe('Multi select', () => {
+    it('calls on change to remove an item when the user presses the remove button', async () => {
+      const value = [
+        {
+          label: 'Option 1',
+          value: 1,
+        },
+      ];
+      render(
+        <SelectBase onChange={onChangeHandler} options={options} isMulti={true} value={value} aria-label="My select" />
+      );
+
+      expect(screen.getByLabelText('My select')).toBeInTheDocument();
+
+      await userEvent.click(screen.getAllByLabelText('Remove')[0]);
+      expect(onChangeHandler).toHaveBeenCalledWith([], {
+        action: 'remove-value',
+        name: undefined,
+        removedValue: { label: 'Option 1', value: 1 },
+      });
+    });
+
+    it('does not allow deleting selected values when disabled', async () => {
+      const value = [
+        {
+          label: 'Option 1',
+          value: 1,
+        },
+      ];
+      render(
+        <SelectBase
+          onChange={onChangeHandler}
+          options={options}
+          disabled
+          isMulti={true}
+          value={value}
+          aria-label="My select"
+        />
+      );
+
+      expect(screen.queryByLabelText('Remove Option 1')).not.toBeInTheDocument();
+    });
+
+    describe('toggle all', () => {
+      it('renders menu with select all toggle', async () => {
+        render(
+          <SelectBase
+            options={options}
+            isMulti={true}
+            toggleAllOptions={{ enabled: true }}
+            onChange={onChangeHandler}
+          />
+        );
+        await userEvent.click(screen.getByText(/choose/i));
+        const toggleAllOptions = screen.getByTestId(selectors.components.Select.toggleAllOptions);
+        expect(toggleAllOptions).toBeInTheDocument();
+      });
+
+      it('correctly displays the number of selected items', async () => {
+        render(
+          <SelectBase
+            options={options}
+            isMulti={true}
+            value={[1]}
+            toggleAllOptions={{ enabled: true }}
+            onChange={onChangeHandler}
+          />
+        );
+        await userEvent.click(screen.getByText(/Option 1/i));
+        const toggleAllOptions = screen.getByTestId(selectors.components.Select.toggleAllOptions);
+        expect(toggleAllOptions.textContent).toBe('Selected (1)');
+      });
+
+      it('correctly removes all selected options when in indeterminate state', async () => {
+        render(
+          <SelectBase
+            options={options}
+            isMulti={true}
+            value={[1]}
+            toggleAllOptions={{ enabled: true }}
+            onChange={onChangeHandler}
+          />
+        );
+        await userEvent.click(screen.getByText(/Option 1/i));
+        let toggleAllOptions = screen.getByTestId(selectors.components.Select.toggleAllOptions);
+        expect(toggleAllOptions.textContent).toBe('Selected (1)');
+
+        // Toggle all unselected when in indeterminate state
+        await userEvent.click(toggleAllOptions);
+        expect(onChangeHandler).toHaveBeenCalledWith([], expect.anything());
+      });
+
+      it('correctly removes all selected options when all options are selected', async () => {
+        render(
+          <SelectBase
+            options={options}
+            isMulti={true}
+            value={[1, 2]}
+            toggleAllOptions={{ enabled: true }}
+            onChange={onChangeHandler}
+          />
+        );
+        await userEvent.click(screen.getByText(/Option 1/i));
+        let toggleAllOptions = screen.getByTestId(selectors.components.Select.toggleAllOptions);
+        expect(toggleAllOptions.textContent).toBe('Selected (2)');
+
+        // Toggle all unselected when in indeterminate state
+        await userEvent.click(toggleAllOptions);
+        expect(onChangeHandler).toHaveBeenCalledWith([], expect.anything());
+      });
+
+      it('correctly selects all values when none are selected', async () => {
+        render(
+          <SelectBase
+            options={options}
+            isMulti={true}
+            value={[]}
+            toggleAllOptions={{ enabled: true }}
+            onChange={onChangeHandler}
+          />
+        );
+        await userEvent.click(screen.getByText(/Choose/i));
+        let toggleAllOptions = screen.getByTestId(selectors.components.Select.toggleAllOptions);
+        expect(toggleAllOptions.textContent).toBe('Selected (0)');
+
+        // Toggle all unselected when in indeterminate state
+        await userEvent.click(toggleAllOptions);
+        expect(onChangeHandler).toHaveBeenCalledWith(options, expect.anything());
+      });
     });
   });
 });

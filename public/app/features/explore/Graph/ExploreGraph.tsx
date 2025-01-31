@@ -1,50 +1,49 @@
-import { css, cx } from '@emotion/css';
-import { identity } from 'lodash';
-import React, { useEffect, useMemo, useState } from 'react';
-import { useCounter } from 'react-use';
+import { identity, isEqual, sortBy } from 'lodash';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import * as React from 'react';
 
 import {
   AbsoluteTimeRange,
   applyFieldOverrides,
   createFieldConfigRegistry,
+  DashboardCursorSync,
   DataFrame,
-  dateTime,
+  EventBus,
   FieldColorModeId,
   FieldConfigSource,
   getFrameDisplayName,
-  GrafanaTheme2,
   LoadingState,
   SplitOpen,
-  TimeZone,
-  DashboardCursorSync,
-  EventBus,
+  ThresholdsConfig,
+  TimeRange,
 } from '@grafana/data';
 import { PanelRenderer } from '@grafana/runtime';
-import { GraphDrawStyle, LegendDisplayMode, TooltipDisplayMode, SortOrder } from '@grafana/schema';
 import {
-  Button,
-  Icon,
-  PanelContext,
-  PanelContextProvider,
-  SeriesVisibilityChangeMode,
-  useStyles2,
-  useTheme2,
-} from '@grafana/ui';
+  GraphDrawStyle,
+  GraphThresholdsStyleConfig,
+  LegendDisplayMode,
+  SortOrder,
+  TimeZone,
+  TooltipDisplayMode,
+  VizLegendOptions,
+} from '@grafana/schema';
+import { PanelContext, PanelContextProvider, SeriesVisibilityChangeMode, useTheme2 } from '@grafana/ui';
+import { GraphFieldConfig } from 'app/plugins/panel/graph/types';
 import { defaultGraphConfig, getGraphFieldConfig } from 'app/plugins/panel/timeseries/config';
-import { TimeSeriesOptions } from 'app/plugins/panel/timeseries/types';
+import { Options as TimeSeriesOptions } from 'app/plugins/panel/timeseries/panelcfg.gen';
 import { ExploreGraphStyle } from 'app/types';
 
 import { seriesVisibilityConfigFactory } from '../../dashboard/dashgrid/SeriesVisibilityConfigFactory';
+import { useExploreDataLinkPostProcessor } from '../hooks/useExploreDataLinkPostProcessor';
 
-import { applyGraphStyle } from './exploreGraphStyleUtils';
-
-const MAX_NUMBER_OF_TIME_SERIES = 20;
+import { applyGraphStyle, applyThresholdsConfig } from './exploreGraphStyleUtils';
+import { useStructureRev } from './useStructureRev';
 
 interface Props {
   data: DataFrame[];
   height: number;
   width: number;
-  absoluteRange: AbsoluteTimeRange;
+  timeRange: TimeRange;
   timeZone: TimeZone;
   loadingState: LoadingState;
   annotations?: DataFrame[];
@@ -54,7 +53,12 @@ interface Props {
   onChangeTime: (timeRange: AbsoluteTimeRange) => void;
   graphStyle: ExploreGraphStyle;
   anchorToZero?: boolean;
+  yAxisMaximum?: number;
+  thresholdsConfig?: ThresholdsConfig;
+  thresholdsStyle?: GraphThresholdsStyleConfig;
   eventBus: EventBus;
+  vizLegendOverrides?: Partial<VizLegendOptions>;
+  toggleLegendRef?: React.MutableRefObject<(name: string, mode: SeriesVisibilityChangeMode) => void>;
 }
 
 export function ExploreGraph({
@@ -62,7 +66,7 @@ export function ExploreGraph({
   height,
   width,
   timeZone,
-  absoluteRange,
+  timeRange,
   onChangeTime,
   loadingState,
   annotations,
@@ -71,21 +75,25 @@ export function ExploreGraph({
   graphStyle,
   tooltipDisplayMode = TooltipDisplayMode.Single,
   anchorToZero = false,
+  yAxisMaximum,
+  thresholdsConfig,
+  thresholdsStyle,
   eventBus,
+  vizLegendOverrides,
+  toggleLegendRef,
 }: Props) {
   const theme = useTheme2();
-  const style = useStyles2(getStyles);
-  const [showAllTimeSeries, setShowAllTimeSeries] = useState(false);
-  const [structureRev, { inc }] = useCounter(0);
 
   const fieldConfigRegistry = useMemo(
     () => createFieldConfigRegistry(getGraphFieldConfig(defaultGraphConfig), 'Explore'),
     []
   );
 
-  const [fieldConfig, setFieldConfig] = useState<FieldConfigSource>({
+  const [fieldConfig, setFieldConfig] = useState<FieldConfigSource<GraphFieldConfig>>({
     defaults: {
       min: anchorToZero ? 0 : undefined,
+      max: yAxisMaximum || undefined,
+      unit: 'short',
       color: {
         mode: FieldColorModeId.PaletteClassic,
       },
@@ -98,16 +106,12 @@ export function ExploreGraph({
     overrides: [],
   });
 
-  const timeRange = {
-    from: dateTime(absoluteRange.from),
-    to: dateTime(absoluteRange.to),
-    raw: {
-      from: dateTime(absoluteRange.from),
-      to: dateTime(absoluteRange.to),
-    },
-  };
+  const styledFieldConfig = useMemo(() => {
+    const withGraphStyle = applyGraphStyle(fieldConfig, graphStyle, yAxisMaximum);
+    return applyThresholdsConfig(withGraphStyle, thresholdsStyle, thresholdsConfig);
+  }, [fieldConfig, graphStyle, yAxisMaximum, thresholdsConfig, thresholdsStyle]);
 
-  const styledFieldConfig = useMemo(() => applyGraphStyle(fieldConfig, graphStyle), [fieldConfig, graphStyle]);
+  const dataLinkPostProcessor = useExploreDataLinkPostProcessor(splitOpenFn, timeRange);
 
   const dataWithConfig = useMemo(() => {
     return applyFieldOverrides({
@@ -117,16 +121,31 @@ export function ExploreGraph({
       replaceVariables: (value) => value, // We don't need proper replace here as it is only used in getLinks and we use getFieldLinks
       theme,
       fieldConfigRegistry,
+      dataLinkPostProcessor,
     });
-  }, [fieldConfigRegistry, data, timeZone, theme, styledFieldConfig]);
+  }, [fieldConfigRegistry, data, timeZone, theme, styledFieldConfig, dataLinkPostProcessor]);
 
-  // We need to increment structureRev when the number of series changes.
-  // the function passed to useMemo runs during rendering, so when we get a different
-  // amount of data, structureRev is incremented before we render it
-  useMemo(inc, [dataWithConfig.length, styledFieldConfig, inc]);
+  const annotationsWithConfig = useMemo(() => {
+    return applyFieldOverrides({
+      fieldConfig: {
+        defaults: {},
+        overrides: [],
+      },
+      data: annotations,
+      timeZone,
+      replaceVariables: (value) => value,
+      theme,
+      dataLinkPostProcessor,
+    });
+  }, [annotations, timeZone, theme, dataLinkPostProcessor]);
+
+  const structureRev = useStructureRev(dataWithConfig);
+
+  const onHiddenSeriesChangedRef = useRef(onHiddenSeriesChanged);
+  const previousHiddenFrames = useRef<string[] | undefined>(undefined);
 
   useEffect(() => {
-    if (onHiddenSeriesChanged) {
+    if (onHiddenSeriesChangedRef.current) {
       const hiddenFrames: string[] = [];
       dataWithConfig.forEach((frame) => {
         const allFieldsHidden = frame.fields.map((field) => field.config?.custom?.hideFrom?.viz).every(identity);
@@ -134,20 +153,34 @@ export function ExploreGraph({
           hiddenFrames.push(getFrameDisplayName(frame));
         }
       });
-      onHiddenSeriesChanged(hiddenFrames);
+      if (
+        previousHiddenFrames.current === undefined ||
+        !isEqual(sortBy(hiddenFrames), sortBy(previousHiddenFrames.current))
+      ) {
+        previousHiddenFrames.current = hiddenFrames;
+        onHiddenSeriesChangedRef.current(hiddenFrames);
+      }
     }
-  }, [dataWithConfig, onHiddenSeriesChanged]);
-
-  const seriesToShow = showAllTimeSeries ? dataWithConfig : dataWithConfig.slice(0, MAX_NUMBER_OF_TIME_SERIES);
+  }, [dataWithConfig]);
 
   const panelContext: PanelContext = {
+    eventsScope: 'explore',
     eventBus,
-    sync: () => DashboardCursorSync.Crosshair,
-    onSplitOpen: splitOpenFn,
+    // TODO: Re-enable DashboardCursorSync.Crosshair when #81505 is fixed
+    sync: () => DashboardCursorSync.Off,
     onToggleSeriesVisibility(label: string, mode: SeriesVisibilityChangeMode) {
       setFieldConfig(seriesVisibilityConfigFactory(label, mode, fieldConfig, data));
     },
+    dataLinkPostProcessor,
   };
+
+  function toggleLegend(name: string, mode: SeriesVisibilityChangeMode) {
+    setFieldConfig(seriesVisibilityConfigFactory(name, mode, fieldConfig, data));
+  }
+
+  if (toggleLegendRef) {
+    toggleLegendRef.current = toggleLegend;
+  }
 
   const panelOptions: TimeSeriesOptions = useMemo(
     () => ({
@@ -157,29 +190,22 @@ export function ExploreGraph({
         showLegend: true,
         placement: 'bottom',
         calcs: [],
+        ...vizLegendOverrides,
       },
     }),
-    [tooltipDisplayMode]
+    [tooltipDisplayMode, vizLegendOverrides]
   );
 
   return (
     <PanelContextProvider value={panelContext}>
-      {dataWithConfig.length > MAX_NUMBER_OF_TIME_SERIES && !showAllTimeSeries && (
-        <div className={cx([style.timeSeriesDisclaimer])}>
-          <Icon className={style.disclaimerIcon} name="exclamation-triangle" />
-          Showing only {MAX_NUMBER_OF_TIME_SERIES} time series.
-          <Button
-            variant="primary"
-            fill="text"
-            onClick={() => setShowAllTimeSeries(true)}
-            className={style.showAllButton}
-          >
-            Show all {dataWithConfig.length}
-          </Button>
-        </div>
-      )}
       <PanelRenderer
-        data={{ series: seriesToShow, timeRange, state: loadingState, annotations, structureRev }}
+        data={{
+          series: dataWithConfig,
+          timeRange,
+          state: loadingState,
+          annotations: annotationsWithConfig,
+          structureRev,
+        }}
         pluginId="timeseries"
         title=""
         width={width}
@@ -191,22 +217,3 @@ export function ExploreGraph({
     </PanelContextProvider>
   );
 }
-
-const getStyles = (theme: GrafanaTheme2) => ({
-  timeSeriesDisclaimer: css`
-    label: time-series-disclaimer;
-    margin: ${theme.spacing(1)} auto;
-    padding: 10px 0;
-    border-radius: ${theme.spacing(2)};
-    text-align: center;
-    background-color: ${theme.colors.background.primary};
-  `,
-  disclaimerIcon: css`
-    label: disclaimer-icon;
-    color: ${theme.colors.warning.main};
-    margin-right: ${theme.spacing(0.5)};
-  `,
-  showAllButton: css`
-    margin-left: ${theme.spacing(0.5)};
-  `,
-});

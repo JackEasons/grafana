@@ -1,6 +1,7 @@
 // Libraries
 import { css } from '@emotion/css';
-import React, { FunctionComponent, MouseEvent } from 'react';
+import { MouseEvent } from 'react';
+import * as React from 'react';
 
 // Components
 import { GrafanaTheme2 } from '@grafana/data';
@@ -16,7 +17,7 @@ interface Props {
   iconSize?: IconSize;
 }
 
-export const DashNavButton: FunctionComponent<Props> = ({ icon, iconType, iconSize, tooltip, onClick, children }) => {
+export const DashNavButton = ({ icon, iconType, iconSize, tooltip, onClick, children }: Props) => {
   const styles = useStyles2(getStyles);
 
   return (
@@ -37,8 +38,8 @@ export const DashNavButton: FunctionComponent<Props> = ({ icon, iconType, iconSi
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  noBorderContainer: css`
-    padding: 0 ${theme.spacing(0.5)};
-    display: flex;
-  `,
+  noBorderContainer: css({
+    padding: `0 ${theme.spacing(0.5)}`,
+    display: 'flex',
+  }),
 });

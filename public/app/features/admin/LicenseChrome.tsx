@@ -1,8 +1,8 @@
 import { css } from '@emotion/css';
-import React from 'react';
+import * as React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
-import { useStyles2 } from '@grafana/ui';
+import { useStyles2, useTheme2 } from '@grafana/ui';
 
 const title = { fontWeight: 500, fontSize: '26px', lineHeight: '123%' };
 
@@ -11,21 +11,21 @@ const getStyles = (theme: GrafanaTheme2) => {
   const footerBg = theme.isDark ? theme.v1.palette.dark9 : theme.v1.palette.gray6;
 
   return {
-    container: css`
-      padding: 36px 79px;
-      background: ${theme.components.panel.background};
-    `,
-    footer: css`
-      text-align: center;
-      padding: 16px;
-      background: ${footerBg};
-    `,
-    header: css`
-      height: 137px;
-      padding: 40px 0 0 79px;
-      position: relative;
-      background: url('${backgroundUrl}') right;
-    `,
+    container: css({
+      padding: '36px 79px',
+      background: theme.components.panel.background,
+    }),
+    footer: css({
+      textAlign: 'center',
+      padding: theme.spacing(2),
+      background: footerBg,
+    }),
+    header: css({
+      height: '137px',
+      padding: '40px 0 0 79px',
+      position: 'relative',
+      background: `url('${backgroundUrl}') right`,
+    }),
   };
 };
 
@@ -77,6 +77,7 @@ interface CircleProps {
 }
 
 export const Circle = ({ size, style, children }: React.PropsWithChildren<CircleProps>) => {
+  const theme = useTheme2();
   return (
     <div
       style={{
@@ -85,7 +86,7 @@ export const Circle = ({ size, style, children }: React.PropsWithChildren<Circle
         position: 'absolute',
         bottom: 0,
         right: 0,
-        borderRadius: '50%',
+        borderRadius: theme.shape.radius.circle,
         ...style,
       }}
     >

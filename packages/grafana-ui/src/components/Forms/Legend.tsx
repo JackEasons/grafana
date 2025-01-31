@@ -1,5 +1,6 @@
 import { css, cx } from '@emotion/css';
-import React, { ReactNode } from 'react';
+import { ReactNode } from 'react';
+import * as React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
@@ -12,15 +13,15 @@ export interface LabelProps extends React.HTMLAttributes<HTMLLegendElement> {
 
 export const getLegendStyles = (theme: GrafanaTheme2) => {
   return {
-    legend: css`
-      font-size: ${theme.typography.h3.fontSize};
-      font-weight: ${theme.typography.fontWeightRegular};
-      margin: 0 0 ${theme.spacing(2)} 0;
-    `,
+    legend: css({
+      fontSize: theme.typography.h3.fontSize,
+      fontWeight: theme.typography.fontWeightRegular,
+      margin: theme.spacing(0, 0, 2, 0),
+    }),
   };
 };
 
-export const Legend: React.FC<LabelProps> = ({ children, className, ...legendProps }) => {
+export const Legend = ({ children, className, ...legendProps }: LabelProps) => {
   const styles = useStyles2(getLegendStyles);
 
   return (

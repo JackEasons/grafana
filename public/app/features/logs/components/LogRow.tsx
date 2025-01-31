@@ -1,39 +1,30 @@
-import { cx, css } from '@emotion/css';
-import React, { PureComponent } from 'react';
+import { debounce } from 'lodash';
+import { MouseEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
-  Field,
-  LinkModel,
-  LogRowModel,
-  LogsSortOrder,
-  TimeZone,
-  DataQueryResponse,
-  dateTimeFormat,
-  GrafanaTheme2,
   CoreApp,
   DataFrame,
+  dateTimeFormat,
+  Field,
+  LinkModel,
+  LogRowContextOptions,
+  LogRowModel,
+  LogsSortOrder,
 } from '@grafana/data';
 import { reportInteraction } from '@grafana/runtime';
-import { styleMixins, withTheme2, Themeable2, Icon, Tooltip } from '@grafana/ui';
+import { DataQuery, TimeZone } from '@grafana/schema';
+import { Icon, PopoverContent, Tooltip, useTheme2 } from '@grafana/ui';
+import { t } from 'app/core/internationalization';
 
-import { checkLogsError, escapeUnescapedString } from '../utils';
+import { checkLogsError, checkLogsSampled, escapeUnescapedString } from '../utils';
 
 import { LogDetails } from './LogDetails';
 import { LogLabels } from './LogLabels';
-import {
-  LogRowContextRows,
-  LogRowContextQueryErrors,
-  HasMoreContextRows,
-  LogRowContextProvider,
-  RowContextOptions,
-} from './LogRowContextProvider';
 import { LogRowMessage } from './LogRowMessage';
-import { LogRowMessageDetectedFields } from './LogRowMessageDetectedFields';
-import { getLogRowStyles } from './getLogRowStyles';
+import { LogRowMessageDisplayedFields } from './LogRowMessageDisplayedFields';
+import { getLogLevelStyles, LogRowStyles } from './getLogRowStyles';
 
-//Components
-
-interface Props extends Themeable2 {
+export interface Props {
   row: LogRowModel;
   showDuplicates: boolean;
   showLabels: boolean;
@@ -44,246 +35,293 @@ interface Props extends Themeable2 {
   enableLogDetails: boolean;
   logsSortOrder?: LogsSortOrder | null;
   forceEscape?: boolean;
-  showDetectedFields?: string[];
-  scrollElement?: HTMLDivElement;
-  showRowMenu?: boolean;
   app?: CoreApp;
+  displayedFields?: string[];
   getRows: () => LogRowModel[];
-  onClickFilterLabel?: (key: string, value: string) => void;
-  onClickFilterOutLabel?: (key: string, value: string) => void;
+  onClickFilterLabel?: (key: string, value: string, frame?: DataFrame) => void;
+  onClickFilterOutLabel?: (key: string, value: string, frame?: DataFrame) => void;
   onContextClick?: () => void;
-  getRowContext: (row: LogRowModel, options?: RowContextOptions) => Promise<DataQueryResponse>;
   getFieldLinks?: (field: Field, rowIndex: number, dataFrame: DataFrame) => Array<LinkModel<Field>>;
-  showContextToggle?: (row?: LogRowModel) => boolean;
-  onClickShowDetectedField?: (key: string) => void;
-  onClickHideDetectedField?: (key: string) => void;
+  showContextToggle?: (row: LogRowModel) => boolean;
+  onClickShowField?: (key: string) => void;
+  onClickHideField?: (key: string) => void;
   onLogRowHover?: (row?: LogRowModel) => void;
-  toggleContextIsOpen?: () => void;
+  onOpenContext: (row: LogRowModel, onClose: () => void) => void;
+  getRowContextQuery?: (
+    row: LogRowModel,
+    options?: LogRowContextOptions,
+    cacheFilters?: boolean
+  ) => Promise<DataQuery | null>;
+  onPermalinkClick?: (row: LogRowModel) => Promise<void>;
+  styles: LogRowStyles;
+  permalinkedRowId?: string;
+  scrollIntoView?: (element: HTMLElement) => void;
+  isFilterLabelActive?: (key: string, value: string, refId?: string) => Promise<boolean>;
+  onPinLine?: (row: LogRowModel, allowUnPin?: boolean) => void;
+  onUnpinLine?: (row: LogRowModel) => void;
+  pinLineButtonTooltipTitle?: PopoverContent;
+  pinned?: boolean;
+  handleTextSelection?: (e: MouseEvent<HTMLTableRowElement>, row: LogRowModel) => boolean;
+  logRowMenuIconsBefore?: ReactNode[];
+  logRowMenuIconsAfter?: ReactNode[];
 }
 
-interface State {
-  showContext: boolean;
-  showDetails: boolean;
-}
+export const LogRow = ({
+  getRows,
+  onClickFilterLabel,
+  onClickFilterOutLabel,
+  onClickShowField,
+  onClickHideField,
+  enableLogDetails,
+  row,
+  showDuplicates,
+  showContextToggle,
+  showLabels,
+  showTime,
+  displayedFields,
+  wrapLogMessage,
+  prettifyLogMessage,
+  getFieldLinks,
+  forceEscape,
+  app,
+  styles,
+  getRowContextQuery,
+  pinned,
+  logRowMenuIconsBefore,
+  logRowMenuIconsAfter,
+  timeZone,
+  permalinkedRowId,
+  scrollIntoView,
+  handleTextSelection,
+  onLogRowHover,
+  ...props
+}: Props) => {
+  const [showingContext, setShowingContext] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [mouseIsOver, setMouseIsOver] = useState(false);
+  const [permalinked, setPermalinked] = useState(false);
+  const logLineRef = useRef<HTMLTableRowElement | null>(null);
+  const theme = useTheme2();
 
-const getStyles = (theme: GrafanaTheme2) => {
-  return {
-    topVerticalAlign: css`
-      label: topVerticalAlign;
-      margin-top: -${theme.spacing(0.9)};
-      margin-left: -${theme.spacing(0.25)};
-    `,
-    detailsOpen: css`
-      &:hover {
-        background-color: ${styleMixins.hoverColor(theme.colors.background.primary, theme)};
-      }
-    `,
-    errorLogRow: css`
-      label: erroredLogRow;
-      color: ${theme.colors.text.secondary};
-    `,
-  };
-};
-/**
- * Renders a log line.
- *
- * When user hovers over it for a certain time, it lazily parses the log line.
- * Once a parser is found, it will determine fields, that will be highlighted.
- * When the user requests stats for a field, they will be calculated and rendered below the row.
- */
-class UnThemedLogRow extends PureComponent<Props, State> {
-  state: State = {
-    showContext: false,
-    showDetails: false,
-  };
+  const timestamp = useMemo(
+    () =>
+      dateTimeFormat(row.timeEpochMs, {
+        timeZone: timeZone,
+        defaultWithMS: true,
+      }),
+    [row.timeEpochMs, timeZone]
+  );
+  const levelStyles = useMemo(() => getLogLevelStyles(theme, row.logLevel), [row.logLevel, theme]);
+  const processedRow = useMemo(
+    () =>
+      row.hasUnescapedContent && forceEscape
+        ? { ...row, entry: escapeUnescapedString(row.entry), raw: escapeUnescapedString(row.raw) }
+        : row,
+    [forceEscape, row]
+  );
+  const errorMessage = checkLogsError(row);
+  const hasError = errorMessage !== undefined;
+  const sampleMessage = checkLogsSampled(row);
+  const isSampled = sampleMessage !== undefined;
 
-  toggleContext = (method: string) => {
-    const { datasourceType, uid: logRowUid } = this.props.row;
-    reportInteraction('grafana_explore_logs_log_context_clicked', {
-      datasourceType,
-      logRowUid,
-      type: method,
-    });
-
-    this.props.toggleContextIsOpen?.();
-    this.setState((state) => {
-      return {
-        showContext: !state.showContext,
-      };
-    });
-  };
-
-  toggleDetails = () => {
-    if (!this.props.enableLogDetails) {
+  useEffect(() => {
+    if (permalinkedRowId !== row.uid) {
+      setPermalinked(false);
+      return;
+    }
+    if (!permalinked) {
+      setPermalinked(true);
       return;
     }
 
-    reportInteraction('grafana_explore_logs_log_details_clicked', {
-      datasourceType: this.props.row.datasourceType,
-      type: this.state.showDetails ? 'close' : 'open',
-      logRowUid: this.props.row.uid,
-      app: this.props.app,
-    });
+    if (logLineRef.current && scrollIntoView) {
+      // at this point this row is the permalinked row, so we need to scroll to it and highlight it if possible.
+      scrollIntoView(logLineRef.current);
+      reportInteraction('grafana_explore_logs_permalink_opened', {
+        datasourceType: row.datasourceType ?? 'unknown',
+        logRowUid: row.uid,
+      });
+      setPermalinked(true);
+    }
+  }, [permalinked, permalinkedRowId, row.datasourceType, row.uid, scrollIntoView]);
 
-    this.setState((state) => {
-      return {
-        showDetails: !state.showDetails,
-      };
-    });
-  };
+  // we are debouncing the state change by 3 seconds to highlight the logline after the context closed.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const debouncedContextClose = useCallback(
+    debounce(() => {
+      setShowingContext(false);
+    }, 3000),
+    []
+  );
 
-  renderTimeStamp(epochMs: number) {
-    return dateTimeFormat(epochMs, {
-      timeZone: this.props.timeZone,
-    });
-  }
+  const onOpenContext = useCallback(
+    (row: LogRowModel) => {
+      setShowingContext(true);
+      props.onOpenContext(row, debouncedContextClose);
+    },
+    [debouncedContextClose, props]
+  );
 
-  renderLogRow(
-    context?: LogRowContextRows,
-    errors?: LogRowContextQueryErrors,
-    hasMoreContextRows?: HasMoreContextRows,
-    updateLimit?: () => void,
-    logsSortOrder?: LogsSortOrder | null
-  ) {
-    const {
-      getRows,
-      onClickFilterLabel,
-      onClickFilterOutLabel,
-      onClickShowDetectedField,
-      onClickHideDetectedField,
-      enableLogDetails,
-      row,
-      showDuplicates,
-      showContextToggle,
-      showRowMenu,
-      showLabels,
-      showTime,
-      showDetectedFields,
-      wrapLogMessage,
-      prettifyLogMessage,
-      theme,
-      getFieldLinks,
-      forceEscape,
-      onLogRowHover,
-      app,
-      scrollElement,
-    } = this.props;
-    const { showDetails, showContext } = this.state;
-    const style = getLogRowStyles(theme, row.logLevel);
-    const styles = getStyles(theme);
-    const { errorMessage, hasError } = checkLogsError(row);
-    const logRowBackground = cx(style.logsRow, {
-      [styles.errorLogRow]: hasError,
-      [style.contextBackground]: showContext,
-    });
+  const onRowClick = useCallback(
+    (e: MouseEvent<HTMLTableRowElement>) => {
+      if (handleTextSelection?.(e, row)) {
+        // Event handled by the parent.
+        return;
+      }
 
-    const processedRow =
-      row.hasUnescapedContent && forceEscape
-        ? { ...row, entry: escapeUnescapedString(row.entry), raw: escapeUnescapedString(row.raw) }
-        : row;
+      if (!enableLogDetails) {
+        return;
+      }
 
-    return (
-      <>
-        <tr
-          className={logRowBackground}
-          onClick={this.toggleDetails}
-          onMouseEnter={() => {
-            onLogRowHover && onLogRowHover(row);
-          }}
-          onMouseLeave={() => {
-            onLogRowHover && onLogRowHover(undefined);
-          }}
-        >
-          {showDuplicates && (
-            <td className={style.logsRowDuplicates}>
-              {processedRow.duplicates && processedRow.duplicates > 0 ? `${processedRow.duplicates + 1}x` : null}
-            </td>
-          )}
-          <td className={cx({ [style.logsRowLevel]: !hasError })}>
-            {hasError && (
-              <Tooltip content={`Error: ${errorMessage}`} placement="right" theme="error">
-                <Icon className={style.logIconError} name="exclamation-triangle" size="xs" />
-              </Tooltip>
-            )}
+      setShowDetails((showDetails: boolean) => !showDetails);
+    },
+    [enableLogDetails, handleTextSelection, row]
+  );
+
+  const onMouseEnter = useCallback(() => {
+    setMouseIsOver(true);
+    if (onLogRowHover) {
+      onLogRowHover(row);
+    }
+  }, [onLogRowHover, row]);
+
+  const onMouseMove = useCallback(
+    (e: MouseEvent) => {
+      // No need to worry about text selection.
+      if (!handleTextSelection) {
+        return;
+      }
+      // The user is selecting text, so hide the log row menu so it doesn't interfere.
+      if (document.getSelection()?.toString() && e.buttons > 0) {
+        setMouseIsOver(false);
+      }
+    },
+    [handleTextSelection]
+  );
+
+  const onMouseLeave = useCallback(() => {
+    setMouseIsOver(false);
+  }, []);
+
+  return (
+    <>
+      <tr
+        ref={logLineRef}
+        className={`${styles.logsRow} ${hasError ? styles.errorLogRow : ''} ${showingContext || permalinked || pinned ? styles.highlightBackground : ''}`}
+        onClick={onRowClick}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        onMouseMove={onMouseMove}
+        /**
+         * For better accessibility support, we listen to the onFocus event here (to display the LogRowMenuCell), and
+         * to onBlur event in the LogRowMenuCell (to hide it). This way, the LogRowMenuCell is displayed when the user navigates
+         * using the keyboard.
+         */
+        onFocus={onMouseEnter}
+      >
+        {showDuplicates && (
+          <td className={styles.logsRowDuplicates}>
+            {processedRow.duplicates && processedRow.duplicates > 0 ? `${processedRow.duplicates + 1}x` : null}
           </td>
+        )}
+        <td
+          className={
+            hasError || isSampled ? styles.logsRowWithError : `${levelStyles.logsRowLevelColor} ${styles.logsRowLevel}`
+          }
+        >
+          {hasError && (
+            <Tooltip content={`Error: ${errorMessage}`} placement="right" theme="error">
+              <Icon className={styles.logIconError} name="exclamation-triangle" size="xs" />
+            </Tooltip>
+          )}
+          {isSampled && (
+            <Tooltip content={`${sampleMessage}`} placement="right" theme="info">
+              <Icon className={styles.logIconInfo} name="info-circle" size="xs" />
+            </Tooltip>
+          )}
+        </td>
+        <td
+          title={enableLogDetails ? (showDetails ? 'Hide log details' : 'See log details') : ''}
+          className={enableLogDetails ? styles.logsRowToggleDetails : ''}
+        >
           {enableLogDetails && (
-            <td title={showDetails ? 'Hide log details' : 'See log details'} className={style.logsRowToggleDetails}>
+            <button
+              aria-label={t('logs.log-row-message.see-details', `See log details`)}
+              className={styles.detailsToggle}
+              aria-expanded={showDetails}
+            >
               <Icon className={styles.topVerticalAlign} name={showDetails ? 'angle-down' : 'angle-right'} />
-            </td>
+            </button>
           )}
-          {showTime && <td className={style.logsRowLocalTime}>{this.renderTimeStamp(row.timeEpochMs)}</td>}
-          {showLabels && processedRow.uniqueLabels && (
-            <td className={style.logsRowLabels}>
-              <LogLabels labels={processedRow.uniqueLabels} />
-            </td>
-          )}
-          {showDetectedFields && showDetectedFields.length > 0 ? (
-            <LogRowMessageDetectedFields
-              row={processedRow}
-              showDetectedFields={showDetectedFields!}
-              getFieldLinks={getFieldLinks}
-              wrapLogMessage={wrapLogMessage}
-            />
-          ) : (
-            <LogRowMessage
-              row={processedRow}
-              getRows={getRows}
-              errors={errors}
-              hasMoreContextRows={hasMoreContextRows}
-              updateLimit={updateLimit}
-              context={context}
-              contextIsOpen={showContext}
-              showContextToggle={showContextToggle}
-              showRowMenu={showRowMenu}
-              wrapLogMessage={wrapLogMessage}
-              prettifyLogMessage={prettifyLogMessage}
-              onToggleContext={this.toggleContext}
-              app={app}
-              scrollElement={scrollElement}
-              logsSortOrder={logsSortOrder}
-            />
-          )}
-        </tr>
-        {this.state.showDetails && (
-          <LogDetails
-            className={logRowBackground}
-            showDuplicates={showDuplicates}
-            getFieldLinks={getFieldLinks}
-            onClickFilterLabel={onClickFilterLabel}
-            onClickFilterOutLabel={onClickFilterOutLabel}
-            onClickShowDetectedField={onClickShowDetectedField}
-            onClickHideDetectedField={onClickHideDetectedField}
-            getRows={getRows}
+        </td>
+        {showTime && <td className={styles.logsRowLocalTime}>{timestamp}</td>}
+        {showLabels && processedRow.uniqueLabels && (
+          <td className={styles.logsRowLabels}>
+            <LogLabels labels={processedRow.uniqueLabels} addTooltip={false} />
+          </td>
+        )}
+        {displayedFields && displayedFields.length > 0 ? (
+          <LogRowMessageDisplayedFields
             row={processedRow}
+            showContextToggle={showContextToggle}
+            detectedFields={displayedFields}
+            getFieldLinks={getFieldLinks}
             wrapLogMessage={wrapLogMessage}
-            hasError={hasError}
-            showDetectedFields={showDetectedFields}
+            onOpenContext={onOpenContext}
+            onPermalinkClick={props.onPermalinkClick}
+            styles={styles}
+            onPinLine={props.onPinLine}
+            onUnpinLine={props.onUnpinLine}
+            pinned={pinned}
+            mouseIsOver={mouseIsOver}
+            onBlur={onMouseLeave}
+            logRowMenuIconsBefore={logRowMenuIconsBefore}
+            logRowMenuIconsAfter={logRowMenuIconsAfter}
+          />
+        ) : (
+          <LogRowMessage
+            row={processedRow}
+            showContextToggle={showContextToggle}
+            getRowContextQuery={getRowContextQuery}
+            wrapLogMessage={wrapLogMessage}
+            prettifyLogMessage={prettifyLogMessage}
+            onOpenContext={onOpenContext}
+            onPermalinkClick={props.onPermalinkClick}
             app={app}
+            styles={styles}
+            onPinLine={props.onPinLine}
+            onUnpinLine={props.onUnpinLine}
+            pinLineButtonTooltipTitle={props.pinLineButtonTooltipTitle}
+            pinned={pinned}
+            mouseIsOver={mouseIsOver}
+            onBlur={onMouseLeave}
+            expanded={showDetails}
+            logRowMenuIconsBefore={logRowMenuIconsBefore}
+            logRowMenuIconsAfter={logRowMenuIconsAfter}
           />
         )}
-      </>
-    );
-  }
-
-  render() {
-    const { showContext } = this.state;
-    const { logsSortOrder, row, getRowContext } = this.props;
-
-    if (showContext) {
-      return (
-        <>
-          <LogRowContextProvider row={row} getRowContext={getRowContext} logsSortOrder={logsSortOrder}>
-            {({ result, errors, hasMoreContextRows, updateLimit, logsSortOrder }) => {
-              return <>{this.renderLogRow(result, errors, hasMoreContextRows, updateLimit, logsSortOrder)}</>;
-            }}
-          </LogRowContextProvider>
-        </>
-      );
-    }
-
-    return this.renderLogRow();
-  }
-}
-
-export const LogRow = withTheme2(UnThemedLogRow);
-LogRow.displayName = 'LogRow';
+      </tr>
+      {showDetails && (
+        <LogDetails
+          onPinLine={props.onPinLine}
+          className={`${styles.logsRow} ${hasError ? styles.errorLogRow : ''} ${permalinked && !showDetails ? styles.highlightBackground : ''}`}
+          showDuplicates={showDuplicates}
+          getFieldLinks={getFieldLinks}
+          onClickFilterLabel={onClickFilterLabel}
+          onClickFilterOutLabel={onClickFilterOutLabel}
+          onClickShowField={onClickShowField}
+          onClickHideField={onClickHideField}
+          getRows={getRows}
+          row={processedRow}
+          wrapLogMessage={wrapLogMessage}
+          hasError={hasError}
+          displayedFields={displayedFields}
+          app={app}
+          styles={styles}
+          isFilterLabelActive={props.isFilterLabelActive}
+          pinLineButtonTooltipTitle={props.pinLineButtonTooltipTitle}
+        />
+      )}
+    </>
+  );
+};

@@ -20,10 +20,11 @@ username_claim = login
 email_claim = email
 jwk_set_file = devenv/docker/blocks/auth/oauth/jwks.json
 cache_ttl = 60m
-expect_claims = {"iss": "http://env.grafana.local:8087/auth/realms/grafana", "azp": "grafana-oauth"}
+expect_claims = {"iss": "http://env.grafana.local:8087/realms/grafana", "azp": "grafana-oauth"}
 auto_sign_up = true
 role_attribute_path = contains(roles[*], 'grafanaadmin') && 'GrafanaAdmin' || contains(roles[*], 'admin') && 'Admin' || contains(roles[*], 'editor') && 'Editor' || 'Viewer'
 role_attribute_strict = false
+groups_attribute_path = groups[]
 allow_assign_grafana_admin = true
 ```
 

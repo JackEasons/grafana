@@ -1,10 +1,10 @@
 import { css } from '@emotion/css';
-import React, { FC, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { PanelPluginMeta } from '@grafana/data';
 import { Button, VerticalGroup } from '@grafana/ui';
 import { getDashboardSrv } from 'app/features/dashboard/services/DashboardSrv';
-import { PanelModel } from 'app/features/dashboard/state';
+import { PanelModel } from 'app/features/dashboard/state/PanelModel';
 import { changeToLibraryPanel } from 'app/features/panel/state/actions';
 import { useDispatch } from 'app/types';
 
@@ -19,7 +19,7 @@ interface Props {
   searchQuery: string;
 }
 
-export const PanelLibraryOptionsGroup: FC<Props> = ({ panel, searchQuery }) => {
+export const PanelLibraryOptionsGroup = ({ panel, searchQuery }: Props) => {
   const [showingAddPanelModal, setShowingAddPanelModal] = useState(false);
   const [changeToPanel, setChangeToPanel] = useState<LibraryElementDTO | undefined>(undefined);
   const [panelFilter, setPanelFilter] = useState<string[]>([]);
@@ -43,7 +43,6 @@ export const PanelLibraryOptionsGroup: FC<Props> = ({ panel, searchQuery }) => {
 
   const onAddToPanelLibrary = () => setShowingAddPanelModal(true);
   const onDismissChangeToPanel = () => setChangeToPanel(undefined);
-
   return (
     <VerticalGroup spacing="md">
       {!panel.libraryPanel && (
@@ -83,7 +82,7 @@ export const PanelLibraryOptionsGroup: FC<Props> = ({ panel, searchQuery }) => {
 };
 
 const styles = {
-  libraryPanelsView: css`
-    width: 100%;
-  `,
+  libraryPanelsView: css({
+    width: '100%',
+  }),
 };

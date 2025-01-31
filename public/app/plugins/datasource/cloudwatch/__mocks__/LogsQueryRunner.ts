@@ -1,12 +1,10 @@
 import { of } from 'rxjs';
 
-import { CustomVariableModel, DataFrame } from '@grafana/data';
-import { BackendDataSourceResponse, getBackendSrv, setBackendSrv } from '@grafana/runtime';
-import { getTimeSrv } from 'app/features/dashboard/services/TimeSrv';
-import { TemplateSrv } from 'app/features/templating/template_srv';
+import { CustomVariableModel, DataFrame, DataSourceInstanceSettings } from '@grafana/data';
+import { BackendDataSourceResponse, toDataQueryResponse } from '@grafana/runtime';
 
 import { CloudWatchLogsQueryRunner } from '../query-runner/CloudWatchLogsQueryRunner';
-import { CloudWatchLogsQueryStatus } from '../types';
+import { CloudWatchJsonData, CloudWatchLogsQueryStatus, CloudWatchLogsRequest } from '../types';
 
 import { CloudWatchSettings, setupMockedTemplateService } from './CloudWatchDataSource';
 
@@ -15,24 +13,18 @@ export function setupMockedLogsQueryRunner({
     results: {},
   },
   variables,
-  mockGetVariableName = true,
-}: { data?: BackendDataSourceResponse; variables?: CustomVariableModel[]; mockGetVariableName?: boolean } = {}) {
-  let templateService = new TemplateSrv();
-  if (variables) {
-    templateService = setupMockedTemplateService(variables);
-    if (mockGetVariableName) {
-      templateService.getVariableName = (name: string) => name;
-    }
-  }
+  settings = CloudWatchSettings,
+}: {
+  data?: BackendDataSourceResponse;
+  variables?: CustomVariableModel[];
+  settings?: DataSourceInstanceSettings<CloudWatchJsonData>;
+} = {}) {
+  let templateService = setupMockedTemplateService(variables);
 
-  const runner = new CloudWatchLogsQueryRunner(CloudWatchSettings, templateService, getTimeSrv());
-  const fetchMock = jest.fn().mockReturnValue(of({ data }));
-  setBackendSrv({
-    ...getBackendSrv(),
-    fetch: fetchMock,
-  });
+  const queryMock = jest.fn().mockReturnValue(of(toDataQueryResponse({ data })));
+  const runner = new CloudWatchLogsQueryRunner(settings, templateService);
 
-  return { runner, fetchMock, templateService };
+  return { runner, queryMock, templateService };
 }
 
 export function genMockFrames(numResponses: number): DataFrame[] {
@@ -59,4 +51,20 @@ export function genMockFrames(numResponses: number): DataFrame[] {
   }
 
   return mockFrames;
+}
+
+export function genMockCloudWatchLogsRequest(overrides: Partial<CloudWatchLogsRequest> = {}) {
+  const request: CloudWatchLogsRequest = {
+    queryString: 'fields @timestamp, @message | sort @timestamp desc',
+    logGroupNames: ['log-group-name-1', 'log-group-name-2'],
+    logGroups: [
+      { arn: 'log-group-arn-1', name: 'log-group-name-1' },
+      { arn: 'log-group-arn-2', name: 'log-group-name-2' },
+    ],
+    refId: 'A',
+    region: 'us-east-1',
+    ...overrides,
+  };
+
+  return request;
 }

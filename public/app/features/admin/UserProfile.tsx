@@ -1,17 +1,19 @@
 import { css, cx } from '@emotion/css';
-import React, { FC, PureComponent, useRef, useState } from 'react';
+import { PureComponent, useRef, useState } from 'react';
+import * as React from 'react';
 
-import { Button, ConfirmButton, ConfirmModal, Input, LegacyInputStatus } from '@grafana/ui';
+import { Button, ConfirmButton, ConfirmModal, Input, LegacyInputStatus, Stack } from '@grafana/ui';
 import { contextSrv } from 'app/core/core';
+import { t, Trans } from 'app/core/internationalization';
 import { AccessControlAction, UserDTO } from 'app/types';
 
 interface Props {
   user: UserDTO;
 
   onUserUpdate: (user: UserDTO) => void;
-  onUserDelete: (userId: number) => void;
-  onUserDisable: (userId: number) => void;
-  onUserEnable: (userId: number) => void;
+  onUserDelete: (userUid: string) => void;
+  onUserDisable: (userUid: string) => void;
+  onUserEnable: (userUid: string) => void;
   onPasswordChange(password: string): void;
 }
 
@@ -42,11 +44,11 @@ export function UserProfile({
     }
   };
 
-  const handleUserDelete = () => onUserDelete(user.id);
+  const handleUserDelete = () => onUserDelete(user.uid);
 
-  const handleUserDisable = () => onUserDisable(user.id);
+  const handleUserDisable = () => onUserDisable(user.uid);
 
-  const handleUserEnable = () => onUserEnable(user.id);
+  const handleUserEnable = () => onUserEnable(user.uid);
 
   const onUserNameChange = (newValue: string) => {
     onUserUpdate({
@@ -80,12 +82,15 @@ export function UserProfile({
   const canEnable = contextSrv.hasPermissionInMetadata(AccessControlAction.UsersEnable, user);
 
   return (
-    <>
-      <h3 className="page-heading">User information</h3>
-      <div className="gf-form-group">
-        <div className="gf-form">
+    <div>
+      <h3 className="page-heading">
+        <Trans i18nKey="admin.user-profile.title">User information</Trans>
+      </h3>
+      <Stack direction="column" gap={1.5}>
+        <div>
           <table className="filter-table form-inline">
             <tbody>
+              <UserProfileRow label="Numerical identifier" value={user.id.toString()} locked={true} />
               <UserProfileRow
                 label="Name"
                 value={user.name}
@@ -118,11 +123,11 @@ export function UserProfile({
             </tbody>
           </table>
         </div>
-        <div className={styles.buttonRow}>
+        <Stack gap={2}>
           {canDelete && (
             <>
               <Button variant="destructive" onClick={showDeleteUserModal(true)} ref={deleteUserRef}>
-                Delete user
+                <Trans i18nKey="admin.user-profile.delete-button">Delete user</Trans>
               </Button>
               <ConfirmModal
                 isOpen={showDeleteModal}
@@ -136,13 +141,13 @@ export function UserProfile({
           )}
           {user.isDisabled && canEnable && (
             <Button variant="secondary" onClick={handleUserEnable}>
-              Enable user
+              <Trans i18nKey="admin.user-profile.enable-button">Enable user</Trans>
             </Button>
           )}
           {!user.isDisabled && canDisable && (
             <>
               <Button variant="secondary" onClick={showDisableUserModal(true)} ref={disableUserRef}>
-                Disable user
+                <Trans i18nKey="admin.user-profile.disable-button">Disable user</Trans>
               </Button>
               <ConfirmModal
                 isOpen={showDisableModal}
@@ -154,20 +159,11 @@ export function UserProfile({
               />
             </>
           )}
-        </div>
-      </div>
-    </>
+        </Stack>
+      </Stack>
+    </div>
   );
 }
-
-const styles = {
-  buttonRow: css`
-    margin-top: 0.8rem;
-    > * {
-      margin-right: 16px;
-    }
-  `,
-};
 
 interface UserProfileRowProps {
   label: string;
@@ -252,9 +248,9 @@ export class UserProfileRow extends PureComponent<UserProfileRowProps, UserProfi
     const { value } = this.state;
     const labelClass = cx(
       'width-16',
-      css`
-        font-weight: 500;
-      `
+      css({
+        fontWeight: 500,
+      })
     );
 
     if (locked) {
@@ -289,7 +285,7 @@ export class UserProfileRow extends PureComponent<UserProfileRowProps, UserProfi
             onConfirm={this.onSave}
             onCancel={this.onCancelClick}
           >
-            Edit
+            {t('admin.user-profile.edit-button', 'Edit')}
           </ConfirmButton>
         </td>
       </tr>
@@ -303,16 +299,16 @@ interface LockedRowProps {
   lockMessage?: string;
 }
 
-export const LockedRow: FC<LockedRowProps> = ({ label, value, lockMessage }) => {
-  const lockMessageClass = css`
-    font-style: italic;
-    margin-right: 0.6rem;
-  `;
+export const LockedRow = ({ label, value, lockMessage }: LockedRowProps) => {
+  const lockMessageClass = css({
+    fontStyle: 'italic',
+    marginRight: '0.6rem',
+  });
   const labelClass = cx(
     'width-16',
-    css`
-      font-weight: 500;
-    `
+    css({
+      fontWeight: 500,
+    })
   );
 
   return (

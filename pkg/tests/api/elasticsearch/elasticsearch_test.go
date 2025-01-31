@@ -10,15 +10,20 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/grafana/grafana/pkg/api/dtos"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/services/datasources"
 	"github.com/grafana/grafana/pkg/services/org"
-	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/tests/testinfra"
-	"github.com/stretchr/testify/require"
+	"github.com/grafana/grafana/pkg/tests/testsuite"
 )
+
+func TestMain(m *testing.M) {
+	testsuite.Run(m)
+}
 
 func TestIntegrationElasticsearch(t *testing.T) {
 	if testing.Short() {
@@ -31,7 +36,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	grafanaListeningAddr, testEnv := testinfra.StartGrafanaEnv(t, dir, path)
 	ctx := context.Background()
 
-	createUser(t, testEnv.SQLStore, user.CreateUserCommand{
+	u := testinfra.CreateUser(t, testEnv.SQLStore, testEnv.Cfg, user.CreateUserCommand{
 		DefaultOrgRole: string(org.RoleAdmin),
 		Password:       "admin",
 		Login:          "admin",
@@ -44,10 +49,9 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	}))
 	t.Cleanup(outgoingServer.Close)
 
-	jsonData := simplejson.NewFromAny(map[string]interface{}{
+	jsonData := simplejson.NewFromAny(map[string]any{
 		"httpMethod":      "post",
 		"httpHeaderName1": "X-CUSTOM-HEADER",
-		"esVersion":       "8.0.0",
 		"timeField":       "@timestamp",
 	})
 	secureJSONData := map[string]string{
@@ -56,13 +60,13 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	}
 
 	uid := "es"
-	err := testEnv.Server.HTTPServer.DataSourcesService.AddDataSource(ctx, &datasources.AddDataSourceCommand{
-		OrgId:          1,
+	_, err := testEnv.Server.HTTPServer.DataSourcesService.AddDataSource(ctx, &datasources.AddDataSourceCommand{
+		OrgID:          u.OrgID,
 		Access:         datasources.DS_ACCESS_PROXY,
 		Name:           "Elasticsearch",
 		Type:           datasources.DS_ES,
-		Uid:            uid,
-		Url:            outgoingServer.URL,
+		UID:            uid,
+		URL:            outgoingServer.URL,
 		BasicAuth:      true,
 		BasicAuthUser:  "basicAuthUser",
 		JsonData:       jsonData,
@@ -71,13 +75,18 @@ func TestIntegrationElasticsearch(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("When calling /api/ds/query should set expected headers on outgoing HTTP request", func(t *testing.T) {
-		query := simplejson.NewFromAny(map[string]interface{}{
-			"datasource": map[string]interface{}{
+		query := simplejson.NewFromAny(map[string]any{
+			"datasource": map[string]any{
 				"uid": uid,
 			},
 			"rawQuery":  "*",
 			"type":      "",
 			"timeField": "@timestamp",
+			"metrics": []any{
+				map[string]any{
+					"type": "logs",
+				},
+			},
 		})
 		buf1 := &bytes.Buffer{}
 		err = json.NewEncoder(buf1).Encode(dtos.MetricRequest{
@@ -91,7 +100,7 @@ func TestIntegrationElasticsearch(t *testing.T) {
 		resp, err := http.Post(u, "application/json", buf1)
 		require.NoError(t, err)
 
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		t.Cleanup(func() {
 			err := resp.Body.Close()
 			require.NoError(t, err)
@@ -106,15 +115,4 @@ func TestIntegrationElasticsearch(t *testing.T) {
 		require.Equal(t, "basicAuthUser", username)
 		require.Equal(t, "basicAuthPassword", pwd)
 	})
-}
-
-func createUser(t *testing.T, store *sqlstore.SQLStore, cmd user.CreateUserCommand) int64 {
-	t.Helper()
-
-	store.Cfg.AutoAssignOrg = true
-	store.Cfg.AutoAssignOrgId = 1
-
-	u, err := store.CreateUser(context.Background(), cmd)
-	require.NoError(t, err)
-	return u.ID
 }

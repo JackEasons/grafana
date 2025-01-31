@@ -1,27 +1,70 @@
 ---
 aliases:
-  - /docs/grafana/latest/alerting/alerting-rules/
-  - /docs/grafana/latest/alerting/old-alerting/create-alerts/
-  - /docs/grafana/latest/alerting/rules/
-  - /docs/grafana/latest/alerting/unified-alerting/alerting-rules/
-title: Manage your alert rules
-weight: 130
+  - rules/ # /docs/grafana/<GRAFANA_VERSION>/alerting/rules/
+  - unified-alerting/alerting-rules/ # /docs/grafana/<GRAFANA_VERSION>/alerting/unified-alerting/alerting-rules/
+  - ./create-alerts/ # /docs/grafana/<GRAFANA_VERSION>/alerting/create-alerts/
+canonical: https://grafana.com/docs/grafana/latest/alerting/alerting-rules/
+description: Configure alert rules
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
+title: Configure alert rules
+weight: 120
+refs:
+  alert-rules:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/fundamentals/alert-rules/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/alerting-and-irm/alerting/fundamentals/alert-rules/
+  configure-grafana-alerts:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/alerting-rules/create-grafana-managed-rule/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/alerting-and-irm/alerting/alerting-rules/create-grafana-managed-rule/
+  configure-ds-alerts:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/alerting-rules/create-data-source-managed-rule/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/alerting-and-irm/alerting/alerting-rules/create-data-source-managed-rule/
+  recording-rules:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/alerting-rules/create-recording-rules/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/alerting-and-irm/alerting/alerting-rules/create-recording-rules/
+  alert-types-comparison-table:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/fundamentals/alert-rules/#comparison-between-alert-rule-types
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/alerting-and-irm/alerting/fundamentals/alert-rules/#comparison-between-alert-rule-types
+  templating-labels-annotations:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/alerting/fundamentals/templates/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana-cloud/alerting-and-irm/alerting/fundamentals/templates/
 ---
 
-# Manage your alert rules
+# Configure alert rules
 
-An alert rule is a set of evaluation criteria that determines whether an alert will fire. The alert rule consists of one or more queries and expressions, a condition, the frequency of evaluation, and optionally, the duration over which the condition is met.
+[Alert rules](ref:alert-rules) are the central component of your alerting system.
 
-While queries and expressions select the data set to evaluate, a condition sets the threshold that an alert must meet or exceed to create an alert. An interval specifies how frequently an alert rule is evaluated. Duration, when configured, indicates how long a condition must be met. Alert rules can also define alerting behavior in the absence of data.
+An alert rule consists of one or more queries and expressions that select the data you want to measure. It contains a condition to trigger the alert, an evaluation period that determines how often the rule is evaluated, and additional options to manage alert events and their notifications.
 
-You can:
+Grafana supports two types of alert rules:
 
-- [Create Grafana Mimir or Loki managed alert rules]({{< relref "create-mimir-loki-managed-rule/" >}})
-- [Create Grafana Mimir or Loki managed recording rules]({{< relref "create-mimir-loki-managed-recording-rule/" >}})
-- [Edit Grafana Mimir or Loki rule groups and namespaces]({{< relref "edit-mimir-loki-namespace-group/" >}})
-- [Create Grafana managed alert rules]({{< relref "create-grafana-managed-rule/" >}})
+1. Grafana-managed alert rules: These can query multiple data sources.
 
-**Note:**
-Grafana managed alert rules can only be edited or deleted by users with Edit permissions for the folder storing the rules.
+1. Data source-managed alert rules: These can only query Prometheus-based data sources and support horizontal scaling.
 
-Alert rules for an external Grafana Mimir or Loki instance can be edited or deleted by users with Editor or Admin roles.
+We recommend using Grafana-managed alert rules whenever possible, and opting for data source-managed alert rules when horizontal scaling is required. Refer to the [comparison table of alert rule types](ref:alert-types-comparison-table) for a more detailed overview.
+
+Both types of alert rules can be configured in Grafana using the **+ New alert rule** flow. For step-by-step instructions, refer to:
+
+- [Configure Grafana-managed alert rules](ref:configure-grafana-alerts)
+- [Configure data source-managed alert rules](ref:configure-ds-alerts)
+- [Create and link alert rules to panels](ref:templating-labels-annotations)
+
+Alert rules can also query metrics generated by recording rules. To learn more, refer to:
+
+- [Create recording rules](ref:recording-rules)

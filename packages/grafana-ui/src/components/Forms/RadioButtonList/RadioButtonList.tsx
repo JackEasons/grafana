@@ -1,6 +1,5 @@
 import { css, cx } from '@emotion/css';
 import { uniqueId } from 'lodash';
-import React from 'react';
 
 import { GrafanaTheme2, SelectableValue } from '@grafana/data';
 
@@ -23,7 +22,7 @@ export interface RadioButtonListProps<T> {
   className?: string;
 }
 
-export function RadioButtonList<T>({
+export function RadioButtonList<T extends string | number | readonly string[]>({
   name,
   id,
   options,
@@ -47,13 +46,14 @@ export function RadioButtonList<T>({
         const handleChange = () => onChange && option.value && onChange(option.value);
 
         return (
-          <RadioButtonDot
-            key={itemId}
+          <RadioButtonDot<T>
+            key={index}
             id={itemId}
             name={name}
             label={option.label}
             description={option.description}
             checked={isChecked}
+            value={option.value}
             disabled={isDisabled}
             onChange={handleChange}
           />
@@ -64,8 +64,8 @@ export function RadioButtonList<T>({
 }
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  container: css`
-    display: grid;
-    gap: ${theme.spacing(1)};
-  `,
+  container: css({
+    display: 'grid',
+    gap: theme.spacing(1),
+  }),
 });

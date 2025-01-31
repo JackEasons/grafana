@@ -1,4 +1,4 @@
-import React from 'react';
+import * as React from 'react';
 import {
   ActionMeta as SelectActionMeta,
   CommonProps as ReactSelectCommonProps,
@@ -15,26 +15,38 @@ export type InputActionMeta = {
 };
 export type LoadOptionsCallback<T> = (options: Array<SelectableValue<T>>) => void;
 
+export enum ToggleAllState {
+  allSelected = 'allSelected',
+  indeterminate = 'indeterminate',
+  noneSelected = 'noneSelected',
+}
+
 export interface SelectCommonProps<T> {
   /** Aria label applied to the input field */
   ['aria-label']?: string;
+  ['data-testid']?: string;
   allowCreateWhileLoading?: boolean;
   allowCustomValue?: boolean;
   /** Focus is set to the Select when rendered*/
   autoFocus?: boolean;
   backspaceRemovesValue?: boolean;
+  blurInputOnSelect?: boolean;
+  captureMenuScroll?: boolean;
   className?: string;
   closeMenuOnSelect?: boolean;
   /** Used for custom components. For more information, see `react-select` */
   components?: any;
+  /** Sets the position of the createOption element in your options list. Defaults to 'last' */
+  createOptionPosition?: 'first' | 'last';
   defaultValue?: any;
   disabled?: boolean;
   filterOption?: (option: SelectableValue<T>, searchQuery: string) => boolean;
   formatOptionLabel?: (item: SelectableValue<T>, formatOptionMeta: FormatOptionLabelMeta<T>) => React.ReactNode;
   /** Function for formatting the text that is displayed when creating a new value*/
-  formatCreateLabel?: (input: string) => string;
+  formatCreateLabel?: (input: string) => React.ReactNode;
   getOptionLabel?: (item: SelectableValue<T>) => React.ReactNode;
-  getOptionValue?: (item: SelectableValue<T>) => string;
+  getOptionValue?: (item: SelectableValue<T>) => T | undefined;
+  hideSelectedOptions?: boolean;
   inputValue?: string;
   invalid?: boolean;
   isClearable?: boolean;
@@ -66,8 +78,20 @@ export interface SelectCommonProps<T> {
   onCreateOption?: (value: string) => void;
   onInputChange?: (value: string, actionMeta: InputActionMeta) => void;
   onKeyDown?: (event: React.KeyboardEvent) => void;
+  /** Callback which fires when the user scrolls to the bottom of the menu */
+  onMenuScrollToBottom?: (event: WheelEvent | TouchEvent) => void;
+  /** Callback which fires when the user scrolls to the top of the menu */
+  onMenuScrollToTop?: (event: WheelEvent | TouchEvent) => void;
   onOpenMenu?: () => void;
   onFocus?: () => void;
+  toggleAllOptions?: {
+    enabled: boolean;
+    optionsFilter?: (v: SelectableValue<T>) => boolean;
+    determineToggleAllState?: (
+      selectedValues: Array<SelectableValue<T>>,
+      options: Array<SelectableValue<T>>
+    ) => ToggleAllState;
+  };
   openMenuOnFocus?: boolean;
   options?: Array<SelectableValue<T>>;
   placeholder?: string;
@@ -81,15 +105,17 @@ export interface SelectCommonProps<T> {
   virtualized?: boolean;
   /** Sets the width to a multiple of 8px. Should only be used with inline forms. Setting width of the container is preferred in other cases.*/
   width?: number | 'auto';
-  isOptionDisabled?: () => boolean;
+  isOptionDisabled?: (option: SelectableValue<T>) => boolean;
   /** allowCustomValue must be enabled. Determines whether the "create new" option should be displayed based on the current input value, select value and options array. */
   isValidNewOption?: (
     inputValue: string,
     value: SelectableValue<T> | null,
-    options: OptionsOrGroups<unknown, GroupBase<unknown>>
+    options: OptionsOrGroups<SelectableValue<T>, GroupBase<SelectableValue<T>>>
   ) => boolean;
   /** Message to display isLoading=true*/
   loadingMessage?: string;
+  /** Disables wrapping of multi value values when closed */
+  noMultiValueWrap?: boolean;
 }
 
 export interface SelectAsyncProps<T> {
@@ -110,9 +136,14 @@ export interface VirtualizedSelectProps<T> extends Omit<SelectCommonProps<T>, 'v
   options?: Array<Pick<SelectableValue<T>, 'label' | 'value'>>;
 }
 
+/** The AsyncVirtualizedSelect component uses a slightly different SelectableValue, description and other props are not supported */
+export interface VirtualizedSelectAsyncProps<T>
+  extends Omit<SelectCommonProps<T>, 'virtualized'>,
+    SelectAsyncProps<T> {}
+
 export interface MultiSelectCommonProps<T> extends Omit<SelectCommonProps<T>, 'onChange' | 'isMulti' | 'value'> {
   value?: Array<SelectableValue<T>> | T[];
-  onChange: (item: Array<SelectableValue<T>>) => {} | void;
+  onChange: (item: Array<SelectableValue<T>>, actionMeta: ActionMeta) => {} | void;
 }
 
 // This is the type of *our* SelectBase component, not ReactSelect's prop, although
@@ -140,6 +171,7 @@ export type ControlComponent<T> = React.ComponentType<CustomControlProps<T>>;
 export interface SelectableOptGroup<T = any> {
   label: string;
   options: Array<SelectableValue<T>>;
+
   [key: string]: any;
 }
 

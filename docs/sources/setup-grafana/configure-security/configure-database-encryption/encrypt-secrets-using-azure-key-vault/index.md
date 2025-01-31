@@ -1,8 +1,11 @@
 ---
 aliases:
-  - /docs/grafana/latest/enterprise/enterprise-encryption/using-azure-key-vault-to-encrypt-database-secrets/
-  - /docs/grafana/latest/setup-grafana/configure-security/configure-database-encryption/encrypt-secrets-using-azure-key-vault/
+  - ../../../enterprise/enterprise-encryption/using-azure-key-vault-to-encrypt-database-secrets/
 description: Learn how to use Azure Key Vault to encrypt secrets in the Grafana database.
+labels:
+  products:
+    - enterprise
+    - oss
 title: Encrypt database secrets using Azure Key Vault
 weight: 400
 ---
@@ -14,7 +17,7 @@ You can use an encryption key from Azure Key Vault to encrypt secrets in the Gra
 **Prerequisites:**
 
 - An Azure account with permission to view and create Key Vault keys and programmatic credentials to access those keys
-- Access to the Grafana [configuration]({{< relref "../../../configure-grafana/#config-file-locations" >}}) file
+- Access to the Grafana [configuration]({{< relref "../../../configure-grafana#configuration-file-location" >}}) file
 
 1. [Create a vault](https://docs.microsoft.com/en-us/azure/key-vault/general/quick-create-portal#create-a-vault).
 
@@ -26,7 +29,7 @@ You can use an encryption key from Azure Key Vault to encrypt secrets in the Gra
 
 5. In the Key Permissions section, set encrypt and decrypt permissions, and click **Save**.
 
-6. From within Grafana, turn on [envelope encryption]({{< relref "/" >}}).
+6. From within Grafana, turn on envelope encryption.
 
 7. Add your Azure Key Vault details to the Grafana configuration file; depending on your operating system, is usually named `grafana.ini`:
    <br><br>a. Add a new section to the configuration file, with a name in the format of `[security.encryption.azurekv.<KEY-NAME>]`, where `<KEY-NAME>` is any name that uniquely identifies this key among other provider keys.
@@ -68,16 +71,14 @@ You can use an encryption key from Azure Key Vault to encrypt secrets in the Gra
    available_encryption_providers =  azurekv.example-encryption-key
    ```
 
-   **> Note:** The encryption key stored in the `secret_key` field is still used by Grafana’s legacy alerting system to encrypt secrets. Do not change or remove that value.
-
-9. [Restart Grafana](https://grafana.com/docs/grafana/latest/installation/restart-grafana/).
+9. [Restart Grafana](/docs/grafana/latest/installation/restart-grafana/).
 
 10. (Optional) From the command line and the root directory of Grafana Enterprise, re-encrypt all of the secrets within the Grafana database with the new key using the following command:
 
-    `grafana-cli admin secrets-migration re-encrypt`
+    `grafana cli admin secrets-migration re-encrypt`
 
     If you do not re-encrypt existing secrets, then they will remain encrypted by the previous encryption key. Users will still be able to access them.
 
-    **> Note:** This process could take a few minutes to complete, depending on the number of secrets (such as data sources or alert notification channels) in your database. Users might experience errors while this process is running, and alert notifications might not be sent.
+    **> Note:** This process could take a few minutes to complete, depending on the number of secrets (such as data sources) in your database. Users might experience errors while this process is running, and alert notifications might not be sent.
 
-    **> Note:** If you are updating this encryption key during the initial setup of Grafana before any data sources, alert notification channels, or dashboards have been created, then this step is not necessary because there are no secrets in Grafana to migrate.
+    **> Note:** If you are updating this encryption key during the initial setup of Grafana before any data sources or dashboards have been created, then this step is not necessary because there are no secrets in Grafana to migrate.

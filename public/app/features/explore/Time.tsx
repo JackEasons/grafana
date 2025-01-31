@@ -1,5 +1,3 @@
-import React, { FC } from 'react';
-
 import { toDuration } from '@grafana/data';
 
 export interface TimeProps {
@@ -8,7 +6,7 @@ export interface TimeProps {
   humanize?: boolean;
 }
 
-export const Time: FC<TimeProps> = ({ timeInMs, className, humanize }) => {
+export const Time = ({ timeInMs, className, humanize }: TimeProps) => {
   return <span className={className}>{formatTime(timeInMs, humanize)}</span>;
 };
 

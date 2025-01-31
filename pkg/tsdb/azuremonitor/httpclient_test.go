@@ -1,15 +1,17 @@
 package azuremonitor
 
 import (
+	"context"
 	"crypto/tls"
+	"encoding/json"
 	"net/http"
 	"testing"
 
-	"github.com/grafana/grafana-azure-sdk-go/azcredentials"
-	sdkhttpclient "github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
+	"github.com/grafana/grafana-azure-sdk-go/v2/azcredentials"
+	"github.com/grafana/grafana-azure-sdk-go/v2/azsettings"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/httpclient"
 
-	"github.com/grafana/grafana/pkg/infra/httpclient"
-	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/tsdb/azuremonitor/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +22,19 @@ func TestHttpClient_AzureCredentials(t *testing.T) {
 		Credentials: &azcredentials.AzureManagedIdentityCredentials{},
 	}
 
-	cfg := &setting.Cfg{}
+	jsonData, _ := json.Marshal(map[string]any{
+		"httpHeaderName1": "GrafanaHeader",
+	})
+	settings := &backend.DataSourceInstanceSettings{
+		JSONData: jsonData,
+		DecryptedSecureJSONData: map[string]string{
+			"httpHeaderValue1": "GrafanaValue",
+		},
+	}
+
+	azureSettings := &azsettings.AzureSettings{
+		Cloud: azsettings.AzurePublic,
+	}
 	provider := &fakeHttpClientProvider{}
 
 	t.Run("should have Azure middleware when scopes provided", func(t *testing.T) {
@@ -28,7 +42,7 @@ func TestHttpClient_AzureCredentials(t *testing.T) {
 			Scopes: []string{"https://management.azure.com/.default"},
 		}
 
-		_, err := newHTTPClient(route, model, cfg, provider)
+		_, err := newHTTPClient(context.Background(), route, model, settings, azureSettings, provider)
 		require.NoError(t, err)
 
 		require.NotNil(t, provider.opts)
@@ -41,7 +55,7 @@ func TestHttpClient_AzureCredentials(t *testing.T) {
 			Scopes: []string{},
 		}
 
-		_, err := newHTTPClient(route, model, cfg, provider)
+		_, err := newHTTPClient(context.Background(), route, model, settings, azureSettings, provider)
 		require.NoError(t, err)
 
 		assert.NotNil(t, provider.opts)
@@ -50,25 +64,47 @@ func TestHttpClient_AzureCredentials(t *testing.T) {
 			assert.Len(t, provider.opts.Middlewares, 0)
 		}
 	})
+
+	t.Run("should combine custom azure and custom grafana headers", func(t *testing.T) {
+		route := types.AzRoute{
+			Headers: map[string]string{
+				"AzureHeader": "AzureValue",
+			},
+		}
+
+		res := http.Header{
+			"Grafanaheader": {"GrafanaValue"},
+			"Azureheader":   {"AzureValue"},
+		}
+		_, err := newHTTPClient(context.Background(), route, model, settings, azureSettings, provider)
+		require.NoError(t, err)
+
+		assert.NotNil(t, provider.opts)
+
+		if provider.opts.Header != nil {
+			assert.Len(t, provider.opts.Header, 2)
+			assert.Equal(t, res, provider.opts.Header)
+		}
+	})
 }
 
 type fakeHttpClientProvider struct {
 	httpclient.Provider
 
-	opts sdkhttpclient.Options
+	opts httpclient.Options
 }
 
-func (p *fakeHttpClientProvider) New(opts ...sdkhttpclient.Options) (*http.Client, error) {
+func (p *fakeHttpClientProvider) New(opts ...httpclient.Options) (*http.Client, error) {
 	p.opts = opts[0]
 	return nil, nil
 }
 
-func (p *fakeHttpClientProvider) GetTransport(opts ...sdkhttpclient.Options) (http.RoundTripper, error) {
+func (p *fakeHttpClientProvider) GetTransport(opts ...httpclient.Options) (http.RoundTripper, error) {
 	p.opts = opts[0]
 	return nil, nil
 }
 
-func (p *fakeHttpClientProvider) GetTLSConfig(opts ...sdkhttpclient.Options) (*tls.Config, error) {
+func (p *fakeHttpClientProvider) GetTLSConfig(opts ...httpclient.Options) (*tls.Config, error) {
 	p.opts = opts[0]
 	return nil, nil
 }

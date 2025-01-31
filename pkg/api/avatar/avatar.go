@@ -20,11 +20,12 @@ import (
 	"sync"
 	"time"
 
+	gocache "github.com/patrickmn/go-cache"
+
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
+	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	"github.com/grafana/grafana/pkg/setting"
 	"github.com/grafana/grafana/pkg/web"
-	gocache "github.com/patrickmn/go-cache"
 )
 
 const (
@@ -98,7 +99,7 @@ type AvatarCacheServer struct {
 
 var validMD5 = regexp.MustCompile("^[a-fA-F0-9]{32}$")
 
-func (a *AvatarCacheServer) Handler(ctx *models.ReqContext) {
+func (a *AvatarCacheServer) Handler(ctx *contextmodel.ReqContext) {
 	hash := web.Params(ctx.Req)[":hash"]
 
 	if len(hash) != 32 || !validMD5.MatchString(hash) {
@@ -106,7 +107,7 @@ func (a *AvatarCacheServer) Handler(ctx *models.ReqContext) {
 		return
 	}
 
-	avatar := a.GetAvatarForHash(hash)
+	avatar := a.GetAvatarForHash(a.cfg, hash)
 
 	ctx.Resp.Header().Set("Content-Type", "image/jpeg")
 
@@ -122,8 +123,8 @@ func (a *AvatarCacheServer) Handler(ctx *models.ReqContext) {
 	}
 }
 
-func (a *AvatarCacheServer) GetAvatarForHash(hash string) *Avatar {
-	if setting.DisableGravatar {
+func (a *AvatarCacheServer) GetAvatarForHash(cfg *setting.Cfg, hash string) *Avatar {
+	if cfg.DisableGravatar {
 		alog.Warn("'GetGravatarForHash' called despite gravatars being disabled; returning default profile image")
 		return a.notFound
 	}

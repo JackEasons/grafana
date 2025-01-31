@@ -4,17 +4,17 @@ import (
 	"net/http"
 
 	"github.com/grafana/grafana/pkg/infra/metrics"
-	"github.com/grafana/grafana/pkg/models"
+	contextmodel "github.com/grafana/grafana/pkg/services/contexthandler/model"
 	"github.com/grafana/grafana/pkg/services/publicdashboards"
-	"github.com/grafana/grafana/pkg/services/publicdashboards/internal/tokens"
+	"github.com/grafana/grafana/pkg/services/publicdashboards/validation"
 	"github.com/grafana/grafana/pkg/web"
 )
 
 // SetPublicDashboardOrgIdOnContext Adds orgId to context based on org of public dashboard
-func SetPublicDashboardOrgIdOnContext(publicDashboardService publicdashboards.Service) func(c *models.ReqContext) {
-	return func(c *models.ReqContext) {
+func SetPublicDashboardOrgIdOnContext(publicDashboardService publicdashboards.Service) func(c *contextmodel.ReqContext) {
+	return func(c *contextmodel.ReqContext) {
 		accessToken, ok := web.Params(c.Req)[":accessToken"]
-		if !ok || !tokens.IsValidAccessToken(accessToken) {
+		if !ok || !validation.IsValidAccessToken(accessToken) {
 			return
 		}
 
@@ -28,16 +28,16 @@ func SetPublicDashboardOrgIdOnContext(publicDashboardService publicdashboards.Se
 	}
 }
 
-// SetPublicDashboardFlag Adds public dashboard flag on context
-func SetPublicDashboardFlag(c *models.ReqContext) {
-	c.IsPublicDashboardView = true
+// SetPublicDashboardAccessToken Adds public dashboard flag on context
+func SetPublicDashboardAccessToken(c *contextmodel.ReqContext) {
+	c.PublicDashboardAccessToken = web.Params(c.Req)[":accessToken"]
 }
 
 // RequiresExistingAccessToken Middleware to enforce that a public dashboards exists before continuing to handler. This
 // method will query the database to ensure that it exists.
 // Use when we want to enforce a public dashboard is valid on an endpoint we do not maintain
-func RequiresExistingAccessToken(publicDashboardService publicdashboards.Service) func(c *models.ReqContext) {
-	return func(c *models.ReqContext) {
+func RequiresExistingAccessToken(publicDashboardService publicdashboards.Service) func(c *contextmodel.ReqContext) {
+	return func(c *contextmodel.ReqContext) {
 		accessToken, ok := web.Params(c.Req)[":accessToken"]
 
 		if !ok {
@@ -45,7 +45,7 @@ func RequiresExistingAccessToken(publicDashboardService publicdashboards.Service
 			return
 		}
 
-		if !tokens.IsValidAccessToken(accessToken) {
+		if !validation.IsValidAccessToken(accessToken) {
 			c.JsonApiErr(http.StatusBadRequest, "Invalid access token", nil)
 		}
 
@@ -62,8 +62,27 @@ func RequiresExistingAccessToken(publicDashboardService publicdashboards.Service
 	}
 }
 
-func CountPublicDashboardRequest() func(c *models.ReqContext) {
-	return func(c *models.ReqContext) {
+func CountPublicDashboardRequest() func(c *contextmodel.ReqContext) {
+	return func(c *contextmodel.ReqContext) {
 		metrics.MPublicDashboardRequestCount.Inc()
 	}
+}
+
+// Empty middleware created in order to bind the enterprise one
+type Middleware struct {
+}
+
+var _ publicdashboards.Middleware = (*Middleware)(nil)
+
+func ProvideMiddleware() *Middleware {
+	return &Middleware{}
+}
+func (m *Middleware) HandleApi(c *contextmodel.ReqContext) {
+}
+func (m *Middleware) HandleView(c *contextmodel.ReqContext) {
+}
+func (m *Middleware) HandleAccessView(c *contextmodel.ReqContext) {
+}
+func (m *Middleware) HandleConfirmAccessView(c *contextmodel.ReqContext) {
+
 }

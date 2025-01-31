@@ -1,7 +1,7 @@
 ---
 aliases:
-  - /docs/grafana/latest/developers/http_api/dashboard/
-  - /docs/grafana/latest/http_api/dashboard/
+  - ../../http_api/dashboard/
+canonical: /docs/grafana/latest/developers/http_api/dashboard/
 description: Grafana Dashboard HTTP API
 keywords:
   - grafana
@@ -9,12 +9,16 @@ keywords:
   - documentation
   - api
   - dashboard
-title: 'Dashboard HTTP API'
+labels:
+  products:
+    - enterprise
+    - oss
+title: Dashboard HTTP API
 ---
 
 # Dashboard API
 
-> If you are running Grafana Enterprise, for some endpoints you'll need to have specific permissions. Refer to [Role-based access control permissions]({{< relref "../../administration/roles-and-permissions/access-control/custom-role-actions-scopes/" >}}) for more information.
+> If you are running Grafana Enterprise, for some endpoints you'll need to have specific permissions. Refer to [Role-based access control permissions]({{< relref "/docs/grafana/latest/administration/roles-and-permissions/access-control/custom-role-actions-scopes" >}}) for more information.
 
 ## Identifier (id) vs unique identifier (uid)
 
@@ -22,7 +26,7 @@ The identifier (id) of a dashboard is an auto-incrementing numeric value and is 
 
 The unique identifier (uid) of a dashboard can be used for uniquely identify a dashboard between multiple Grafana installs.
 It's automatically generated if not provided when creating a dashboard. The uid allows having consistent URLs for accessing
-dashboards and when syncing dashboards between multiple Grafana installs, see [dashboard provisioning]({{< relref "../../administration/provisioning/#dashboards" >}})
+dashboards and when syncing dashboards between multiple Grafana installs, see [dashboard provisioning]({{< relref "/docs/grafana/latest/administration/provisioning#dashboards" >}})
 for more information. This means that changing the title of a dashboard will not break any bookmarked links to that dashboard.
 
 The uid can have a maximum length of 40 characters.
@@ -31,15 +35,21 @@ The uid can have a maximum length of 40 characters.
 
 `POST /api/dashboards/db`
 
-Creates a new dashboard or updates an existing dashboard. When updating existing dashboards, if you do not define the `folderId` or the `folderUid` property, then the dashboard(s) are moved to the General folder. (You need to define only one property, not both).
+Creates a new dashboard or updates an existing dashboard. When updating existing dashboards, if you do not define the `folderId` or the `folderUid` property, then the dashboard(s) are moved to the root level. (You need to define only one property, not both).
+
+> **Note:** This endpoint is not intended for creating folders, use `POST /api/folders` for that.
 
 **Required permissions**
 
 See note in the [introduction]({{< ref "#dashboard-api" >}}) for an explanation.
 
-| Action              | Scope       |
-| ------------------- | ----------- |
-| `dashboards:create` | `folders:*` |
+<!-- prettier-ignore-start -->
+| Action              | Scope                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `dashboards:create` | <ul><li>`folders:*`</li><li>`folders:uid:*`</li></ul>                                                   |
+| `dashboards:write`  | <ul><li>`dashboards:*`</li><li>`dashboards:uid:*`</li><li>`folders:*`</li><li>`folders:uid:*`</li></ul> |
+{ .no-spacing-list }
+<!-- prettier-ignore-end -->
 
 **Example Request for new dashboard**:
 
@@ -57,10 +67,8 @@ Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
     "tags": [ "templated" ],
     "timezone": "browser",
     "schemaVersion": 16,
-    "version": 0,
     "refresh": "25s"
   },
-  "folderId": 0,
   "folderUid": "l3KqBxCMz",
   "message": "Made changes to xyz",
   "overwrite": false
@@ -69,169 +77,36 @@ Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
 
 JSON Body schema:
 
-- **dashboard** – The complete dashboard model, id = null to create a new dashboard.
+- **dashboard** – The complete dashboard model.
 - **dashboard.id** – id = null to create a new dashboard.
 - **dashboard.uid** – Optional unique identifier when creating a dashboard. uid = null will generate a new uid.
+- **dashboard.refresh** - Set the dashboard refresh interval. If this is lower than [the minimum refresh interval]({{< relref "/docs/grafana/latest/setup-grafana/configure-grafana#min_refresh_interval" >}}), then Grafana will ignore it and will enforce the minimum refresh interval.
 - **folderId** – The id of the folder to save the dashboard in.
 - **folderUid** – The UID of the folder to save the dashboard in. Overrides the `folderId`.
-- **overwrite** – Set to true if you want to overwrite existing dashboard with newer version, same dashboard title in folder or same dashboard uid.
+- **overwrite** – Set to true if you want to overwrite an existing dashboard with a given dashboard UID.
 - **message** - Set a commit message for the version history.
-- **refresh** - Set the dashboard refresh interval. If this is lower than [the minimum refresh interval]({{< relref "../../setup-grafana/configure-grafana/#min_refresh_interval" >}}), then Grafana will ignore it and will enforce the minimum refresh interval.
 
-For adding or updating an alert rule for a dashboard panel the user should declare a
-`dashboard.panels.alert` block.
-
-**Example Request for updating dashboard alert rule**:
+**Example Request for updating a dashboard**:
 
 ```http
-HTTP/1.1 200 OK
-Content-Type: application/json; charset=UTF-8
-Content-Length: 78
+POST /api/dashboards/db HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
 
 {
- "dashboard":  {
-        "id": 104,
-        "panels": [
-            {
-                "alert": {
-                    "alertRuleTags": {},
-                    "conditions": [
-                        {
-                            "evaluator": {
-                                "params": [
-                                    25
-                                ],
-                                "type": "gt"
-                            },
-                            "operator": {
-                                "type": "and"
-                            },
-                            "query": {
-                                "params": [
-                                    "A",
-                                    "5m",
-                                    "now"
-                                ]
-                            },
-                            "reducer": {
-                                "params": [],
-                                "type": "avg"
-                            },
-                            "type": "query"
-                        }
-                    ],
-                    "executionErrorState": "alerting",
-                    "for": "5m",
-                    "frequency": "1m",
-                    "handler": 1,
-                    "name": "Panel Title alert",
-                    "noDataState": "no_data",
-                    "notifications": []
-                },
-                "aliasColors": {},
-                "bars": false,
-                "dashLength": 10,
-                "dashes": false,
-                "datasource": null,
-                "fieldConfig": {
-                    "defaults": {
-                        "custom": {}
-                    },
-                    "overrides": []
-                },
-                "fill": 1,
-                "fillGradient": 0,
-                "gridPos": {
-                    "h": 9,
-                    "w": 12,
-                    "x": 0,
-                    "y": 0
-                },
-                "hiddenSeries": false,
-                "id": 2,
-                "legend": {
-                    "avg": false,
-                    "current": false,
-                    "max": false,
-                    "min": false,
-                    "show": true,
-                    "total": false,
-                    "values": false
-                },
-                "lines": true,
-                "linewidth": 1,
-                "nullPointMode": "null",
-                "options": {
-                    "dataLinks": []
-                },
-                "percentage": false,
-                "pointradius": 2,
-                "points": false,
-                "renderer": "flot",
-                "seriesOverrides": [],
-                "spaceLength": 10,
-                "stack": false,
-                "steppedLine": false,
-                "targets": [
-                    {
-                        "refId": "A",
-                        "scenarioId": "random_walk"
-                    }
-                ],
-                "thresholds": [
-                    {
-                        "colorMode": "critical",
-                        "fill": true,
-                        "line": true,
-                        "op": "gt",
-                        "value": 50
-                    }
-                ],
-                "timeFrom": null,
-                "timeRegions": [],
-                "timeShift": null,
-                "title": "Panel Title",
-                "tooltip": {
-                    "shared": true,
-                    "sort": 0,
-                    "value_type": "individual"
-                },
-                "type": "graph",
-                "xaxis": {
-                    "buckets": null,
-                    "mode": "time",
-                    "name": null,
-                    "show": true,
-                    "values": []
-                },
-                "yaxes": [
-                    {
-                        "format": "short",
-                        "label": null,
-                        "logBase": 1,
-                        "max": null,
-                        "min": null,
-                        "show": true
-                    },
-                    {
-                        "format": "short",
-                        "label": null,
-                        "logBase": 1,
-                        "max": null,
-                        "min": null,
-                        "show": true
-                    }
-                ],
-                "yaxis": {
-                    "align": false,
-                    "alignLevel": null
-                }
-            }
-        ],
-        "title": "Update alert rule via API",
-        "uid": "dHEquNzGz",
-        "version": 1
-    }
+  "dashboard": {
+    "id": 1,
+    "title": "Production Overview Updated",
+    "tags": [ "templated" ],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "25s"
+  },
+  "folderUid": "l3KqBxCMz",
+  "message": "Made changes to xyz",
+  "overwrite": false
 }
 ```
 
@@ -243,12 +118,12 @@ Content-Type: application/json; charset=UTF-8
 Content-Length: 78
 
 {
-  "id":      1,
-  "uid":     "cIBgcSjkk",
-  "url":     "/d/cIBgcSjkk/production-overview",
-  "status":  "success",
-  "version": 1,
-  "slug":    "production-overview" //deprecated in Grafana v5.0
+    "id": 1,
+    "uid": "e883f11b-77c0-4ee3-9a70-3ba223d66e56",
+    "url": "/d/e883f11b-77c0-4ee3-9a70-3ba223d66e56/production-overview-updated",
+    "status": "success",
+    "version": 2
+    "slug": "production-overview-updated",
 }
 ```
 
@@ -293,9 +168,12 @@ Will return the dashboard given the dashboard unique identifier (uid). Informati
 
 See note in the [introduction]({{< ref "#dashboard-api" >}}) for an explanation.
 
-| Action            | Scope          |
-| ----------------- | -------------- |
-| `dashboards:read` | `dashboards:*` |
+<!-- prettier-ignore-start -->
+| Action            | Scope                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------- |
+| `dashboards:read` | <ul><li>`dashboards:*`</li><li>`dashboards:uid:*`</li><li>`folders:*`</li><li>`folders:uid:*`</li></ul> |
+{ .no-spacing-list }
+<!-- prettier-ignore-end -->
 
 **Example Request**:
 
@@ -349,9 +227,12 @@ Will delete the dashboard given the specified unique identifier (uid).
 
 See note in the [introduction]({{< ref "#dashboard-api" >}}) for an explanation.
 
-| Action              | Scope                         |
-| ------------------- | ----------------------------- |
-| `dashboards:delete` | `dashboards:*`<br>`folders:*` |
+<!-- prettier-ignore-start -->
+| Action              | Scope                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `dashboards:delete` | <ul><li>`dashboards:*`</li><li>`dashboards:uid:*`</li><li>`folders:*`</li><li>`folders:uid:*`</li></ul> |
+{ .no-spacing-list }
+<!-- prettier-ignore-end -->
 
 **Example Request**:
 
@@ -381,6 +262,107 @@ Status Codes:
 - **401** – Unauthorized
 - **403** – Access denied
 - **404** – Not found
+
+## Hard delete dashboard by uid
+
+{{% admonition type="note" %}}
+This feature is currently in private preview and behind the `dashboardRestore` feature toggle.
+{{% /admonition %}}
+
+`DELETE /api/dashboards/uid/:uid/trash`
+
+Will delete permanently the dashboard given the specified unique identifier (uid).
+
+**Required permissions**
+
+See note in the [introduction]({{< ref "#dashboard-api" >}}) for an explanation.
+
+<!-- prettier-ignore-start -->
+| Action              | Scope                                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------------------- |
+| `dashboards:delete` | <ul><li>`dashboards:*`</li><li>`dashboards:uid:*`</li><li>`folders:*`</li><li>`folders:uid:*`</li></ul> |
+{ .no-spacing-list }
+<!-- prettier-ignore-end -->
+
+**Example Request**:
+
+```http
+DELETE /api/dashboards/uid/cIBgcSjkk/trash HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
+```
+
+**Example Response**:
+
+```http
+HTTP/1.1 200
+Content-Type: application/json
+
+{
+  "title": "Production Overview",
+  "message": "Dashboard Production Overview deleted",
+  "uid": "cIBgcSjkk"
+}
+```
+
+Status Codes:
+
+- **200** – Deleted
+- **401** – Unauthorized
+- **403** – Access denied
+- **404** – Not found
+
+## Restore deleted dashboard by uid
+
+{{% admonition type="note" %}}
+This feature is currently in private preview and behind the `dashboardRestore` feature toggle.
+{{% /admonition %}}
+
+`PATCH /api/dashboards/uid/:uid/trash`
+
+Will restore a deleted dashboard given the specified unique identifier (uid).
+
+**Required permissions**
+
+See note in the [introduction]({{< ref "#dashboard-api" >}}) for an explanation.
+
+<!-- prettier-ignore-start -->
+| Action              | Scope                                                 |
+| ------------------- | ----------------------------------------------------- |
+| `dashboards:create` | <ul><li>`folders:*`</li><li>`folders:uid:*`</li></ul> |
+{ .no-spacing-list }
+<!-- prettier-ignore-end -->
+
+**Example Request**:
+
+```http
+PATCH /api/dashboards/uid/cIBgcSjkk/trash HTTP/1.1
+Accept: application/json
+Content-Type: application/json
+Authorization: Bearer eyJrIjoiT0tTcG1pUlY2RnVKZTFVaDFsNFZXdE9ZWmNrMkZYbk
+```
+
+**Example Response**:
+
+```http
+HTTP/1.1 200
+Content-Type: application/json
+
+{
+  "title": "Production Overview",
+  "message": "Dashboard Production Overview restored",
+  "uid": "cIBgcSjkk"
+}
+```
+
+Status Codes:
+
+- **200** – Deleted
+- **401** – Unauthorized
+- **403** – Access denied
+- **404** – Not found
+-
 
 ## Gets the home dashboard
 

@@ -7,25 +7,25 @@ describe('currency', () => {
     const fmtFunc = currency(symbol);
 
     it.each`
-      value               | expectedSuffix | expectedText
-      ${0}                | ${''}          | ${'0'}
-      ${999}              | ${''}          | ${'999'}
-      ${1000}             | ${'K'}         | ${'1'}
-      ${1000000}          | ${'M'}         | ${'1'}
-      ${1000000000}       | ${'B'}         | ${'1'}
-      ${1000000000000}    | ${'T'}         | ${'1'}
-      ${1000000000000000} | ${'T'}         | ${'1000'}
-      ${-1000000000000}   | ${'T'}         | ${'-1'}
-      ${-1000000000}      | ${'B'}         | ${'-1'}
-      ${-1000000}         | ${'M'}         | ${'-1'}
-      ${-1000}            | ${'K'}         | ${'-1'}
-      ${-999}             | ${''}          | ${'-999'}
-    `('when called with value:{$value}', ({ value, expectedSuffix, expectedText }) => {
+      value               | expectedPrefix | expectedSuffix | expectedText
+      ${0}                | ${'@'}         | ${''}          | ${'0'}
+      ${999}              | ${'@'}         | ${''}          | ${'999'}
+      ${1000}             | ${'@'}         | ${'K'}         | ${'1'}
+      ${1000000}          | ${'@'}         | ${'M'}         | ${'1'}
+      ${1000000000}       | ${'@'}         | ${'B'}         | ${'1'}
+      ${1000000000000}    | ${'@'}         | ${'T'}         | ${'1'}
+      ${1000000000000000} | ${'@'}         | ${'T'}         | ${'1000'}
+      ${-1000000000000}   | ${'-@'}        | ${'T'}         | ${'1'}
+      ${-1000000000}      | ${'-@'}        | ${'B'}         | ${'1'}
+      ${-1000000}         | ${'-@'}        | ${'M'}         | ${'1'}
+      ${-1000}            | ${'-@'}        | ${'K'}         | ${'1'}
+      ${-999}             | ${'-@'}        | ${''}          | ${'999'}
+    `('when called with value:{$value}', ({ value, expectedPrefix, expectedText, expectedSuffix }) => {
       const { prefix, suffix, text } = fmtFunc(value);
 
-      expect(prefix).toEqual(symbol);
-      expect(suffix).toEqual(expectedSuffix);
+      expect(prefix).toEqual(expectedPrefix);
       expect(text).toEqual(expectedText);
+      expect(suffix).toEqual(expectedSuffix);
     });
   });
 
@@ -33,25 +33,25 @@ describe('currency', () => {
     const fmtFunc = currency(symbol, true);
 
     it.each`
-      value               | expectedSuffix | expectedText
-      ${0}                | ${'@'}         | ${'0'}
-      ${999}              | ${'@'}         | ${'999'}
-      ${1000}             | ${'K@'}        | ${'1'}
-      ${1000000}          | ${'M@'}        | ${'1'}
-      ${1000000000}       | ${'B@'}        | ${'1'}
-      ${1000000000000}    | ${'T@'}        | ${'1'}
-      ${1000000000000000} | ${'T@'}        | ${'1000'}
-      ${-1000000000000}   | ${'T@'}        | ${'-1'}
-      ${-1000000000}      | ${'B@'}        | ${'-1'}
-      ${-1000000}         | ${'M@'}        | ${'-1'}
-      ${-1000}            | ${'K@'}        | ${'-1'}
-      ${-999}             | ${'@'}         | ${'-999'}
-    `('when called with value:{$value}', ({ value, expectedSuffix, expectedText }) => {
+      value               | expectedPrefix | expectedSuffix | expectedText
+      ${0}                | ${undefined}   | ${'@'}         | ${'0'}
+      ${999}              | ${undefined}   | ${'@'}         | ${'999'}
+      ${1000}             | ${undefined}   | ${'K@'}        | ${'1'}
+      ${1000000}          | ${undefined}   | ${'M@'}        | ${'1'}
+      ${1000000000}       | ${undefined}   | ${'B@'}        | ${'1'}
+      ${1000000000000}    | ${undefined}   | ${'T@'}        | ${'1'}
+      ${1000000000000000} | ${undefined}   | ${'T@'}        | ${'1000'}
+      ${-1000000000000}   | ${'-'}         | ${'T@'}        | ${'1'}
+      ${-1000000000}      | ${'-'}         | ${'B@'}        | ${'1'}
+      ${-1000000}         | ${'-'}         | ${'M@'}        | ${'1'}
+      ${-1000}            | ${'-'}         | ${'K@'}        | ${'1'}
+      ${-999}             | ${'-'}         | ${'@'}         | ${'999'}
+    `('when called with value:{$value}', ({ value, expectedPrefix, expectedText, expectedSuffix }) => {
       const { prefix, suffix, text } = fmtFunc(value);
 
-      expect(prefix).toEqual(undefined);
-      expect(suffix).toEqual(expectedSuffix);
+      expect(prefix).toEqual(expectedPrefix);
       expect(text).toEqual(expectedText);
+      expect(suffix).toEqual(expectedSuffix);
     });
   });
 });
@@ -63,6 +63,12 @@ describe('SIPrefix', () => {
   it.each`
     value               | expectedSuffix | expectedText
     ${0}                | ${' V'}        | ${'0'}
+    ${0.000000000001}   | ${' pV'}       | ${'1'}
+    ${0.000000001}      | ${' nV'}       | ${'1'}
+    ${0.000001}         | ${' µV'}       | ${'1'}
+    ${0.001}            | ${' mV'}       | ${'1'}
+    ${0.999}            | ${' mV'}       | ${'999'}
+    ${1}                | ${' V'}        | ${'1'}
     ${999}              | ${' V'}        | ${'999'}
     ${1000}             | ${' kV'}       | ${'1'}
     ${1000000}          | ${' MV'}       | ${'1'}

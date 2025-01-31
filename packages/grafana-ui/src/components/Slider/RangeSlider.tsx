@@ -1,9 +1,9 @@
 import { cx } from '@emotion/css';
 import { Global } from '@emotion/react';
 import Slider, { SliderProps } from 'rc-slider';
-import React, { FunctionComponent, useCallback } from 'react';
+import { useCallback } from 'react';
 
-import { useTheme2 } from '../../themes/ThemeContext';
+import { useStyles2 } from '../../themes/ThemeContext';
 
 import HandleTooltip from './HandleTooltip';
 import { getStyles } from './styles';
@@ -14,7 +14,7 @@ import { RangeSliderProps } from './types';
  *
  * RichHistoryQueriesTab uses this Range Component
  */
-export const RangeSlider: FunctionComponent<RangeSliderProps> = ({
+export const RangeSlider = ({
   min,
   max,
   onChange,
@@ -25,7 +25,7 @@ export const RangeSlider: FunctionComponent<RangeSliderProps> = ({
   formatTooltipResult,
   value,
   tooltipAlwaysVisible = true,
-}) => {
+}: RangeSliderProps) => {
   const handleChange = useCallback(
     (v: number | number[]) => {
       const value = typeof v === 'number' ? [v, v] : v;
@@ -34,7 +34,7 @@ export const RangeSlider: FunctionComponent<RangeSliderProps> = ({
     [onChange]
   );
 
-  const handleAfterChange = useCallback(
+  const handleChangeComplete = useCallback(
     (v: number | number[]) => {
       const value = typeof v === 'number' ? [v, v] : v;
       onAfterChange?.(value);
@@ -43,15 +43,14 @@ export const RangeSlider: FunctionComponent<RangeSliderProps> = ({
   );
 
   const isHorizontal = orientation === 'horizontal';
-  const theme = useTheme2();
-  const styles = getStyles(theme, isHorizontal);
+  const styles = useStyles2(getStyles, isHorizontal);
 
   const tipHandleRender: SliderProps['handleRender'] = (node, handleProps) => {
     return (
       <HandleTooltip
         value={handleProps.value}
         visible={tooltipAlwaysVisible || handleProps.dragging}
-        tipFormatter={formatTooltipResult}
+        tipFormatter={formatTooltipResult ? () => formatTooltipResult(handleProps.value) : undefined}
         placement={isHorizontal ? 'top' : 'right'}
       >
         {node}
@@ -70,7 +69,7 @@ export const RangeSlider: FunctionComponent<RangeSliderProps> = ({
         defaultValue={value}
         range={true}
         onChange={handleChange}
-        onAfterChange={handleAfterChange}
+        onChangeComplete={handleChangeComplete}
         vertical={!isHorizontal}
         reverse={reverse}
         handleRender={tipHandleRender}

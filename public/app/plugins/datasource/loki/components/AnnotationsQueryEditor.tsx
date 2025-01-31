@@ -1,9 +1,9 @@
 // Libraries
-import React, { memo } from 'react';
+import { memo } from 'react';
 
 import { AnnotationQuery } from '@grafana/data';
-import { EditorField, EditorRow } from '@grafana/experimental';
-import { Input } from '@grafana/ui';
+import { EditorField, EditorRow } from '@grafana/plugin-ui';
+import { Input, Stack } from '@grafana/ui';
 
 // Types
 import { getNormalizedLokiQuery } from '../queryUtils';
@@ -49,14 +49,13 @@ export const LokiAnnotationsQueryEditor = memo(function LokiAnnotationQueryEdito
     queryType: annotation.queryType,
   };
   return (
-    <>
-      <div className="gf-form-group">
+    <Stack gap={5} direction="column">
+      <Stack gap={0} direction="column">
         <LokiQueryField
           datasource={props.datasource}
           query={queryWithRefId}
           onChange={onChangeQuery}
           onRunQuery={() => {}}
-          onBlur={() => {}}
           history={history}
           ExtraFieldElement={
             <LokiOptionFields
@@ -68,8 +67,7 @@ export const LokiAnnotationsQueryEditor = memo(function LokiAnnotationQueryEdito
             />
           }
         />
-      </div>
-
+      </Stack>
       <EditorRow>
         <EditorField
           label="Title"
@@ -121,6 +119,6 @@ export const LokiAnnotationsQueryEditor = memo(function LokiAnnotationQueryEdito
           />
         </EditorField>
       </EditorRow>
-    </>
+    </Stack>
   );
 });

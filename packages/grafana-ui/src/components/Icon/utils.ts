@@ -1,8 +1,16 @@
-import { IconName, IconSize } from '../../types/icon';
+import { IconName, IconSize, IconType } from '../../types/icon';
 
-const alwaysMonoIcons: IconName[] = ['grafana', 'favorite', 'heart-break', 'heart', 'panel-add', 'library-panel'];
+const alwaysMonoIcons: IconName[] = [
+  'grafana',
+  'favorite',
+  'heart-break',
+  'heart',
+  'panel-add',
+  'library-panel',
+  'circle-mono',
+];
 
-export function getIconSubDir(name: IconName, type: string): string {
+export function getIconSubDir(name: IconName, type: IconType): string {
   if (name?.startsWith('gf-')) {
     return 'custom';
   } else if (alwaysMonoIcons.includes(name)) {
@@ -34,4 +42,21 @@ export function getSvgSize(size: IconSize) {
     case 'xxxl':
       return 48;
   }
+}
+
+let iconRoot: string | undefined;
+
+export function getIconRoot(): string {
+  if (iconRoot) {
+    return iconRoot;
+  }
+
+  const grafanaPublicPath = typeof window !== 'undefined' && window.__grafana_public_path__;
+  if (grafanaPublicPath) {
+    iconRoot = grafanaPublicPath + 'img/icons/';
+  } else {
+    iconRoot = 'public/img/icons/';
+  }
+
+  return iconRoot;
 }

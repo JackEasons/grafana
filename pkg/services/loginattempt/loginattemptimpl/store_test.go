@@ -8,7 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/infra/db"
+	"github.com/grafana/grafana/pkg/tests/testsuite"
 )
+
+func TestMain(m *testing.M) {
+	testsuite.Run(m)
+}
 
 func TestIntegrationLoginAttemptsQuery(t *testing.T) {
 	if testing.Short() {
@@ -53,21 +58,21 @@ func TestIntegrationLoginAttemptsQuery(t *testing.T) {
 			now: func() time.Time { return mockTime },
 		}
 
-		err := s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
+		_, err := s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
 			Username:  user,
 			IpAddress: "192.168.0.1",
 		})
 		require.Nil(t, err)
 
 		mockTime = timePlusOneMinute
-		err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
+		_, err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
 			Username:  user,
 			IpAddress: "192.168.0.1",
 		})
 		require.Nil(t, err)
 
 		mockTime = timePlusTwoMinutes
-		err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
+		_, err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
 			Username:  user,
 			IpAddress: "192.168.0.1",
 		})
@@ -118,21 +123,21 @@ func TestIntegrationLoginAttemptsDelete(t *testing.T) {
 			now: func() time.Time { return mockTime },
 		}
 
-		err := s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
+		_, err := s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
 			Username:  user,
 			IpAddress: "192.168.0.1",
 		})
 		require.Nil(t, err)
 
 		mockTime = timePlusOneMinute
-		err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
+		_, err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
 			Username:  user,
 			IpAddress: "192.168.0.1",
 		})
 		require.Nil(t, err)
 
 		mockTime = timePlusTwoMinutes
-		err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
+		_, err = s.CreateLoginAttempt(context.Background(), CreateLoginAttemptCommand{
 			Username:  user,
 			IpAddress: "192.168.0.1",
 		})

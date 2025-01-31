@@ -6,18 +6,13 @@ import { IconName } from './icon';
 export interface NavLinkDTO {
   id?: string;
   text: string;
-  description?: string;
-  section?: NavSection;
   subTitle?: string;
   icon?: IconName;
   img?: string;
   url?: string;
   target?: LinkTarget;
   sortWeight?: number;
-  divider?: boolean;
-  hideFromMenu?: boolean;
   hideFromTabs?: boolean;
-  showIconInNavbar?: boolean;
   roundIcon?: boolean;
   /**
    * This is true for some sections that have no children (but is still a section)
@@ -25,36 +20,25 @@ export interface NavLinkDTO {
   isSection?: boolean;
   children?: NavLinkDTO[];
   highlightText?: string;
+  highlightId?: string;
   emptyMessageId?: string;
   // The ID of the plugin that registered the page (in case it was registered by a plugin, otherwise left empty)
   pluginId?: string;
   // Whether the page is used to create a new resource. We may place these in a different position in the UI.
   isCreateAction?: boolean;
+  // Optional keywords to match on when searching (e.g. in the CommandPalette)
+  keywords?: string[];
 }
 
 export interface NavModelItem extends NavLinkDTO {
   children?: NavModelItem[];
   active?: boolean;
-  breadcrumbs?: NavModelBreadcrumb[];
   parentItem?: NavModelItem;
-  showOrgSwitcher?: boolean;
   onClick?: () => void;
-  menuItemType?: NavMenuItemType;
-  highlightText?: string;
-  highlightId?: string;
   tabSuffix?: ComponentType<{ className?: string }>;
+  tabCounter?: number;
   hideFromBreadcrumbs?: boolean;
-}
-
-export enum NavSection {
-  Core = 'core',
-  Plugin = 'plugin',
-  Config = 'config',
-}
-
-export enum NavMenuItemType {
-  Section = 'section',
-  Item = 'item',
+  emptyMessage?: string;
 }
 
 /**
@@ -69,11 +53,6 @@ export interface NavModel {
    *   This is the current active tab/navigation.
    */
   node: NavModelItem;
-}
-
-export interface NavModelBreadcrumb {
-  title: string;
-  url?: string;
 }
 
 export type NavIndex = { [s: string]: NavModelItem };

@@ -1,12 +1,13 @@
-import React, { FunctionComponent, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { SelectableValue } from '@grafana/data';
-import { EditorField, EditorFieldGroup } from '@grafana/experimental';
+import { EditorField, EditorFieldGroup } from '@grafana/plugin-ui';
 import { MultiSelect } from '@grafana/ui';
 
 import { SYSTEM_LABELS } from '../constants';
 import { labelsToGroupedOptions } from '../functions';
-import { MetricDescriptor, MetricQuery } from '../types';
+import { TimeSeriesList } from '../types/query';
+import { MetricDescriptor } from '../types/types';
 
 import { Aggregation } from './Aggregation';
 
@@ -15,18 +16,18 @@ export interface Props {
   variableOptionGroup: SelectableValue<string>;
   labels: string[];
   metricDescriptor?: MetricDescriptor;
-  onChange: (query: MetricQuery) => void;
-  query: MetricQuery;
+  onChange: (query: TimeSeriesList) => void;
+  query: TimeSeriesList;
 }
 
-export const GroupBy: FunctionComponent<Props> = ({
+export const GroupBy = ({
   refId,
   labels: groupBys = [],
   query,
   onChange,
   variableOptionGroup,
   metricDescriptor,
-}) => {
+}: Props) => {
   const options = useMemo(
     () => [variableOptionGroup, ...labelsToGroupedOptions([...groupBys, ...SYSTEM_LABELS])],
     [groupBys, variableOptionGroup]
@@ -39,6 +40,7 @@ export const GroupBy: FunctionComponent<Props> = ({
         tooltip="You can reduce the amount of data returned for a metric by combining different time series. To combine multiple time series, you can specify a grouping and a function. Grouping is done on the basis of labels. The grouping function is used to combine the time series in the group into a single time series."
       >
         <MultiSelect
+          allowCustomValue
           inputId={`${refId}-group-by`}
           width="auto"
           placeholder="Choose label"

@@ -1,20 +1,25 @@
 import { contextSrv } from 'app/core/services/context_srv';
 import { RulerRuleDTO } from 'app/types/unified-alerting-dto';
 
+import { featureDiscoveryApi } from '../api/featureDiscoveryApi';
 import { getRulesPermissions } from '../utils/access-control';
+import { getDatasourceAPIUid } from '../utils/datasource';
 import { isGrafanaRulerRule } from '../utils/rules';
 
 import { useFolder } from './useFolder';
-import { useUnifiedAlertingSelector } from './useUnifiedAlertingSelector';
 
 interface ResultBag {
+  isRulerAvailable?: boolean;
   isEditable?: boolean;
   isRemovable?: boolean;
   loading: boolean;
 }
 
 export function useIsRuleEditable(rulesSourceName: string, rule?: RulerRuleDTO): ResultBag {
-  const dataSources = useUnifiedAlertingSelector((state) => state.dataSources);
+  const { currentData: dsFeatures, isLoading } = featureDiscoveryApi.endpoints.discoverDsFeatures.useQuery({
+    uid: getDatasourceAPIUid(rulesSourceName),
+  });
+
   const folderUID = rule && isGrafanaRulerRule(rule) ? rule.grafana_alert.namespace_uid : undefined;
 
   const rulePermission = getRulesPermissions(rulesSourceName);
@@ -37,31 +42,33 @@ export function useIsRuleEditable(rulesSourceName: string, rule?: RulerRuleDTO):
     if (!folder) {
       // Loading or invalid folder UID
       return {
+        isRulerAvailable: true,
         isEditable: false,
         isRemovable: false,
         loading,
       };
     }
-    const rbacDisabledFallback = folder.canSave;
 
-    const canEditGrafanaRules = contextSrv.hasAccessInMetadata(rulePermission.update, folder, rbacDisabledFallback);
-    const canRemoveGrafanaRules = contextSrv.hasAccessInMetadata(rulePermission.delete, folder, rbacDisabledFallback);
+    const canEditGrafanaRules = contextSrv.hasPermissionInMetadata(rulePermission.update, folder);
+    const canRemoveGrafanaRules = contextSrv.hasPermissionInMetadata(rulePermission.delete, folder);
 
     return {
+      isRulerAvailable: true,
       isEditable: canEditGrafanaRules,
       isRemovable: canRemoveGrafanaRules,
-      loading,
+      loading: loading || isLoading,
     };
   }
 
   // prom rules are only editable by users with Editor role and only if rules source supports editing
-  const isRulerAvailable = Boolean(dataSources[rulesSourceName]?.result?.rulerConfig);
-  const canEditCloudRules = contextSrv.hasAccess(rulePermission.update, contextSrv.isEditor);
-  const canRemoveCloudRules = contextSrv.hasAccess(rulePermission.delete, contextSrv.isEditor);
+  const isRulerAvailable = Boolean(dsFeatures?.rulerConfig);
+  const canEditCloudRules = contextSrv.hasPermission(rulePermission.update);
+  const canRemoveCloudRules = contextSrv.hasPermission(rulePermission.delete);
 
   return {
+    isRulerAvailable,
     isEditable: canEditCloudRules && isRulerAvailable,
     isRemovable: canRemoveCloudRules && isRulerAvailable,
-    loading: dataSources[rulesSourceName]?.loading,
+    loading: isLoading,
   };
 }

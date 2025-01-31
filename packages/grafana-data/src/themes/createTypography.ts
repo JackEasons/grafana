@@ -5,7 +5,7 @@
 import { ThemeColors } from './createColors';
 
 /** @beta */
-export interface ThemeTypography {
+export interface ThemeTypography extends ThemeTypographyVariantTypes {
   fontFamily: string;
   fontFamilyMonospace: string;
   fontSize: number;
@@ -16,16 +16,6 @@ export interface ThemeTypography {
 
   // The font-size on the html element.
   htmlFontSize?: number;
-
-  h1: ThemeTypographyVariant;
-  h2: ThemeTypographyVariant;
-  h3: ThemeTypographyVariant;
-  h4: ThemeTypographyVariant;
-  h5: ThemeTypographyVariant;
-  h6: ThemeTypographyVariant;
-
-  body: ThemeTypographyVariant;
-  bodySmall: ThemeTypographyVariant;
 
   /**
    * @deprecated
@@ -63,7 +53,7 @@ export interface ThemeTypographyInput {
   htmlFontSize?: number;
 }
 
-const defaultFontFamily = '"Roboto", "Helvetica", "Arial", sans-serif';
+const defaultFontFamily = "'Inter', 'Helvetica', 'Arial', sans-serif";
 const defaultFontFamilyMonospace = "'Roboto Mono', monospace";
 
 export function createTypography(colors: ThemeColors, typographyInput: ThemeTypographyInput = {}): ThemeTypography {
@@ -124,6 +114,7 @@ export function createTypography(colors: ThemeColors, typographyInput: ThemeTypo
     h6: buildVariant(fontWeightMedium, 14, 22, 0.15),
     body: buildVariant(fontWeightRegular, fontSize, 22, 0.15),
     bodySmall: buildVariant(fontWeightRegular, 12, 18, 0.15),
+    code: { ...buildVariant(fontWeightRegular, 14, 16, 0.15), fontFamily: fontFamilyMonospace },
   };
 
   const size = {
@@ -151,4 +142,16 @@ export function createTypography(colors: ThemeColors, typographyInput: ThemeTypo
 
 function round(value: number) {
   return Math.round(value * 1e5) / 1e5;
+}
+
+export interface ThemeTypographyVariantTypes {
+  h1: ThemeTypographyVariant;
+  h2: ThemeTypographyVariant;
+  h3: ThemeTypographyVariant;
+  h4: ThemeTypographyVariant;
+  h5: ThemeTypographyVariant;
+  h6: ThemeTypographyVariant;
+  body: ThemeTypographyVariant;
+  bodySmall: ThemeTypographyVariant;
+  code: ThemeTypographyVariant;
 }

@@ -1,6 +1,7 @@
-import React, { Component } from 'react';
+import { Component } from 'react';
+import * as React from 'react';
 
-interface ModalsContextState {
+export interface ModalsContextState {
   component: React.ComponentType<any> | null;
   props: any;
   showModal: <T>(component: React.ComponentType<T>, props: T) => void;
@@ -22,6 +23,10 @@ interface ModalsProviderProps {
   props?: any;
 }
 
+/**
+ * @deprecated.
+ * Not the real implementation used by core.
+ */
 export class ModalsProvider extends Component<ModalsProviderProps, ModalsContextState> {
   constructor(props: ModalsProviderProps) {
     super(props);
@@ -33,7 +38,7 @@ export class ModalsProvider extends Component<ModalsProviderProps, ModalsContext
     };
   }
 
-  showModal = (component: React.ComponentType<any>, props: any) => {
+  showModal = <T,>(component: React.ComponentType<T>, props: T) => {
     this.setState({
       component,
       props,

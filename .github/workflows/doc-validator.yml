@@ -1,16 +1,26 @@
 name: "doc-validator"
 on:
-  pull_request:
-    paths: ["docs/sources/**"]
   workflow_dispatch:
+    inputs:
+      include:
+        description: |
+          Regular expression that matches paths to include in linting.
+
+          For example: docs/sources/(?:alerting|fundamentals)/.+\.md
+        required: true
 jobs:
   doc-validator:
     runs-on: "ubuntu-latest"
     container:
-      image: "grafana/doc-validator:latest"
+      image: "grafana/doc-validator:v5.2.0"
     steps:
       - name: "Checkout code"
-        uses: "actions/checkout@v3"
+        uses: "actions/checkout@v4"
       - name: "Run doc-validator tool"
-        # Ensure that the CI always passes until all errors are resolved.
-        run: "doc-validator ./docs/sources || true"
+        # Only run doc-validator on specific directories.
+        run: >
+          doc-validator
+          '--include=${{ inputs.include }}'
+          '--skip-checks=^(?:image.+|canonical-does-not-match-pretty-URL)$'
+          ./docs/sources
+          /docs/grafana/latest

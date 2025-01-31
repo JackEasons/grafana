@@ -1,9 +1,11 @@
 import { css, cx } from '@emotion/css';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
+import * as React from 'react';
 
 import { GrafanaTheme2 } from '@grafana/data';
 
 import { useStyles2, useTheme2 } from '../../themes/ThemeContext';
+import { Trans } from '../../utils/i18n';
 import { Button } from '../Button';
 import { Input } from '../Input/Input';
 
@@ -87,7 +89,7 @@ export const TagsInput = ({
             size="md"
             disabled={newTagName.length <= 0}
           >
-            Add
+            <Trans i18nKey="grafana-ui.tags-input.add">Add</Trans>
           </Button>
         }
       />
@@ -103,20 +105,20 @@ export const TagsInput = ({
 };
 
 const getStyles = (theme: GrafanaTheme2) => ({
-  wrapper: css`
-    min-height: ${theme.spacing(4)};
-    display: flex;
-    flex-direction: column;
-    gap: ${theme.spacing(1)};
-    flex-wrap: wrap;
-  `,
-  tags: css`
-    display: flex;
-    justify-content: flex-start;
-    flex-wrap: wrap;
-    gap: ${theme.spacing(0.5)};
-  `,
-  addButtonStyle: css`
-    margin: 0 -${theme.spacing(1)};
-  `,
+  wrapper: css({
+    minHeight: theme.spacing(4),
+    display: 'flex',
+    flexDirection: 'column',
+    gap: theme.spacing(1),
+    flexWrap: 'wrap',
+  }),
+  tags: css({
+    display: 'flex',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
+    gap: theme.spacing(0.5),
+  }),
+  addButtonStyle: css({
+    margin: `0 -${theme.spacing(1)}`,
+  }),
 });

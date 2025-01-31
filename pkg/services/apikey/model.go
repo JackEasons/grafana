@@ -4,9 +4,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/grafana/grafana/pkg/apimachinery/identity"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/quota"
-	"github.com/grafana/grafana/pkg/services/user"
 )
 
 var (
@@ -17,8 +17,8 @@ var (
 )
 
 type APIKey struct {
-	Id               int64        `db:"id"`
-	OrgId            int64        `db:"org_id"`
+	ID               int64        `db:"id" xorm:"pk autoincr 'id'"`
+	OrgID            int64        `db:"org_id" xorm:"org_id"`
 	Name             string       `db:"name"`
 	Key              string       `db:"key"`
 	Role             org.RoleType `db:"role"`
@@ -32,38 +32,33 @@ type APIKey struct {
 
 func (k APIKey) TableName() string { return "api_key" }
 
-// swagger:model
+// swagger:model AddAPIKeyCommand
 type AddCommand struct {
 	Name             string       `json:"name" binding:"Required"`
 	Role             org.RoleType `json:"role" binding:"Required"`
-	OrgId            int64        `json:"-"`
+	OrgID            int64        `json:"-" xorm:"org_id"`
 	Key              string       `json:"-"`
 	SecondsToLive    int64        `json:"secondsToLive"`
 	ServiceAccountID *int64       `json:"-"`
-
-	Result *APIKey `json:"-"`
 }
 
 type DeleteCommand struct {
-	Id    int64 `json:"id"`
-	OrgId int64 `json:"-"`
+	ID    int64 `json:"id"`
+	OrgID int64 `json:"-"`
 }
 
 type GetApiKeysQuery struct {
-	OrgId          int64
+	OrgID          int64
 	IncludeExpired bool
-	User           *user.SignedInUser
-	Result         []*APIKey
+	User           identity.Requester
 }
 type GetByNameQuery struct {
 	KeyName string
-	OrgId   int64
-	Result  *APIKey
+	OrgID   int64
 }
 
 type GetByIDQuery struct {
-	ApiKeyId int64
-	Result   *APIKey
+	ApiKeyID int64
 }
 
 const (

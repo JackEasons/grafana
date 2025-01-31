@@ -8,16 +8,16 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-func logf(format string, a ...interface{}) {
+func logf(format string, a ...any) {
 	//fmt.Printf(format, a...)
 }
 
 type templateVariable struct {
 	current struct {
-		value interface{}
+		value any
 	}
 	name         string
-	query        interface{}
+	query        any
 	variableType string
 }
 
@@ -69,7 +69,7 @@ func (d *datasourceVariableLookup) add(templateVariable templateVariable) {
 		return
 	}
 
-	if values, multiValueVariable := templateVariable.current.value.([]interface{}); multiValueVariable {
+	if values, multiValueVariable := templateVariable.current.value.([]any); multiValueVariable {
 		for _, value := range values {
 			if valueAsString, ok := value.(string); ok {
 				refs = append(refs, d.getDsRefsByTemplateVariableValue(valueAsString, datasourceType)...)
@@ -112,12 +112,15 @@ func newDatasourceVariableLookup(dsLookup DatasourceLookup) *datasourceVariableL
 	}
 }
 
-// nolint:gocyclo
 // ReadDashboard will take a byte stream and return dashboard info
-func readDashboard(stream io.Reader, lookup DatasourceLookup) (*dashboardInfo, error) {
-	dash := &dashboardInfo{}
-
+func ReadDashboard(stream io.Reader, lookup DatasourceLookup) (*DashboardSummaryInfo, error) {
 	iter := jsoniter.Parse(jsoniter.ConfigDefault, stream, 1024)
+	return readDashboardIter(iter, lookup)
+}
+
+// nolint:gocyclo
+func readDashboardIter(iter *jsoniter.Iterator, lookup DatasourceLookup) (*DashboardSummaryInfo, error) {
+	dash := &DashboardSummaryInfo{}
 
 	datasourceVariablesLookup := newDatasourceVariableLookup(lookup)
 
@@ -129,6 +132,14 @@ func readDashboard(stream io.Reader, lookup DatasourceLookup) (*dashboardInfo, e
 		}
 
 		switch l1Field {
+		// k8s metadata wrappers (skip)
+		case "metadata", "kind", "apiVersion":
+			_ = iter.Read()
+
+		// recursively read the spec as dashboard json
+		case "spec":
+			return readDashboardIter(iter, lookup)
+
 		case "id":
 			dash.ID = iter.ReadInt64()
 
@@ -179,7 +190,7 @@ func readDashboard(stream io.Reader, lookup DatasourceLookup) (*dashboardInfo, e
 			}
 
 		case "time":
-			obj, ok := iter.Read().(map[string]interface{})
+			obj, ok := iter.Read().(map[string]any)
 			if ok {
 				if timeFrom, ok := obj["from"].(string); ok {
 					dash.TimeFrom = timeFrom
@@ -268,7 +279,12 @@ func readDashboard(stream io.Reader, lookup DatasourceLookup) (*dashboardInfo, e
 	filterOutSpecialDatasources(dash)
 
 	targets := newTargetInfo(lookup)
-	for _, panel := range dash.Panels {
+	for idx, panel := range dash.Panels {
+		if panel.Type == "row" {
+			dash.Panels[idx].Datasource = nil
+			continue
+		}
+
 		targets.addPanel(panel)
 	}
 	dash.Datasource = targets.GetDatasourceInfo()
@@ -276,13 +292,13 @@ func readDashboard(stream io.Reader, lookup DatasourceLookup) (*dashboardInfo, e
 	return dash, iter.Error
 }
 
-func panelRequiresDatasource(panel panelInfo) bool {
+func panelRequiresDatasource(panel PanelSummaryInfo) bool {
 	return panel.Type != "row"
 }
 
-func fillDefaultDatasources(dash *dashboardInfo, lookup DatasourceLookup) {
+func fillDefaultDatasources(dash *DashboardSummaryInfo, lookup DatasourceLookup) {
 	for i, panel := range dash.Panels {
-		if len(panel.Datasource) != 0 || !panelRequiresDatasource(panel) {
+		if len(panel.Datasource) != 0 || !panelRequiresDatasource(PanelSummaryInfo{}) {
 			continue
 		}
 
@@ -293,7 +309,7 @@ func fillDefaultDatasources(dash *dashboardInfo, lookup DatasourceLookup) {
 	}
 }
 
-func filterOutSpecialDatasources(dash *dashboardInfo) {
+func filterOutSpecialDatasources(dash *DashboardSummaryInfo) {
 	for i, panel := range dash.Panels {
 		var dsRefs []DataSourceRef
 
@@ -315,7 +331,7 @@ func filterOutSpecialDatasources(dash *dashboardInfo) {
 	}
 }
 
-func replaceDatasourceVariables(dash *dashboardInfo, datasourceVariablesLookup *datasourceVariableLookup) {
+func replaceDatasourceVariables(dash *DashboardSummaryInfo, datasourceVariablesLookup *datasourceVariableLookup) {
 	for i, panel := range dash.Panels {
 		var dsVariableRefs []DataSourceRef
 		var dsRefs []DataSourceRef
@@ -362,8 +378,8 @@ func findDatasourceRefsForVariables(dsVariableRefs []DataSourceRef, datasourceVa
 }
 
 // will always return strings for now
-func readpanelInfo(iter *jsoniter.Iterator, lookup DatasourceLookup) panelInfo {
-	panel := panelInfo{}
+func readpanelInfo(iter *jsoniter.Iterator, lookup DatasourceLookup) PanelSummaryInfo {
+	panel := PanelSummaryInfo{}
 
 	targets := newTargetInfo(lookup)
 
@@ -394,6 +410,15 @@ func readpanelInfo(iter *jsoniter.Iterator, lookup DatasourceLookup) panelInfo {
 
 		case "pluginVersion":
 			panel.PluginVersion = iter.ReadString() // since 7x (the saved version for the plugin model)
+
+		case "libraryPanel":
+			var v map[string]interface{}
+			iter.ReadVal(&v)
+			if uid, ok := v["uid"]; ok {
+				if u, isString := uid.(string); isString {
+					panel.LibraryPanel = u
+				}
+			}
 
 		case "datasource":
 			targets.addDatasource(iter)

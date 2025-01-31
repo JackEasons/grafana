@@ -14,6 +14,9 @@ type AlertInstance struct {
 	CurrentStateSince time.Time
 	CurrentStateEnd   time.Time
 	LastEvalTime      time.Time
+	LastSentAt        *time.Time
+	ResolvedAt        *time.Time
+	ResultFingerprint string
 }
 
 type AlertInstanceKey struct {
@@ -34,7 +37,7 @@ const (
 	InstanceStatePending InstanceStateType = "Pending"
 	// InstanceStateNoData is for an alert with no data.
 	InstanceStateNoData InstanceStateType = "NoData"
-	// InstanceStateError is for a erroring alert.
+	// InstanceStateError is for an erroring alert.
 	InstanceStateError InstanceStateType = "Error"
 )
 
@@ -50,12 +53,9 @@ func (i InstanceStateType) IsValid() bool {
 
 // ListAlertInstancesQuery is the query list alert Instances.
 type ListAlertInstancesQuery struct {
-	RuleOrgID   int64 `json:"-"`
-	RuleUID     string
-	State       InstanceStateType
-	StateReason string
-
-	Result []*AlertInstance
+	RuleUID   string
+	RuleOrgID int64 `json:"-"`
+	RuleGroup string
 }
 
 // ValidateAlertInstance validates that the alert instance contains an alert rule id,

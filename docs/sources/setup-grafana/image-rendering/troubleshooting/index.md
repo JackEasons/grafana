@@ -1,7 +1,6 @@
 ---
 aliases:
-  - /docs/grafana/latest/image-rendering/troubleshooting/
-  - /docs/grafana/latest/setup-grafana/image-rendering/troubleshooting/
+  - ../../image-rendering/troubleshooting/
 description: Image rendering troubleshooting
 keywords:
   - grafana
@@ -9,7 +8,12 @@ keywords:
   - rendering
   - plugin
   - troubleshooting
-title: Troubleshooting
+labels:
+  products:
+    - enterprise
+    - oss
+menuTitle: Troubleshooting
+title: Troubleshoot image rendering
 weight: 200
 ---
 
@@ -28,11 +32,7 @@ You can enable debug log messages for rendering in the Grafana configuration fil
 filters = rendering:debug
 ```
 
-You can also enable more logs in image renderer service itself by:
-
-- Increasing the [log level]({{< relref ".#log-level" >}}).
-- Enabling [verbose logging]({{< relref "./#verbose-logging" >}}).
-- [Capturing headless browser output]({{< relref "./#capture-browser-output" >}}).
+You can also enable more logs in image renderer service itself by enabling [debug logging]({{< relref "#enable-debug-logging" >}}).
 
 ## Missing libraries
 
@@ -49,7 +49,7 @@ are not installed in your system:
 
 ```bash
 cd <grafana-image-render plugin directory>
-ldd chrome-linux/chrome
+ldd chrome-headless-shell/linux-132.0.6781.0/chrome-headless-shell-linux64/chrome-headless-shell
       linux-vdso.so.1 (0x00007fff1bf65000)
       libdl.so.2 => /lib/x86_64-linux-gnu/libdl.so.2 (0x00007f2047945000)
       libpthread.so.0 => /lib/x86_64-linux-gnu/libpthread.so.0 (0x00007f2047924000)
@@ -97,6 +97,14 @@ On a minimal CentOS 8 installation, the following dependencies are required for 
 libXcomposite libXdamage libXtst cups libXScrnSaver pango atk adwaita-cursor-theme adwaita-icon-theme at at-spi2-atk at-spi2-core cairo-gobject colord-libs dconf desktop-file-utils ed emacs-filesystem gdk-pixbuf2 glib-networking gnutls gsettings-desktop-schemas gtk-update-icon-cache gtk3 hicolor-icon-theme jasper-libs json-glib libappindicator-gtk3 libdbusmenu libdbusmenu-gtk3 libepoxy liberation-fonts liberation-narrow-fonts liberation-sans-fonts liberation-serif-fonts libgusb libindicator-gtk3 libmodman libproxy libsoup libwayland-cursor libwayland-egl libxkbcommon m4 mailx nettle patch psmisc redhat-lsb-core redhat-lsb-submod-security rest spax time trousers xdg-utils xkeyboard-config alsa-lib libX11-xcb
 ```
 
+**RHEL:**
+
+On a minimal RHEL 8 installation, the following dependencies are required for the image rendering to function:
+
+```bash
+linux-vdso.so.1 libdl.so.2 libpthread.so.0 libgobject-2.0.so.0 libglib-2.0.so.0 libnss3.so libnssutil3.so libsmime3.so libnspr4.so libatk-1.0.so.0 libatk-bridge-2.0.so.0 libcups.so.2 libgio-2.0.so.0 libdrm.so.2 libdbus-1.so.3 libexpat.so.1 libxcb.so.1 libxkbcommon.so.0 libm.so.6 libX11.so.6 libXcomposite.so.1 libXdamage.so.1 libXext.so.6 libXfixes.so.3 libXrandr.so.2 libgbm.so.1 libpango-1.0.so.0 libcairo.so.2 libasound.so.2 libatspi.so.0 libgcc_s.so.1 libc.so.6 /lib64/ld-linux-x86-64.so.2 libgnutls.so.30 libpcre.so.1 libffi.so.6 libplc4.so libplds4.so librt.so.1 libgmodule-2.0.so.0 libgssapi_krb5.so.2 libkrb5.so.3 libk5crypto.so.3 libcom_err.so.2 libavahi-common.so.3 libavahi-client.so.3 libcrypt.so.1 libz.so.1 libselinux.so.1 libresolv.so.2 libmount.so.1 libsystemd.so.0 libXau.so.6 libXrender.so.1 libthai.so.0 libfribidi.so.0 libpixman-1.so.0 libfontconfig.so.1 libpng16.so.16 libxcb-render.so.0 libidn2.so.0 libunistring.so.2 libtasn1.so.6 libnettle.so.6 libhogweed.so.4 libgmp.so.10 libkrb5support.so.0 libkeyutils.so.1 libpcre2-8.so.0 libuuid.so.1 liblz4.so.1 libgcrypt.so.20 libbz2.so.1
+```
+
 ## Certificate signed by internal certificate authorities
 
 In many cases, Grafana runs on internal servers and uses certificates that have not been signed by a CA ([Certificate Authority](https://en.wikipedia.org/wiki/Certificate_authority)) known to Chrome, and therefore cannot be validated. Chrome internally uses NSS ([Network Security Services](https://en.wikipedia.org/wiki/Network_Security_Services)) for cryptographic operations such as the validation of certificates.
@@ -115,7 +123,7 @@ If this happens, then you have to add the certificate to the trust store. If you
 
 ```
 [root@server ~]# [ -d /usr/share/grafana/.pki/nssdb ] || mkdir -p /usr/share/grafana/.pki/nssdb
-[root@merver ~]# certutil -d sql:/usr/share/grafana/.pki/nssdb -A -n internal-root-ca -t C -i /etc/pki/tls/certs/internal-root-ca.crt.pem
+[root@server ~]# certutil -d sql:/usr/share/grafana/.pki/nssdb -A -n internal-root-ca -t C -i /etc/pki/tls/certs/internal-root-ca.crt.pem
 [root@server ~]# chown -R grafana: /usr/share/grafana/.pki/nssdb
 ```
 
@@ -125,14 +133,32 @@ If this happens, then you have to add the certificate to the trust store. If you
 certutil –addstore "Root" <path>/internal-root-ca.crt.pem
 ```
 
+**Container:**
+
+```Dockerfile
+FROM grafana/grafana-image-renderer:latest
+
+USER root
+
+RUN apk add --no-cache nss-tools
+
+USER grafana
+
+COPY internal-root-ca.crt.pem /etc/pki/tls/certs/internal-root-ca.crt.pem
+RUN mkdir -p /home/grafana/.pki/nssdb
+RUN certutil -d sql:/home/grafana/.pki/nssdb -A -n internal-root-ca -t C -i /etc/pki/tls/certs/internal-root-ca.crt.pem
+```
+
 ## Custom Chrome/Chromium
 
 As a last resort, if you already have [Chrome](https://www.google.com/chrome/) or [Chromium](https://www.chromium.org/)
-installed on your system, then you can configure the [Grafana Image renderer plugin](../#custom-chromechromium) to use this
+installed on your system, then you can configure the Grafana Image renderer plugin to use this
 instead of the pre-packaged version of Chromium.
 
-> **Note:** Please note that this is not recommended, since you may encounter problems if the installed version of Chrome/Chromium is not
-> compatible with the [Grafana Image renderer plugin](https://grafana.com/grafana/plugins/grafana-image-renderer).
+{{% admonition type="note" %}}
+Please note that this is not recommended, since you may encounter problems if the installed version of Chrome/Chromium is not
+compatible with the [Grafana Image renderer plugin](/grafana/plugins/grafana-image-renderer).
+{{% /admonition %}}
 
 To override the path to the Chrome/Chromium executable in plugin mode, set an environment variable and make sure that it's available for the Grafana process. For example:
 

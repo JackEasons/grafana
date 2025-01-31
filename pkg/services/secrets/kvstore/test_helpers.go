@@ -16,15 +16,16 @@ import (
 	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/plugins/backendplugin"
 	"github.com/grafana/grafana/pkg/plugins/backendplugin/secretsmanagerplugin"
+	pluginsLogger "github.com/grafana/grafana/pkg/plugins/log"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
 	"github.com/grafana/grafana/pkg/services/secrets/fakes"
 	secretsmng "github.com/grafana/grafana/pkg/services/secrets/manager"
+	"github.com/grafana/grafana/pkg/services/sqlstore"
 	"github.com/grafana/grafana/pkg/setting"
 )
 
-func NewFakeSQLSecretsKVStore(t *testing.T) *SecretsKVStoreSQL {
+func NewFakeSQLSecretsKVStore(t *testing.T, sqlStore *sqlstore.SQLStore) *SecretsKVStoreSQL {
 	t.Helper()
-	sqlStore := db.InitTestDB(t)
 	secretsService := secretsmng.SetupTestService(t, fakes.NewFakeSecretsStore())
 	return NewSQLSecretsKVStore(sqlStore, secretsService, log.New("test.logger"))
 }
@@ -146,8 +147,16 @@ func NewFakeFeatureToggles(t *testing.T, returnValue bool) featuremgmt.FeatureTo
 	}
 }
 
-func (f fakeFeatureToggles) IsEnabled(feature string) bool {
+func (f fakeFeatureToggles) IsEnabledGlobally(feature string) bool {
 	return f.returnValue
+}
+
+func (f fakeFeatureToggles) IsEnabled(ctx context.Context, feature string) bool {
+	return f.returnValue
+}
+
+func (f fakeFeatureToggles) GetEnabled(ctx context.Context) map[string]bool {
+	return map[string]bool{}
 }
 
 // Fake grpc secrets plugin impl
@@ -255,6 +264,10 @@ func (pc *fakePluginClient) Start(_ context.Context) error {
 
 func (pc *fakePluginClient) Stop(_ context.Context) error {
 	return nil
+}
+
+func (pc *fakePluginClient) Logger() pluginsLogger.Logger {
+	return pluginsLogger.NewTestLogger()
 }
 
 func SetupFatalCrashTest(

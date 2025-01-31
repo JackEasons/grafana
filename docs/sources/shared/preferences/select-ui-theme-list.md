@@ -1,6 +1,8 @@
 ---
-aliases:
-  - /docs/grafana/latest/shared/preferences/select-ui-theme-list/
+labels:
+  products:
+    - enterprise
+    - oss
 title: Select the UI theme
 ---
 

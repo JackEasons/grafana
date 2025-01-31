@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import React from 'react';
 
 import { FileDropzone } from './FileDropzone';
 import { REMOVE_FILE } from './FileListItem';
@@ -31,6 +30,14 @@ describe('The FileDropzone component', () => {
     render(<FileDropzone options={{ accept: '.json' }} />);
 
     expect(screen.getByText('Accepted file type: .json')).toBeInTheDocument();
+  });
+
+  it('should show an error message when the file size exceeds the max file size', async () => {
+    render(<FileDropzone options={{ maxSize: 1 }} />);
+
+    dispatchEvt(screen.getByTestId('dropzone'), 'drop', mockData(files));
+
+    expect(await screen.findByText('File is larger than 1 B')).toBeInTheDocument();
   });
 
   it('should show the accepted file type(s) when passed in as a array of strings', () => {
@@ -101,7 +108,7 @@ describe('The FileDropzone component', () => {
 
     expect(await screen.findByText('ping.json')).toBeInTheDocument();
     expect(fileReaderSpy).not.toBeCalled();
-    expect(onDrop).toBeCalledWith([fileToUpload], [], expect.anything());
+    expect(onDrop).toHaveBeenCalledWith([fileToUpload], [], expect.anything());
   });
 
   it('should show children inside the dropzone', () => {

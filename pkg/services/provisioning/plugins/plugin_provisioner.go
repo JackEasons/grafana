@@ -5,21 +5,21 @@ import (
 	"errors"
 
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
-	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/services/org"
-	"github.com/grafana/grafana/pkg/services/pluginsettings"
+	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginsettings"
+	"github.com/grafana/grafana/pkg/services/pluginsintegration/pluginstore"
 )
 
 // Provision scans a directory for provisioning config files
 // and provisions the app in those files.
-func Provision(ctx context.Context, configDirectory string, pluginStore plugins.Store, pluginSettings pluginsettings.Service, orgService org.Service) error {
+func Provision(ctx context.Context, configDirectory string, pluginStore pluginstore.Store, pluginSettings pluginsettings.Service, orgService org.Service) error {
 	logger := log.New("provisioning.plugins")
 	ap := PluginProvisioner{
 		log:            logger,
 		cfgProvider:    newConfigReader(logger, pluginStore),
 		pluginSettings: pluginSettings,
 		orgService:     orgService,
+		pluginStore:    pluginStore,
 	}
 	return ap.applyChanges(ctx, configDirectory)
 }
@@ -31,6 +31,7 @@ type PluginProvisioner struct {
 	cfgProvider    configReader
 	pluginSettings pluginsettings.Service
 	orgService     org.Service
+	pluginStore    pluginstore.Store
 }
 
 func (ap *PluginProvisioner) apply(ctx context.Context, cfg *pluginsAsConfig) error {
@@ -46,12 +47,20 @@ func (ap *PluginProvisioner) apply(ctx context.Context, cfg *pluginsAsConfig) er
 			app.OrgID = 1
 		}
 
+		p, found := ap.pluginStore.Plugin(ctx, app.PluginID)
+		if !found {
+			return errors.New("plugin not found")
+		}
+		if p.AutoEnabled && !app.Enabled {
+			return errors.New("plugin is auto enabled and cannot be disabled")
+		}
+
 		ps, err := ap.pluginSettings.GetPluginSettingByPluginID(ctx, &pluginsettings.GetByPluginIDArgs{
 			OrgID:    app.OrgID,
 			PluginID: app.PluginID,
 		})
 		if err != nil {
-			if !errors.Is(err, models.ErrPluginSettingNotFound) {
+			if !errors.Is(err, pluginsettings.ErrPluginSettingNotFound) {
 				return err
 			}
 		} else {

@@ -1,8 +1,12 @@
-import React from 'react';
+import { css } from '@emotion/css';
+import { useCallback } from 'react';
 
-import { DataSourcePluginMeta } from '@grafana/data';
-import { LinkButton } from '@grafana/ui';
+import { DataSourcePluginMeta, GrafanaTheme2 } from '@grafana/data';
+import { reportInteraction } from '@grafana/runtime';
+import { LinkButton, useStyles2 } from '@grafana/ui';
 import { DataSourcePluginCategory } from 'app/types';
+
+import { ROUTES } from '../../connections/constants';
 
 import { DataSourceTypeCardList } from './DataSourceTypeCardList';
 
@@ -15,12 +19,24 @@ export type Props = {
 };
 
 export function DataSourceCategories({ categories, onClickDataSourceType }: Props) {
+  const moreDataSourcesLink = `${ROUTES.AddNewConnection}?cat=data-source`;
+  const styles = useStyles2(getStyles);
+
+  const handleClick = useCallback(() => {
+    reportInteraction('connections_add_datasource_find_more_ds_plugins_clicked', {
+      targetPath: moreDataSourcesLink,
+      path: location.pathname,
+      creator_team: 'grafana_plugins_catalog',
+      schema_version: '1.0.0',
+    });
+  }, [moreDataSourcesLink]);
+
   return (
     <>
       {/* Categories */}
       {categories.map(({ id, title, plugins }) => (
-        <div className="add-data-source-category" key={id}>
-          <div className="add-data-source-category__header" id={id}>
+        <div className={styles.category} key={id}>
+          <div className={styles.header} id={id}>
             {title}
           </div>
           <DataSourceTypeCardList dataSourcePlugins={plugins} onClickDataSourceType={onClickDataSourceType} />
@@ -28,16 +44,25 @@ export function DataSourceCategories({ categories, onClickDataSourceType }: Prop
       ))}
 
       {/* Find more */}
-      <div className="add-data-source-more">
-        <LinkButton
-          variant="secondary"
-          href="https://grafana.com/plugins?type=datasource&utm_source=grafana_add_ds"
-          target="_blank"
-          rel="noopener"
-        >
-          Find more data source plugins on grafana.com
+      <div className={styles.more}>
+        <LinkButton variant="secondary" href={moreDataSourcesLink} onClick={handleClick} target="_self" rel="noopener">
+          Find more data source plugins
         </LinkButton>
       </div>
     </>
   );
 }
+
+const getStyles = (theme: GrafanaTheme2) => ({
+  category: css({
+    marginBottom: theme.spacing(2),
+  }),
+  header: css({
+    fontSize: theme.typography.h5.fontSize,
+    marginBottom: theme.spacing(1),
+  }),
+  more: css({
+    margin: theme.spacing(4),
+    textAlign: 'center',
+  }),
+});

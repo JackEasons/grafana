@@ -1,36 +1,69 @@
 ---
 aliases:
-  - /docs/grafana/latest/datasources/parca/
-  - /docs/grafana/latest/features/datasources/parca/
-description: Continuous profiling for analysis of CPU and memory usage, down to the line number and throughout time. Saving infrastructure cost, improving performance, and increasing reliability.
+  - ../features/datasources/parca/
+description: Continuous profiling for analysis of CPU and memory usage, down to the
+  line number and throughout time. Saving infrastructure cost, improving performance,
+  and increasing reliability.
 keywords:
   - parca
   - guide
   - profiling
+labels:
+  products:
+    - cloud
+    - enterprise
+    - oss
 title: Parca
 weight: 1110
+refs:
+  flame-graph:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/flame-graph/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/panels-visualizations/visualizations/flame-graph/
+  provisioning-data-sources:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/administration/provisioning/#datasources
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/administration/provisioning/#datasources
+  explore:
+    - pattern: /docs/grafana/
+      destination: /docs/grafana/<GRAFANA_VERSION>/explore/
+    - pattern: /docs/grafana-cloud/
+      destination: /docs/grafana/<GRAFANA_VERSION>/explore/
 ---
 
 # Parca data source
 
-> **Note:** This feature is behind the `flameGraph` feature toggle.
-> You can enable feature toggles through configuration file or environment variables. See configuration [docs]({{< relref "../setup-grafana/configure-grafana/#feature_toggles" >}}) for details.
-> Grafana Cloud users can access this feature by [opening a support ticket in the Cloud Portal](https://grafana.com/profile/org#support).
+Grafana ships with built-in support for Parca, a continuous profiling OSS database for analysis of CPU and memory usage, down to the line number and throughout time. Add it as a data source, and you are ready to query your profiles in [Explore](ref:explore).
 
-Grafana ships with built-in support for Parca, a continuous profiling OSS database for analysis of CPU and memory usage, down to the line number and throughout time. Add it as a data source, and you are ready to query your profiles in [Explore]({{< relref "../explore" >}}).
+## Supported Parca versions
+
+This data source supports these versions of Parca:
+
+- v0.19+
 
 ## Configure the Parca data source
 
-To access Parca settings, click the **Configuration** (gear) icon, then click **Data Sources** > **Parca**.
+To configure basic settings for the data source, complete the following steps:
 
-| Name         | Description                                                        |
-| ------------ | ------------------------------------------------------------------ |
-| `Name`       | A name to specify the data source in panels, queries, and Explore. |
-| `Default`    | The default data source will be pre-selected for new panels.       |
-| `URL`        | The URL of the Tempo instance, e.g., `http://localhost:4100`       |
-| `Basic Auth` | Enable basic authentication to the Tempo data source.              |
-| `User`       | User name for basic authentication.                                |
-| `Password`   | Password for basic authentication.                                 |
+1. Click **Connections** in the left-side menu.
+1. Under Your connections, click **Data sources**.
+1. Enter `Parca` in the search bar.
+1. Click **Parca**.
+
+   The **Settings** tab of the data source is displayed.
+
+1. Set the data source's basic configuration options:
+
+   | Name         | Description                                                        |
+   | ------------ | ------------------------------------------------------------------ |
+   | `Name`       | A name to specify the data source in panels, queries, and Explore. |
+   | `Default`    | The default data source will be pre-selected for new panels.       |
+   | `URL`        | The URL of the Parca instance, e.g., `http://localhost:4100`       |
+   | `Basic Auth` | Enable basic authentication to the Parca data source.              |
+   | `User`       | User name for basic authentication.                                |
+   | `Password`   | Password for basic authentication.                                 |
 
 ## Querying
 
@@ -50,11 +83,11 @@ Use the labels selector input to filter by labels. Parca uses similar syntax to 
 
 ![Options section](/static/img/docs/parca/options-section.png 'Options section')
 
-Select a query type to return the profile data which can be shown in the [Flame Graph]({{< relref "../panels-visualizations/visualizations/flame-graph" >}}), metric data visualized in a graph, or both. You can only select both options in a dashboard, because panels allow only one visualization.
+Select a query type to return the profile data which can be shown in the [Flame Graph](ref:flame-graph), metric data visualized in a graph, or both. You can only select both options in a dashboard, because panels allow only one visualization.
 
 ### Profiles query results
 
-Profiles can be visualized in a flame graph. See the [Flame Graph documentation]({{< relref "../panels-visualizations/visualizations/flame-graph" >}}) to learn about the visualization and its features.
+Profiles can be visualized in a flame graph. See the [Flame Graph documentation](ref:flame-graph) to learn about the visualization and its features.
 
 ![Flame graph](/static/img/docs/parca/flame-graph.png 'Flame graph')
 
@@ -70,7 +103,7 @@ This allows you to quickly see any spikes in the value of the scraped profiles a
 
 ## Provision the Parca data source
 
-You can modify the Grafana configuration files to provision the Parca data source. To learn more, and to view the available provisioning settings, see [provisioning documentation]({{< relref "../administration/provisioning/#datasources" >}}).
+You can modify the Grafana configuration files to provision the Parca data source. To learn more, and to view the available provisioning settings, see [provisioning documentation](ref:provisioning-data-sources).
 
 Here is an example config:
 

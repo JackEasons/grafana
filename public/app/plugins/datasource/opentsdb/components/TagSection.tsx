@@ -1,8 +1,18 @@
+import debounce from 'debounce-promise';
 import { has, size } from 'lodash';
-import React, { useCallback, useState } from 'react';
+import { useState } from 'react';
 
 import { SelectableValue, toOption } from '@grafana/data';
-import { Select, InlineFormLabel, Icon, clearButtonStyles, useStyles2 } from '@grafana/ui';
+import {
+  Select,
+  InlineFormLabel,
+  Icon,
+  clearButtonStyles,
+  useStyles2,
+  AsyncSelect,
+  Stack,
+  InlineLabel,
+} from '@grafana/ui';
 
 import { OpenTsdbQuery } from '../types';
 
@@ -11,7 +21,7 @@ export interface TagSectionProps {
   onChange: (query: OpenTsdbQuery) => void;
   onRunQuery: () => void;
   suggestTagKeys: (query: OpenTsdbQuery) => Promise<string[]>;
-  suggestTagValues: () => Promise<SelectableValue[]>;
+  suggestTagValues: (value: string) => Promise<SelectableValue[]>;
   tsdbVersion: number;
 }
 
@@ -27,9 +37,6 @@ export function TagSection({
 
   const [tagKeys, updTagKeys] = useState<Array<SelectableValue<string>>>();
   const [keyIsLoading, updKeyIsLoading] = useState<boolean>();
-
-  const [tagValues, updTagValues] = useState<Array<SelectableValue<string>>>();
-  const [valueIsLoading, updValueIsLoading] = useState<boolean>();
 
   const [addTagMode, updAddTagMode] = useState<boolean>(false);
 
@@ -96,59 +103,53 @@ export function TagSection({
     addTag();
   }
 
-  // We are matching words split with space
-  const splitSeparator = ' ';
-  const customTagOption = useCallback((option: SelectableValue<string>, searchQuery: string) => {
-    const label = option.value ?? '';
-
-    const searchWords = searchQuery.split(splitSeparator);
-    return searchWords.reduce((acc, cur) => acc && label.toLowerCase().includes(cur.toLowerCase()), true);
-  }, []);
+  const tagValueSearch = debounce((query: string) => suggestTagValues(query), 350);
 
   return (
-    <div className="gf-form-inline" data-testid={testIds.section}>
-      <div className="gf-form">
-        <InlineFormLabel
-          className="query-keyword"
-          width={8}
-          tooltip={tsdbVersion >= 2 ? <div>Please use filters, tags are deprecated in opentsdb 2.2</div> : undefined}
-        >
-          Tags
-        </InlineFormLabel>
-        {query.tags &&
-          Object.keys(query.tags).map((tagKey: string | number, idx: number) => {
-            const tagValue = query.tags[tagKey];
-            return (
-              <InlineFormLabel key={idx} width="auto" data-testid={testIds.list + idx}>
-                {tagKey}={tagValue}
-                <button type="button" className={buttonStyles} onClick={() => editTag(tagKey, tagValue)}>
-                  <Icon name={'pen'} />
-                </button>
-                <button
-                  type="button"
-                  className={buttonStyles}
-                  onClick={() => removeTag(tagKey)}
-                  data-testid={testIds.remove}
-                >
-                  <Icon name={'times'} />
-                </button>
-              </InlineFormLabel>
-            );
-          })}
-        {!addTagMode && (
-          <button className="gf-form-label" type="button" onClick={changeAddTagMode} aria-label="Add tag">
+    <Stack gap={0} data-testid={testIds.section}>
+      <InlineFormLabel
+        className="query-keyword"
+        width={8}
+        tooltip={tsdbVersion >= 2 ? <div>Please use filters, tags are deprecated in opentsdb 2.2</div> : undefined}
+      >
+        Tags
+      </InlineFormLabel>
+      {query.tags &&
+        Object.keys(query.tags).map((tagKey: string | number, idx: number) => {
+          const tagValue = query.tags[tagKey];
+          return (
+            <InlineFormLabel key={idx} width="auto" data-testid={testIds.list + idx}>
+              {tagKey}={tagValue}
+              <button type="button" className={buttonStyles} onClick={() => editTag(tagKey, tagValue)}>
+                <Icon name={'pen'} />
+              </button>
+              <button
+                type="button"
+                className={buttonStyles}
+                onClick={() => removeTag(tagKey)}
+                data-testid={testIds.remove}
+              >
+                <Icon name={'times'} />
+              </button>
+            </InlineFormLabel>
+          );
+        })}
+      {!addTagMode && (
+        <InlineFormLabel width={2}>
+          <button type="button" className={buttonStyles} onClick={changeAddTagMode} aria-label="Add tag">
             <Icon name={'plus'} />
           </button>
-        )}
-      </div>
+        </InlineFormLabel>
+      )}
+
       {addTagMode && (
-        <div className="gf-form-inline">
-          <div className="gf-form">
+        <Stack gap={0.5} alignItems="center">
+          <Stack gap={0}>
             <Select
               inputId="opentsdb-suggested-tagk-select"
-              className="gf-form-input"
               value={curTagKey ? toOption('' + curTagKey) : undefined}
               placeholder="key"
+              allowCustomValue
               onOpenMenu={async () => {
                 updKeyIsLoading(true);
                 const tKs = await suggestTagKeys(query);
@@ -164,56 +165,46 @@ export function TagSection({
                 }
               }}
             />
-          </div>
+          </Stack>
 
-          <div className="gf-form">
-            <Select
+          <Stack gap={0}>
+            <AsyncSelect
               inputId="opentsdb-suggested-tagv-select"
-              className="gf-form-input"
               value={curTagValue ? toOption(curTagValue) : undefined}
               placeholder="value"
               allowCustomValue
-              filterOption={customTagOption}
-              onOpenMenu={async () => {
-                if (!tagValues) {
-                  updValueIsLoading(true);
-                  const tVs = await suggestTagValues();
-                  updTagValues(tVs);
-                  updValueIsLoading(false);
-                }
-              }}
-              isLoading={valueIsLoading}
-              options={tagValues}
+              loadOptions={tagValueSearch}
+              defaultOptions={[]}
               onChange={({ value }) => {
                 if (value) {
                   updCurTagValue(value);
                 }
               }}
             />
-          </div>
+          </Stack>
 
-          <div className="gf-form">
+          <Stack gap={0}>
             {errors && (
-              <div className="gf-form-label" title={errors} data-testid={testIds.error}>
+              <InlineLabel title={errors} data-testid={testIds.error}>
                 <Icon name={'exclamation-triangle'} color={'rgb(229, 189, 28)'} />
-              </div>
+              </InlineLabel>
             )}
 
-            <div className="gf-form-label">
+            <InlineFormLabel width={5.5}>
               <button type="button" className={buttonStyles} onClick={addTag}>
                 add tag
               </button>
               <button type="button" className={buttonStyles} onClick={changeAddTagMode}>
                 <Icon name={'times'} />
               </button>
-            </div>
-          </div>
-        </div>
+            </InlineFormLabel>
+          </Stack>
+        </Stack>
       )}
-      <div className="gf-form gf-form--grow">
-        <div className="gf-form-label gf-form-label--grow"></div>
-      </div>
-    </div>
+      <Stack gap={0} grow={1}>
+        <InlineLabel> </InlineLabel>
+      </Stack>
+    </Stack>
   );
 }
 

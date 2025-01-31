@@ -1,5 +1,3 @@
-import React, { FC } from 'react';
-
 import { RuleFormType } from '../../../types/rule-form';
 
 import { DisabledTooltip } from './DisabledTooltip';
@@ -9,7 +7,7 @@ interface Props extends SharedProps {
   onClick: (value: RuleFormType) => void;
 }
 
-const MimirFlavoredType: FC<Props> = ({ selected = false, disabled = false, onClick }) => {
+const MimirFlavoredType = ({ selected = false, disabled = false, onClick }: Props) => {
   return (
     <DisabledTooltip visible={disabled}>
       <RuleType

@@ -1,5 +1,3 @@
-import React from 'react';
-
 import { LokiQueryField } from './LokiQueryField';
 import { LokiQueryEditorProps } from './types';
 
@@ -12,7 +10,6 @@ export function LokiQueryEditorForAlerting(props: LokiQueryEditorProps) {
       query={query}
       onChange={onChange}
       onRunQuery={onRunQuery}
-      onBlur={onRunQuery}
       history={history}
       data={data}
       placeholder="Enter a Loki query"
